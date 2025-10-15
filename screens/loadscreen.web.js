@@ -128,7 +128,7 @@ const styles = {
     fontWeight: '700',
     letterSpacing: '6px',
     marginBottom: '10px',
-    fontFamily: 'Geist-Bold, sans-serif',
+    fontFamily: 'Geist-Bold',
     textTransform: 'uppercase',
   },
 
@@ -139,7 +139,7 @@ const styles = {
     fontSize: '14px',
     fontWeight: '400',
     letterSpacing: '4px',
-    fontFamily: 'Geist-Regular, sans-serif',
+    fontFamily: 'Geist-Regular',
     textTransform: 'uppercase',
   },
 };

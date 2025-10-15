@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.select({
       ios: 'Geist-Bold',
       android: 'Geist-Bold',
-      default: 'sans-serif',
+      default: 'Geist-Bold',
     }),
   },
 
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.select({
       ios: 'Geist-Regular',
       android: 'Geist-Regular',
-      default: 'sans-serif',
+      default: 'Geist-Regular',
     }),
   },
 });
