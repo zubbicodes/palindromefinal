@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,8 +10,12 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import LoginWeb from './index.web';
 
 export default function LoginScreen() {
+  if (Platform.OS === 'web') {
+    return <LoginWeb/>; 
+  }
   const [passwordVisible, setPasswordVisible] = useState(false);
 
   return (
