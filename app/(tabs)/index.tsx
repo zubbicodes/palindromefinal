@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Image,
@@ -13,6 +14,7 @@ import {
 import LoginWeb from './index.web';
 
 export default function LoginScreen() {
+  const router = useRouter(); // ✅ added
   if (Platform.OS === 'web') {
     return <LoginWeb/>; 
   }
@@ -82,7 +84,8 @@ export default function LoginScreen() {
           <Text style={styles.orText}>or</Text>
           <View style={styles.line} />
         </View>
-         {/* Google Login */}
+
+        {/* Google Login */}
         <TouchableOpacity style={styles.socialButton}>
           <Image
             source={require('../../assets/images/google.png')}
@@ -92,7 +95,7 @@ export default function LoginScreen() {
           <Text style={styles.socialText}>Sign in with Google</Text>
         </TouchableOpacity>
 
-          {/* Apple Login */}
+        {/* Apple Login */}
         <TouchableOpacity style={styles.socialButton}>
           <Image
             source={require('../../assets/images/apple.png')}
@@ -106,7 +109,12 @@ export default function LoginScreen() {
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             New on Palindrome?{' '}
-            <Text style={styles.footerBold}>Create an account.</Text>
+            <Text
+              style={styles.footerBold}
+              onPress={() => router.push('/(tabs)/signup')} // ✅ added
+            >
+              Create an account.
+            </Text>
           </Text>
         </View>
       </View>
@@ -259,7 +267,7 @@ const styles = StyleSheet.create({
 
   // --- Footer ---
   footer: {
-    marginTop: 120,
+    marginTop: 170,
     alignItems: 'center',
   },
   footerText: {

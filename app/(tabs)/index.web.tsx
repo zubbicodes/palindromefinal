@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router'; // ✅ import router from expo-router
 import React, { useState } from 'react';
 
 export default function LoginWeb() {
@@ -83,7 +84,7 @@ export default function LoginWeb() {
           </div>
         </div>
 
-        {/* Right Form (outer wrapper - no padding/border) */}
+        {/* Right Form */}
         <div
           style={{
             flex: 1,
@@ -92,7 +93,7 @@ export default function LoginWeb() {
             width: '100%',
           }}
         >
-          {/* ---------- bordered card: ONLY these items inside ---------- */}
+          {/* Bordered Card */}
           <div
             style={{
               border: '1px solid #E0E0E0',
@@ -200,7 +201,7 @@ export default function LoginWeb() {
                 </button>
               </div>
 
-              {/* Forgot password (inside card) */}
+              {/* Forgot password */}
               <div
                 style={{
                   textAlign: 'right',
@@ -221,7 +222,7 @@ export default function LoginWeb() {
                 </span>
               </div>
 
-              {/* Login button (inside card) */}
+              {/* Login Button */}
               <button
                 style={{
                   width: '100%',
@@ -239,9 +240,8 @@ export default function LoginWeb() {
               </button>
             </div>
           </div>
-          {/* ---------- end bordered card ---------- */}
 
-          {/* -------- OUTSIDE the card: divider -------- */}
+          {/* Divider */}
           <div
             style={{
               display: 'flex',
@@ -264,7 +264,7 @@ export default function LoginWeb() {
             <div style={{ width: '70px', height: '1px', background: '#E0E0E0' }} />
           </div>
 
-          {/* -------- OUTSIDE the card: social buttons -------- */}
+          {/* Social Buttons */}
           <div
             style={{
               display: 'flex',
@@ -308,12 +308,24 @@ export default function LoginWeb() {
             </button>
           </div>
 
-          {/* -------- OUTSIDE the card: footer -------- */}
+          {/* Footer */}
           <div style={{ textAlign: 'center', fontSize: '14px', color: '#2A2A2A' }}>
             New on Palindrome?{' '}
-            <span style={{ color: '#007BFF', fontWeight: 600, textDecoration: 'none', cursor: 'pointer' }}>
+            <button
+              onClick={() => router.push('/signup')} // ✅ Expo Router navigation
+              style={{
+                color: '#007BFF',
+                fontWeight: 600,
+                textDecoration: 'none',
+                cursor: 'pointer',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                fontSize: '14px',
+              }}
+            >
               Create an account
-            </span>
+            </button>
           </div>
         </div>
       </div>
