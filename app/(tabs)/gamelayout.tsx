@@ -5,6 +5,7 @@ import {
     Animated,
     Image,
     PanResponder,
+    Platform,
     Pressable,
     StyleSheet,
     Text,
@@ -12,8 +13,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
+import GameLayoutWeb from './gamelayout.web';
 
 export default function GameLayout() {
+    if (Platform.OS === 'web') {
+        return <GameLayoutWeb />;
+    }
   const [score, setScore] = useState(0);
   const [hints, setHints] = useState(2);
   const [time, setTime] = useState('00:00');
