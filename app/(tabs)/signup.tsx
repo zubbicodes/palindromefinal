@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import SignUpWeb from './signup.web';
 
@@ -92,9 +92,13 @@ export default function SignupScreen() {
 
           <Text style={styles.checkboxText}>
             I've read and agree to the{' '}
-            <Text style={styles.linkText}>terms </Text>
+            <Text style={[styles.linkText, { textDecorationLine: 'underline' }]}>
+            terms{' '}
+            </Text>
             or{' '}
-            <Text style={styles.linkText}>privacy policy</Text>
+            <Text style={[styles.linkText, { textDecorationLine: 'underline' }]}>
+            privacy policy
+            </Text>
           </Text>
         </TouchableOpacity>
 

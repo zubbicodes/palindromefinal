@@ -261,6 +261,7 @@ export default function SignUpWeb() {
                   color: '#B7463F',
                   fontWeight: 500,
                   cursor: 'pointer',
+                  textDecoration: 'underline',
                 }}
               >
                 terms 
@@ -271,6 +272,7 @@ export default function SignUpWeb() {
                       color: '#B7463F',
                       fontWeight: 500,
                       cursor: 'pointer',
+                      textDecoration: 'underline',
                     }}
                 >
                   privacy policy
