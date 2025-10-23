@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import {
   Image,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -74,9 +75,15 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         {/* Log In Button */}
-        <TouchableOpacity style={styles.loginButton}>
+        <Pressable
+          style={styles.loginButton}
+          onPress={() => {
+            console.log("Login pressed");
+            router.push('/(tabs)/gamelayout');
+          }}
+        >
           <Text style={styles.loginButtonText}>Log In</Text>
-        </TouchableOpacity>
+        </Pressable>
 
         {/* Divider */}
         <View style={styles.dividerWrapper}>
@@ -111,7 +118,7 @@ export default function LoginScreen() {
             New on Palindrome?{' '}
             <Text
               style={styles.footerBold}
-              onPress={() => router.push('/(tabs)/signup')} // ✅ added
+              onPress={() => router.push('/signup')} // ✅ added
             >
               Create an account.
             </Text>
