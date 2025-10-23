@@ -1,7 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+    Animated,
+    Image,
+    PanResponder,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 
@@ -10,6 +18,7 @@ export default function GameLayout() {
   const [hints, setHints] = useState(2);
   const [time, setTime] = useState('00:00');
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([]);
+  const [remainingBlocks, setRemainingBlocks] = useState(5); // start with 5 color blocks
 
   const handlePlay = () => {
     setScore(prev => prev + 1);
@@ -38,16 +47,11 @@ export default function GameLayout() {
     <View key={row} style={styles.row}>
       {Array.from({ length: gridSize }, (_, col) => {
         const isBulldog = bulldogPositions.some(pos => pos.row === row && pos.col === col);
-
-        // Determine if this cell should have a letter from PALINDROME
         let letter: string | null = null;
 
-        // Horizontal placement (center row)
         if (row === center && col >= center - halfWord && col < center - halfWord + word.length) {
           letter = word[col - (center - halfWord)];
         }
-
-        // Vertical placement (center column)
         if (col === center && row >= center - halfWord && row < center - halfWord + word.length) {
           letter = word[row - (center - halfWord)];
         }
@@ -72,17 +76,63 @@ export default function GameLayout() {
                 resizeMode="contain"
               />
             )}
-
-            {letter && (
-              <Text style={styles.letterText}>{letter}</Text>
-            )}
-
+            {letter && <Text style={styles.letterText}>{letter}</Text>}
             <View style={styles.innerShadow} />
           </Pressable>
         );
       })}
     </View>
   ));
+
+  // 🎨 Color blocks setup
+  const colors = [
+    ['#C40111', '#F01D2E'],
+    ['#757F35', '#99984D'],
+    ['#1177FE', '#48B7FF'],
+    ['#111111', '#3C3C3C'],
+    ['#E7CC01', '#E7E437'],
+  ] as const;
+
+  // Drag + Drop logic
+  const blocks = colors.map((gradient, index) => {
+    const pan = useRef(new Animated.ValueXY()).current;
+
+    const panResponder = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderMove: Animated.event(
+          [null, { dx: pan.x, dy: pan.y }],
+          { useNativeDriver: false }
+        ),
+        onPanResponderRelease: () => {
+          Animated.spring(pan, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: false,
+          }).start();
+
+          // 🧮 Decrease remaining blocks when dropped
+          setRemainingBlocks(prev => Math.max(prev - 1, 0));
+        },
+      })
+    ).current;
+
+    return (
+      <Animated.View
+        key={index}
+        style={[styles.colorBlock, { transform: pan.getTranslateTransform() }]}
+        {...panResponder.panHandlers}
+      >
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientColorBlock}
+        >
+          <Text style={styles.blockText}>16</Text>
+        </LinearGradient>
+      </Animated.View>
+    );
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -125,6 +175,11 @@ export default function GameLayout() {
 
       {/* Board Grid */}
       <View style={styles.board}>{grid}</View>
+
+      {/* 🎨 Color Blocks Row */}
+      <View style={styles.colorBlocksContainer}>
+        <View style={styles.colorBlocksRow}>{blocks}</View>
+      </View>
 
       {/* Controls */}
       <View style={styles.controlsRow}>
@@ -274,7 +329,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CCDAE466',
     backgroundColor: '#FFFFFF',
-    margin: 1.3,
+    margin: 1.5,
     borderRadius: 6,
     shadowColor: '#00000026',
     shadowOffset: { width: 0, height: 0 },
@@ -313,6 +368,49 @@ const styles = StyleSheet.create({
     left: 4,
   },
 
+  colorBlocksContainer: {
+    position: 'absolute',
+    top: 585, // adjust this value to move it up/down
+    width: 320,
+    height: 70,
+    backgroundColor: '#E4EBF0',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  colorBlocksRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: 300,
+  },
+
+  colorBlock: {
+  width: 50,
+  height: 50,
+  borderRadius: 8,
+  marginHorizontal: 4,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.15,
+  shadowRadius: 3,
+  elevation: 3, // for Android
+},
+
+
+  gradientColorBlock: {
+    flex: 1,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  blockText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '500',
+  },
+
   controlsRow: {
     position: 'absolute',
     bottom: 50,
@@ -321,7 +419,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
   },
-
+  
   gradientButton: {
     width: 40,
     height: 40,
