@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -238,7 +239,7 @@ export default function GameLayout() {
           </LinearGradient>
         </Pressable>
 
-        <Pressable onPress={() => console.log('List')}>
+        <Pressable onPress={() => router.push('/profile')}>
           <LinearGradient
             colors={['#8ed9fc', '#3c8dea']}
             start={{ x: 0, y: 0 }}
