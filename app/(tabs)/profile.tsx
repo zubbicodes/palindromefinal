@@ -1,9 +1,13 @@
 import React from 'react';
-import { Dimensions, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import ProfileWeb from './profile.web';
 
 const { width } = Dimensions.get('window');
 
 export default function ProfileScreen() {
+    if (Platform.OS === 'web') {
+    return <ProfileWeb />;
+  }
   return (
     <ScrollView contentContainerStyle={styles.container}>
       {/* Header */}

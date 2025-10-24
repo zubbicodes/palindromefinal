@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -9,11 +10,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
+const router = useRouter();
 
 export default function GameLayoutWeb() {
   const [score, setScore] = useState(0);
@@ -196,11 +198,14 @@ export default function GameLayoutWeb() {
             <Ionicons name="pause" size={20} color="#de5f07" />
           </LinearGradient>
         </Pressable>
-        <Pressable>
-          <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
-            <Ionicons name="list" size={20} color="#1a63cc" />
-          </LinearGradient>
-        </Pressable>
+        <Pressable onPress={() => router.push('/profile')}>
+      <LinearGradient
+        colors={['#8ed9fc', '#3c8dea']}
+        style={styles.controlBtn}
+      >
+        <Ionicons name="list" size={20} color="#1a63cc" />
+      </LinearGradient>
+    </Pressable>
         <Pressable>
           <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
             <Ionicons name="settings" size={20} color="#1a63cc" />
