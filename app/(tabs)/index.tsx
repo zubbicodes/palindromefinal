@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import {
   Image,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -75,15 +74,12 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         {/* Log In Button */}
-        <Pressable
+        <TouchableOpacity
           style={styles.loginButton}
-          onPress={() => {
-            console.log("Login pressed");
-            router.push('/(tabs)/gamelayout');
-          }}
+          onPress={() => router.push('/gamelayout')}
         >
           <Text style={styles.loginButtonText}>Log In</Text>
-        </Pressable>
+        </TouchableOpacity>
 
         {/* Divider */}
         <View style={styles.dividerWrapper}>

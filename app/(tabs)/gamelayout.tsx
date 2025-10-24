@@ -2,14 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Image,
-    PanResponder,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Image,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
@@ -31,10 +31,38 @@ export default function GameLayout() {
 
   const spawnBulldogs = () => {
     const totalBulldogs = 5;
-    const newPositions = Array.from({ length: totalBulldogs }, () => ({
-      row: Math.floor(Math.random() * 11),
-      col: Math.floor(Math.random() * 11),
-    }));
+    const gridSize = 11;
+    const center = Math.floor(gridSize / 2);
+    const word = 'PALINDROME';
+    const halfWord = Math.floor(word.length / 2);
+
+    // Build a list of blocked positions (cells with PALINDROME letters)
+    const blockedPositions = new Set<string>();
+
+    // Horizontal word (center row)
+    for (let i = 0; i < word.length; i++) {
+      blockedPositions.add(`${center},${center - halfWord + i}`);
+    }
+
+    // Vertical word (center column)
+    for (let i = 0; i < word.length; i++) {
+      blockedPositions.add(`${center - halfWord + i},${center}`);
+    }
+
+    // Generate random bulldog positions avoiding the blocked cells
+    const newPositions: { row: number; col: number }[] = [];
+
+    while (newPositions.length < totalBulldogs) {
+      const row = Math.floor(Math.random() * gridSize);
+      const col = Math.floor(Math.random() * gridSize);
+      const key = `${row},${col}`;
+
+      // Skip if it’s part of PALINDROME or already taken
+      if (!blockedPositions.has(key) && !newPositions.some(p => p.row === row && p.col === col)) {
+        newPositions.push({ row, col });
+      }
+    }
+
     setBulldogPositions(newPositions);
   };
 

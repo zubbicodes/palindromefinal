@@ -2,14 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    Dimensions,
-    Image,
-    PanResponder,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Dimensions,
+  Image,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 
@@ -28,10 +28,27 @@ export default function GameLayoutWeb() {
 
   const spawnBulldogs = () => {
     const totalBulldogs = 5;
-    const newPositions = Array.from({ length: totalBulldogs }, () => ({
-      row: Math.floor(Math.random() * 11),
-      col: Math.floor(Math.random() * 11),
-    }));
+
+    const blockedPositions = new Set<string>();
+    for (let i = 0; i < word.length; i++) {
+      blockedPositions.add(`${center},${center - halfWord + i}`);
+    }
+    for (let i = 0; i < word.length; i++) {
+      blockedPositions.add(`${center - halfWord + i},${center}`);
+    }
+
+    const newPositions: { row: number; col: number }[] = [];
+
+    while (newPositions.length < totalBulldogs) {
+      const row = Math.floor(Math.random() * gridSize);
+      const col = Math.floor(Math.random() * gridSize);
+      const key = `${row},${col}`;
+
+      if (!blockedPositions.has(key) && !newPositions.some(p => p.row === row && p.col === col)) {
+        newPositions.push({ row, col });
+      }
+    }
+
     setBulldogPositions(newPositions);
   };
 
@@ -113,41 +130,45 @@ export default function GameLayoutWeb() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <Text style={styles.title}>PALINDROME</Text>
+      
+      <View style={styles.statusRow}>
+        <View style={styles.scoreBox}>
+          <Text style={styles.sideLabel}>Score</Text>
+          <Text style={styles.sideValue}>{score}</Text>
+        </View>
 
-      {/* Timer */}
-      <View style={styles.timerContainer}>
-        <Svg height="40" width="300">
-          <Defs>
-            <SvgLinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
-              <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
-            </SvgLinearGradient>
-          </Defs>
-          <SvgText
-            fill="url(#grad)"
-            fontSize="24"
-            fontFamily="Geist-Regular"
-            fontWeight="Bold"
-            x="50%"
-            y="60%"
-            textAnchor="middle"
-          >
-            {time}
-          </SvgText>
-        </Svg>
+        <View style={styles.timerContainer}>
+          <Svg height="40" width="300">
+            <Defs>
+              <SvgLinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
+                <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
+              </SvgLinearGradient>
+            </Defs>
+            <SvgText
+              fill="url(#grad)"
+              fontSize="24"
+              fontFamily="Geist-Regular"
+              fontWeight="Bold"
+              x="50%"
+              y="60%"
+              textAnchor="middle"
+            >
+              {time}
+            </SvgText>
+          </Svg>
+        </View>
+
+        <View style={styles.scoreBox}>
+          <Text style={styles.sideLabel}>Hints</Text>
+          <Text style={[styles.sideValue, { color: '#C35DD9' }]}>{hints}</Text>
+        </View>
       </View>
 
       <View style={styles.mainLayout}>
         {/* Left Side */}
         <View style={styles.sideColumn}>
-          {/* Score ABOVE color blocks */}
-          <View style={styles.scoreBox}>
-            <Text style={styles.sideLabel}>Score</Text>
-            <Text style={styles.sideValue}>{score}</Text>
-          </View>
-          {/* Color Blocks */}
           <View style={styles.colorBlockWrapper}>
             <View style={styles.colorBlockContainer}>{colorBlocks}</View>
           </View>
@@ -158,20 +179,12 @@ export default function GameLayoutWeb() {
 
         {/* Right Side */}
         <View style={styles.sideColumn}>
-          {/* Hints ABOVE color blocks */}
-          <View style={styles.scoreBox}>
-            <Text style={styles.sideLabel}>Hints</Text>
-            <Text style={[styles.sideValue, { color: '#C35DD9' }]}>{hints}</Text>
-          </View>
-
-          {/* Color Blocks */}
           <View style={styles.colorBlockWrapper}>
             <View style={styles.colorBlockContainer}>{colorBlocks}</View>
           </View>
         </View>
       </View>
 
-      {/* Controls */}
       <View style={styles.controlsRow}>
         <Pressable>
           <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
@@ -205,28 +218,39 @@ const styles = StyleSheet.create({
   mainLayout: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'stretch', // ✅ changed from 'center' to 'stretch' for vertical alignment
     flexWrap: 'nowrap',
     gap: 20,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '48%',
+    marginBottom: 12,
   },
   sideColumn: {
     alignItems: 'center',
     gap: 10,
+    marginHorizontal: 40,
   },
   colorBlockWrapper: {
     backgroundColor: '#F7F9FB',
     borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     alignItems: 'center',
     width: 90,
+    height: '100%', // ✅ ensures vertical alignment with the board
+    justifyContent: 'space-between', // distribute evenly
   },
   scoreBox: {
+    flexDirection: 'row',
     backgroundColor: '#fff',
     borderColor: '#E1E6EB',
     borderWidth: 1,
     borderRadius: 12,
-    width: 80,
+    width: 90,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
@@ -234,8 +258,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
-  sideLabel: { fontSize: 13, color: '#4C575F' },
-  sideValue: { fontSize: 20, color: '#0060FF', fontWeight: '800' },
+  sideLabel: { fontSize: 10, color: '#4C575F' },
+  sideValue: { marginLeft: 8, fontSize: 20, color: '#0060FF', fontWeight: '600' },
   board: {
     width: width > 900 ? 440 : width * 0.6,
     aspectRatio: 1,
@@ -259,10 +283,10 @@ const styles = StyleSheet.create({
   },
   letterText: { fontWeight: '700', color: '#000' },
   bulldogImage: { width: 20, height: 20 },
-  colorBlockContainer: { alignItems: 'center', justifyContent: 'center' },
+  colorBlockContainer: { alignItems: 'center', justifyContent: 'space-between', flex: 1 },
   colorBlock: {
-    width: 55,
-    height: 55,
+    width: 70,
+    height: 70,
     borderRadius: 10,
     marginVertical: 4,
     shadowColor: '#000',
@@ -277,10 +301,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   blockText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  controlsRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 16, gap: 16 },
+  controlsRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 12, gap: 16 },
   controlBtn: {
-    width: 45,
-    height: 45,
+    width: 35,
+    height: 35,
     borderRadius: 22.5,
     alignItems: 'center',
     justifyContent: 'center',

@@ -224,6 +224,7 @@ export default function LoginWeb() {
 
               {/* Login Button */}
               <button
+              onClick={() => router.push('/gamelayout')}
                 style={{
                   width: '100%',
                   padding: '14px',
