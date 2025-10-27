@@ -274,12 +274,12 @@ export default function GameLayout() {
                 {/* Links */}
                 <Pressable style={styles.linkRow}>
                   <Text style={styles.linkText}>Privacy Policy</Text>
-                  <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                  <Ionicons name="chevron-forward" size={20} color="#0060FF" />
                 </Pressable>
 
                 <Pressable style={[styles.linkRow, { borderBottomWidth: 0 }]}>
                   <Text style={styles.linkText}>Terms & Conditions</Text>
-                  <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                  <Ionicons name="chevron-forward" size={20} color="#0060FF" />
                 </Pressable>
               </View>
             </View>
