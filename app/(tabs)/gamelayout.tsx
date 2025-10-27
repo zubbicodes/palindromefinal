@@ -10,12 +10,12 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
+import { Switch } from 'react-native-switch';
 import GameLayoutWeb from './gamelayout.web';
 
 export default function GameLayout() {
@@ -29,7 +29,7 @@ export default function GameLayout() {
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([]);
   const [remainingBlocks, setRemainingBlocks] = useState(5);
   const [settingsVisible, setSettingsVisible] = useState(false); // 🆕 added state
-    const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
 
@@ -199,7 +199,6 @@ export default function GameLayout() {
           </LinearGradient>
         </Pressable>
 
-        {/* ⚙️ Settings button */}
         <Pressable onPress={() => setSettingsVisible(true)}>
           <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.gradientButton}>
             <Ionicons name="settings" size={20} color="#1a63cc" />
@@ -240,36 +239,60 @@ export default function GameLayout() {
                   <Switch
                     value={soundEnabled}
                     onValueChange={setSoundEnabled}
-                    trackColor={{ true: '#0060FF', false: '#E5E5E5' }}
-                    thumbColor="#FFFFFF"
-                    ios_backgroundColor="#E5E5E5"
-                    style={styles.toggleSwitch}
+                    disabled={false}
+                    activeText=""
+                    inActiveText=""
+                    circleSize={18}
+                    barHeight={22}
+                    circleBorderWidth={0}
+                    backgroundActive="#0060FF"
+                    backgroundInactive="#ccc"
+                    circleActiveColor="#FFFFFF"
+                    circleInActiveColor="#FFFFFF"
+                    changeValueImmediately={true}
+                    switchWidthMultiplier={2.5}
                   />
                 </View>
-
-              <View style={styles.optionRow}>
-                <Text style={styles.optionLabel}>Vibration</Text>
+                
+                <View style={styles.optionRow}>
+                  <Text style={styles.optionLabel}>Vibration</Text>
                   <Switch
                     value={vibrationEnabled}
                     onValueChange={setVibrationEnabled}
-                    trackColor={{ true: '#0060FF', false: '#E5E5E5' }}
-                    thumbColor="#FFFFFF"
-                    ios_backgroundColor="#E5E5E5"
-                    style={styles.toggleSwitch}
+                    disabled={false}
+                    activeText=""
+                    inActiveText=""
+                    circleSize={18}
+                    barHeight={22}
+                    circleBorderWidth={0}
+                    backgroundActive="#0060FF"
+                    backgroundInactive="#ccc"
+                    circleActiveColor="#FFFFFF"
+                    circleInActiveColor="#FFFFFF"
+                    changeValueImmediately={true}
+                    switchWidthMultiplier={2.5}
                   />
-              </View>
-
-              <View style={styles.optionRow}>
-                <Text style={styles.optionLabel}>Dark Mode</Text>
+                </View>
+                
+                <View style={styles.optionRow}>
+                  <Text style={styles.optionLabel}>Dark Mode</Text>
                   <Switch
                     value={darkModeEnabled}
                     onValueChange={setDarkModeEnabled}
-                    trackColor={{ true: '#0060FF', false: '#E5E5E5' }}
-                    thumbColor="#FFFFFF"
-                    ios_backgroundColor="#E5E5E5"
-                    style={styles.toggleSwitch}
+                    disabled={false}
+                    activeText=""
+                    inActiveText=""
+                    circleSize={18}
+                    barHeight={22}
+                    circleBorderWidth={0}
+                    backgroundActive="#0060FF"
+                    backgroundInactive="#E5E5E5"
+                    circleActiveColor="#FFFFFF"
+                    circleInActiveColor="#FFFFFF"
+                    changeValueImmediately={true}
+                    switchWidthMultiplier={2.5}
                   />
-              </View>
+                </View>
 
                 {/* Links */}
                 <Pressable style={styles.linkRow}>
@@ -314,7 +337,7 @@ const styles = StyleSheet.create({
 
   // ⚙️ Settings Styles
   settingsOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
-  settingsCard: { width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 },
+  settingsCard: { width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, height: '53.65%' },
   headerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   headerSpacer: {
   flex: 1,
@@ -325,18 +348,15 @@ closeButton: {
   alignItems: 'flex-end',
 },
 
-  settingsTitle: { fontSize: 20, fontWeight: '900', fontFamily: 'Geist-Regular', color: '#000' },
-  closeIcon: { fontSize: 32, color: '#007AFF', fontWeight: '300' },
+  settingsTitle: { fontSize: 24, fontWeight: '900', fontFamily: 'Geist-Regular', color: '#000', marginTop: -10 },
+  closeIcon: { fontSize: 32, color: '#007AFF', marginTop: -10 },
   profileSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   profileImage: { width: 70, height: 70, borderRadius: 35, marginBottom: 10, marginRight: 12 },
   profileName: { fontWeight: '500', fontSize: 18, color: '#000', fontFamily: 'Geist-Bold', marginBottom: 4 },
   profileLink: { color: '#007AFF', fontSize: 14, fontWeight: '400' },
   profileTextContainer: { flexDirection: 'column', justifyContent: 'center'},
-  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 1, borderBottomWidth: 1, borderBottomColor: '#E5E5E5' },
-  toggleSwitch: {
-  transform: [{ scaleX: 1 }, { scaleY: 1 }], // make it bigger & rounded like the image
-},
+  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   optionLabel: { fontSize: 16, color: '#000', fontWeight: '500' },
-  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E5E5' },
+  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   linkText: { color: '#000', fontSize: 16, fontWeight: '500' },
 });

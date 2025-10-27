@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -13,15 +14,21 @@ import {
   View
 } from 'react-native';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
+import { Switch } from 'react-native-switch';
 
 const { width } = Dimensions.get('window');
-const router = useRouter();
+
 
 export default function GameLayoutWeb() {
+  const router = useRouter();
   const [score, setScore] = useState(0);
   const [hints, setHints] = useState(2);
   const [time, setTime] = useState('00:00');
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([]);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [vibrationEnabled, setVibrationEnabled] = useState(true);
+  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
 
   const gridSize = 11;
   const center = Math.floor(gridSize / 2);
@@ -133,7 +140,7 @@ export default function GameLayoutWeb() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>PALINDROME</Text>
-      
+
       <View style={styles.statusRow}>
         <View style={styles.scoreBox}>
           <Text style={styles.sideLabel}>Score</Text>
@@ -148,15 +155,7 @@ export default function GameLayoutWeb() {
                 <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
               </SvgLinearGradient>
             </Defs>
-            <SvgText
-              fill="url(#grad)"
-              fontSize="24"
-              fontFamily="Geist-Regular"
-              fontWeight="Bold"
-              x="50%"
-              y="60%"
-              textAnchor="middle"
-            >
+            <SvgText fill="url(#grad)" fontSize="24" fontFamily="Geist-Regular" fontWeight="Bold" x="50%" y="60%" textAnchor="middle">
               {time}
             </SvgText>
           </Svg>
@@ -169,17 +168,14 @@ export default function GameLayoutWeb() {
       </View>
 
       <View style={styles.mainLayout}>
-        {/* Left Side */}
         <View style={styles.sideColumn}>
           <View style={styles.colorBlockWrapper}>
             <View style={styles.colorBlockContainer}>{colorBlocks}</View>
           </View>
         </View>
 
-        {/* Center Board */}
         <View style={styles.board}>{grid}</View>
 
-        {/* Right Side */}
         <View style={styles.sideColumn}>
           <View style={styles.colorBlockWrapper}>
             <View style={styles.colorBlockContainer}>{colorBlocks}</View>
@@ -199,19 +195,116 @@ export default function GameLayoutWeb() {
           </LinearGradient>
         </Pressable>
         <Pressable onPress={() => router.push('/profile')}>
-      <LinearGradient
-        colors={['#8ed9fc', '#3c8dea']}
-        style={styles.controlBtn}
-      >
-        <Ionicons name="list" size={20} color="#1a63cc" />
-      </LinearGradient>
-    </Pressable>
-        <Pressable>
+          <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
+            <Ionicons name="list" size={20} color="#1a63cc" />
+          </LinearGradient>
+        </Pressable>
+        <Pressable onPress={() => setSettingsVisible(true)}>
           <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
             <Ionicons name="settings" size={20} color="#1a63cc" />
           </LinearGradient>
         </Pressable>
       </View>
+
+      {/* ✅ Settings Modal Overlay */}
+      {settingsVisible && (
+        <View style={StyleSheet.absoluteFill}>
+          <BlurView intensity={20} tint="default" experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
+            <View style={styles.settingsOverlay}>
+              <View style={styles.settingsCard}>
+                <View style={styles.headerRow}>
+                    <View style={styles.headerSpacer} /> 
+                        <Text style={styles.settingsTitle}>Setting</Text>
+                        <Pressable onPress={() => setSettingsVisible(false)} style={styles.closeButton}>
+                        <Text style={styles.closeIcon}>×</Text>
+                          </Pressable>
+                      </View>
+
+                <View style={styles.profileSection}>
+                                  <Image
+                                    source={require('../../assets/images/profile.jpg')}
+                                    style={styles.profileImage}
+                                  />
+                
+                                <View style={styles.profileTextContainer}>
+                                  <Text style={styles.profileName}>Lorem Ipsum</Text>
+                                  <Text style={styles.profileLink}>Edit Profile</Text>
+                                </View>
+                              </View>
+                <View style={styles.optionRow}>
+  <Text style={styles.optionLabel}>Sound</Text>
+  <Switch
+    value={soundEnabled}
+    onValueChange={setSoundEnabled}
+    disabled={false}
+    activeText=""
+    inActiveText=""
+    circleSize={18}
+    barHeight={22}
+    circleBorderWidth={0}
+    backgroundActive="#0060FF"
+    backgroundInactive="#ccc"
+    circleActiveColor="#FFFFFF"
+    circleInActiveColor="#FFFFFF"
+    changeValueImmediately={true}
+    switchWidthMultiplier={2.5}
+  />
+</View>
+
+<View style={styles.optionRow}>
+  <Text style={styles.optionLabel}>Vibration</Text>
+  <Switch
+    value={vibrationEnabled}
+    onValueChange={setVibrationEnabled}
+    disabled={false}
+    activeText=""
+    inActiveText=""
+    circleSize={18}
+    barHeight={22}
+    circleBorderWidth={0}
+    backgroundActive="#0060FF"
+    backgroundInactive="#ccc"
+    circleActiveColor="#FFFFFF"
+    circleInActiveColor="#FFFFFF"
+    changeValueImmediately={true}
+    switchWidthMultiplier={2.5}
+  />
+</View>
+
+<View style={styles.optionRow}>
+  <Text style={styles.optionLabel}>Dark Mode</Text>
+  <Switch
+    value={darkModeEnabled}
+    onValueChange={setDarkModeEnabled}
+    disabled={false}
+    activeText=""
+    inActiveText=""
+    circleSize={18}
+    barHeight={22}
+    circleBorderWidth={0}
+    backgroundActive="#0060FF"
+    backgroundInactive="#E5E5E5"
+    circleActiveColor="#FFFFFF"
+    circleInActiveColor="#FFFFFF"
+    changeValueImmediately={true}
+    switchWidthMultiplier={2.5}
+  />
+</View>
+
+
+                <Pressable style={styles.linkRow}>
+                  <Text style={styles.linkText}>Privacy Policy</Text>
+                  <Text style={styles.arrow}>›</Text>
+                </Pressable>
+                <Pressable style={styles.linkRow}>
+                  <Text style={styles.linkText}>Terms & Conditions</Text>
+                  <Text style={styles.arrow}>›</Text>
+                </Pressable>
+              </View>
+            </View>
+          </BlurView>
+        </View>
+      )}
     </View>
   );
 }
@@ -223,7 +316,7 @@ const styles = StyleSheet.create({
   mainLayout: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'stretch', // ✅ changed from 'center' to 'stretch' for vertical alignment
+    alignItems: 'stretch', 
     flexWrap: 'nowrap',
     gap: 20,
   },
@@ -314,4 +407,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+settingsOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
+  settingsCard: { width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, height: '65%' },
+  headerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  headerSpacer: {
+  flex: 1,
+},
+
+closeButton: {
+  flex: 1,
+  alignItems: 'flex-end',
+},
+
+  settingsTitle: { fontSize: 22, fontWeight: '900', fontFamily: 'Geist-Regular', color: '#000', marginTop: -10 },
+  closeIcon: { fontSize: 26, color: '#007AFF', marginTop: -10 },
+  profileSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
+  profileImage: { width: 70, height: 70, borderRadius: 35, marginBottom: 10, marginRight: 12 },
+  profileName: { fontWeight: '500', fontSize: 18, color: '#000', fontFamily: 'Geist-Bold', marginBottom: 4 },
+  profileLink: { color: '#007AFF', fontSize: 14, fontWeight: '400' },
+  profileTextContainer: { flexDirection: 'column', justifyContent: 'center'},
+  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13 },
+  optionLabel: { fontSize: 16, color: '#000', fontWeight: '500' },
+  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  linkText: { color: '#000', fontSize: 16, fontWeight: '500' },
+  arrow: {
+    color: '#0060FF',
+    fontSize: 32,
+  }
 });
