@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur'; // 🆕 added for blur effect
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -210,7 +210,7 @@ export default function GameLayout() {
       {/* ⚙️ Settings Modal */}
       {settingsVisible && (
         <View style={StyleSheet.absoluteFill}>
-          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill}>
+          <BlurView intensity={20} tint="default" experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
             <View style={styles.settingsOverlay}>
               <View style={styles.settingsCard}>
                 {/* Header */}
