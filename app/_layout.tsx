@@ -18,7 +18,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded) {
-      const timer = setTimeout(() => setShowSplash(false), 3000); // show splash for 3s
+      const timer = setTimeout(() => setShowSplash(false), 5000); // show splash for 3s
       return () => clearTimeout(timer);
     }
   }, [fontsLoaded]);
