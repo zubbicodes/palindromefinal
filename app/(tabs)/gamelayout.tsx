@@ -229,7 +229,9 @@ export default function GameLayout() {
 
                 <View style={styles.profileTextContainer}>
                   <Text style={styles.profileName}>Lorem Ipsum</Text>
-                  <Text style={styles.profileLink}>Edit Profile</Text>
+                  <Pressable onPress={() => router.push('/profile')}>
+                    <Text style={styles.profileLink}>Edit Profile</Text>
+                  </Pressable>
                 </View>
               </View>
 
