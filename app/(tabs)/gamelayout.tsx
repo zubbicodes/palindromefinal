@@ -209,7 +209,7 @@ export default function GameLayout() {
       {/* ⚙️ Settings Modal */}
       {settingsVisible && (
         <View style={StyleSheet.absoluteFill}>
-          <BlurView intensity={20} tint="default" experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
+          <BlurView intensity={20} tint="dark" experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
             <View style={styles.settingsOverlay}>
               <View style={styles.settingsCard}>
                 {/* Header */}
@@ -229,9 +229,16 @@ export default function GameLayout() {
 
                 <View style={styles.profileTextContainer}>
                   <Text style={styles.profileName}>Lorem Ipsum</Text>
-                  <Pressable onPress={() => router.push('/profile')}>
-                    <Text style={styles.profileLink}>Edit Profile</Text>
-                  </Pressable>
+                  <Pressable
+                  onPress={() => {setSettingsVisible(false);
+                  setTimeout(() => {
+                    router.push('/profile');
+                  }, 50);
+                }}
+              >
+                <Text style={styles.profileLink}>Edit Profile</Text>
+              </Pressable>
+
                 </View>
               </View>
 
