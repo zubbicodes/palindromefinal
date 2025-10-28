@@ -32,6 +32,7 @@ export default function GameLayout() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+  const [pause, setPause] = useState(false);
 
   const handlePlay = () => {
     setScore(prev => prev + 1);
@@ -187,7 +188,7 @@ export default function GameLayout() {
           </LinearGradient>
         </Pressable>
 
-        <Pressable onPress={() => console.log('Pause')}>
+        <Pressable onPress={() => setPause(true)}>
           <LinearGradient colors={['#ffee60', '#ffa40b']} style={styles.gradientButton}>
             <Ionicons name="pause" size={20} color="#de5f07" />
           </LinearGradient>
@@ -215,7 +216,7 @@ export default function GameLayout() {
                 {/* Header */}
                 <View style={styles.headerRow}>
                     <View style={styles.headerSpacer} /> 
-                    <Text style={styles.settingsTitle}>Setting</Text>
+                    <Text style={styles.settingsTitle}>Settings</Text>
                   <Pressable onPress={() => setSettingsVisible(false)} style={styles.closeButton}>
                     <Text style={styles.closeIcon}>×</Text>
                   </Pressable>
@@ -318,6 +319,30 @@ export default function GameLayout() {
           </BlurView>
         </View>
       )}
+      {/* Pause Overlay */}
+        {pause && (
+  <View style={StyleSheet.absoluteFill}>
+    {/* Background Blur */}
+    <BlurView
+      intensity={20}
+      tint="dark"
+      experimentalBlurMethod="dimezisBlurView"
+      style={StyleSheet.absoluteFill}
+    />
+
+    {/* Centered Card */}
+    <View style={styles.pauseOverlay}>
+      <View style={styles.pauseCard}>
+        <Text style={styles.pauseTitle}>Game Paused</Text>
+
+        <Pressable onPress={() => setPause(false)} style={styles.resumeButton}>
+          <Text style={styles.resumeButtonText}>Resume</Text>
+        </Pressable>
+      </View>
+    </View>
+  </View>
+)}
+
     </SafeAreaView>
   );
 }
@@ -368,4 +393,48 @@ closeButton: {
   optionLabel: { fontSize: 16, color: '#000', fontWeight: '500' },
   linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   linkText: { color: '#000', fontSize: 16, fontWeight: '500' },
+ pauseOverlay: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+
+pauseCard: {
+  width: '70%',                // reduce length
+  maxWidth: 320,               // optional, for desktop/web scaling
+  backgroundColor: '#FFFFFF',
+  borderRadius: 20,
+  paddingVertical: 30,
+  paddingHorizontal: 20,
+  alignItems: 'center',
+  shadowColor: '#000',
+  shadowOpacity: 0.3,
+  shadowRadius: 8,
+  elevation: 5,                // Android shadow
+},
+
+pauseTitle: {
+  fontSize: 22,
+  fontWeight: '500',
+  color: '#000000ff',
+  fontFamily: 'Geist-Bold',
+  textAlign: 'center',
+  marginBottom: 20,
+},
+
+resumeButton: {
+  backgroundColor: '#0060FF',
+  borderRadius: 8,
+  paddingVertical: 12,
+  paddingHorizontal: 24,
+  alignItems: 'center',
+},
+
+resumeButtonText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '500',
+  fontFamily: 'Geist-Regular',
+},
+
 });
