@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 import { Switch } from 'react-native-switch';
-
 const { width } = Dimensions.get('window');
 
 
