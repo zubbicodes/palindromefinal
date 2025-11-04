@@ -1,9 +1,19 @@
+import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 
 export default function SignUpWeb() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [agree, setAgree] = useState(false);
+  const { colors, theme } = useTheme();
+
+  // CSS styles for placeholder
+  const placeholderStyles = `
+    input::placeholder {
+      color: ${colors.secondaryText} !important;
+      opacity: 0.7;
+    }
+  `;
 
   return (
     <div
@@ -13,21 +23,26 @@ export default function SignUpWeb() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        backgroundColor: '#fff',
+        backgroundColor: colors.background,
         fontFamily: 'Geist, sans-serif',
+        transition: 'all 0.3s ease',
       }}
     >
+      {/* Add CSS for placeholder */}
+      <style>{placeholderStyles}</style>
+
       {/* Top Bar */}
       <div
         style={{
           width: '100%',
-          borderBottom: '1px solid #E5E5E5',
+          borderBottom: `1px solid ${colors.border}`,
           padding: '20px 0',
           textAlign: 'center',
           fontWeight: 700,
-          color: '#0060FF',
+          color: colors.primary,
           fontSize: '22px',
           letterSpacing: '0.5px',
+          background: theme === 'dark' ? 'rgba(10, 15, 45, 0.9)' : '#FFFFFF',
         }}
       >
         PALINDROME
@@ -68,7 +83,8 @@ export default function SignUpWeb() {
                 fontSize: '36px',
                 fontWeight: 700,
                 marginBottom: '10px',
-                color: '#000',
+                color: colors.text,
+                transition: 'color 0.3s ease',
               }}
             >
               Create your account
@@ -76,7 +92,8 @@ export default function SignUpWeb() {
             <p
               style={{
                 fontSize: '18px',
-                color: '#555',
+                color: colors.secondaryText,
+                transition: 'color 0.3s ease',
               }}
             >
               Enter the Palindrome Realm
@@ -84,7 +101,7 @@ export default function SignUpWeb() {
           </div>
         </div>
 
-        {/* Right Form (outer wrapper - no padding/border) */}
+        {/* Right Form */}
         <div
           style={{
             flex: 1,
@@ -93,15 +110,18 @@ export default function SignUpWeb() {
             width: '100%',
           }}
         >
-          {/* ---------- bordered card: ONLY these items inside ---------- */}
+          {/* Form Card */}
           <div
             style={{
-              border: '1px solid #E0E0E0',
+              border: `1px solid ${colors.border}`,
               borderRadius: '16px',
               padding: '32px',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
+              boxShadow: theme === 'dark' 
+                ? '0 4px 20px rgba(0, 96, 255, 0.1)' 
+                : '0 2px 10px rgba(0,0,0,0.04)',
               marginBottom: '20px',
-              background: '#fff',
+              background: colors.card,
+              transition: 'all 0.3s ease',
             }}
           >
             <div
@@ -114,38 +134,43 @@ export default function SignUpWeb() {
                 gap: '24px',
               }}
             >
-                {/* Name */}
-                <div style={{ position: 'relative', width: '100%' }}>
-                  <label
-                    style={{
-                      position: 'absolute',
-                      top: '0',
-                      left: '16px',
-                      backgroundColor: '#fff',
-                      padding: '0 6px',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: '#333',
-                      transform: 'translateY(-50%)',
-                      lineHeight: '1',
-                    }}
-                  >
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. John Doe"
-                    style={{
-                      width: '100%',
-                      padding: '16px',
-                      border: '1px solid #EFE8E8',
-                      borderRadius: '10px',
-                      fontSize: '16px',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
+              {/* Name */}
+              <div style={{ position: 'relative', width: '100%' }}>
+                <label
+                  style={{
+                    position: 'absolute',
+                    top: '0',
+                    left: '16px',
+                    backgroundColor: colors.card,
+                    padding: '0 6px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: colors.text,
+                    transform: 'translateY(-50%)',
+                    lineHeight: '1',
+                    transition: 'all 0.3s ease',
+                  }}
+                >
+                  Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. John Doe"
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '10px',
+                    fontSize: '16px',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    backgroundColor: colors.inputBackground,
+                    color: colors.text,
+                    transition: 'all 0.3s ease',
+                  }}
+                />
+              </div>
+
               {/* Email */}
               <div style={{ position: 'relative', width: '100%' }}>
                 <label
@@ -153,13 +178,14 @@ export default function SignUpWeb() {
                     position: 'absolute',
                     top: '0',
                     left: '16px',
-                    backgroundColor: '#fff',
+                    backgroundColor: colors.card,
                     padding: '0 6px',
                     fontSize: '13px',
                     fontWeight: 600,
-                    color: '#333',
+                    color: colors.text,
                     transform: 'translateY(-50%)',
                     lineHeight: '1',
+                    transition: 'all 0.3s ease',
                   }}
                 >
                   Email address
@@ -170,11 +196,14 @@ export default function SignUpWeb() {
                   style={{
                     width: '100%',
                     padding: '16px',
-                    border: '1px solid #EFE8E8',
+                    border: `1px solid ${colors.border}`,
                     borderRadius: '10px',
                     fontSize: '16px',
                     outline: 'none',
                     boxSizing: 'border-box',
+                    backgroundColor: colors.inputBackground,
+                    color: colors.text,
+                    transition: 'all 0.3s ease',
                   }}
                 />
               </div>
@@ -186,14 +215,15 @@ export default function SignUpWeb() {
                     position: 'absolute',
                     top: '0',
                     left: '16px',
-                    backgroundColor: '#fff',
+                    backgroundColor: colors.card,
                     padding: '0 6px',
                     fontSize: '13px',
                     fontWeight: 600,
-                    color: '#333',
+                    color: colors.text,
                     transform: 'translateY(-50%)',
                     lineHeight: '1',
                     zIndex: 1,
+                    transition: 'all 0.3s ease',
                   }}
                 >
                   Password
@@ -204,11 +234,14 @@ export default function SignUpWeb() {
                   style={{
                     width: '100%',
                     padding: '16px 42px 16px 16px',
-                    border: '1px solid #EFE8E8',
+                    border: `1px solid ${colors.border}`,
                     borderRadius: '10px',
                     fontSize: '16px',
                     outline: 'none',
                     boxSizing: 'border-box',
+                    backgroundColor: colors.inputBackground,
+                    color: colors.text,
+                    transition: 'all 0.3s ease',
                   }}
                 />
                 <button
@@ -222,88 +255,103 @@ export default function SignUpWeb() {
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    color: '#777',
+                    color: colors.secondaryText,
+                    transition: 'color 0.3s ease',
                   }}
                 >
                   <Ionicons
                     name={passwordVisible ? 'eye' : 'eye-off'}
                     size={20}
-                    color="#777"
+                    color={colors.secondaryText}
                   />
                 </button>
               </div>
-               {/* ✅ Checkbox */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              marginBottom: '20px',
-              fontSize: '14px',
-              color: '#333',
-            }}
-          >
-            <input
-              type="checkbox"
-              id="agree"
-              checked={agree}
-              onChange={() => setAgree(!agree)}
-              style={{
-                marginRight: '8px',
-                width: '16px',
-                height: '16px',
-                cursor: 'pointer',
-              }}
-            />
-            <label htmlFor="agree">
-              I've read and agree to the{' '}
-              <span
+
+              {/* Checkbox */}
+              <div
                 style={{
-                  color: '#B7463F',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
+                  display: 'flex',
+                  alignItems: 'center',
+                  marginBottom: '20px',
+                  fontSize: '14px',
+                  color: colors.text,
+                  transition: 'color 0.3s ease',
                 }}
               >
-                terms 
-              </span> {' '}
-              or {' '}
-                <span
+                <input
+                  type="checkbox"
+                  id="agree"
+                  checked={agree}
+                  onChange={() => setAgree(!agree)}
+                  style={{
+                    marginRight: '8px',
+                    width: '16px',
+                    height: '16px',
+                    cursor: 'pointer',
+                  }}
+                />
+                <label htmlFor="agree">
+                  I have read and agree to the{' '}
+                  <span
                     style={{
-                      color: '#B7463F',
+                      color: colors.primary,
                       fontWeight: 500,
                       cursor: 'pointer',
                       textDecoration: 'underline',
                     }}
-                >
-                  privacy policy
-                </span>
-            </label>
-          </div>
+                  >
+                    terms 
+                  </span>{' '}
+                  or{' '}
+                  <span
+                    style={{
+                      color: colors.primary,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    privacy policy
+                  </span>
+                </label>
+              </div>
 
-              {/* Login button (inside card) */}
+              {/* Sign Up button */}
               <button
                 style={{
                   width: '100%',
                   padding: '14px',
                   borderRadius: '50px',
-                  backgroundColor: '#007BFF',
-                  color: '#fff',
+                  backgroundColor: colors.primary,
+                  color: colors.buttonText,
                   border: 'none',
                   fontWeight: 600,
                   fontSize: '16px',
                   cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  opacity: agree ? 1 : 0.6,
                 }}
+                disabled={!agree}
               >
                 Sign Up
               </button>
             </div>
           </div>
-          {/* ---------- end bordered card ---------- */}
 
-          {/* -------- OUTSIDE the card: footer -------- */}
-          <div style={{ textAlign: 'center', fontSize: '14px', color: '#2A2A2A' }}>
+          {/* Footer */}
+          <div style={{ 
+            textAlign: 'center', 
+            fontSize: '14px', 
+            color: colors.text,
+            transition: 'color 0.3s ease',
+          }}>
             Already have an account?{' '}
-            <span style={{ color: '#007BFF', fontWeight: 600, textDecoration: 'none', cursor: 'pointer' }}>
+            <span style={{ 
+              color: colors.primary, 
+              fontWeight: 600, 
+              cursor: 'pointer',
+              textDecoration: 'none',
+            }}>
               Log In
             </span>
           </div>

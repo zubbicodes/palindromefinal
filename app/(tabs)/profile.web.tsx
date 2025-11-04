@@ -1,3 +1,4 @@
+import { useTheme } from '@/context/ThemeContext'; // ✅ Theme import
 import React from 'react';
 import {
   Dimensions,
@@ -13,17 +14,19 @@ import {
 const { width } = Dimensions.get('window');
 
 export default function ProfileScreenWeb() {
+  const { colors, theme } = useTheme(); // ✅ Theme hook
+
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <View style={styles.container}>
+    <ScrollView contentContainerStyle={[styles.scrollContainer, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* App Name */}
-        <View style={styles.topHeader}>
-          <Text style={styles.appName}>PALINDROME</Text>
+        <View style={[styles.topHeader, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.appName, { color: colors.primary }]}>PALINDROME</Text>
         </View>
 
         {/* Page Title */}
         <View style={styles.pageHeader}>
-          <Text style={styles.headerTitle}>PROFILE</Text>
+          <Text style={[styles.headerTitle, { color: colors.primary }]}>PROFILE</Text>
         </View>
 
         {/* Form Area */}
@@ -32,11 +35,17 @@ export default function ProfileScreenWeb() {
           <View style={styles.nameRow}>
             <View style={styles.inputGroup}>
               <View style={styles.floatingLabelWrapper}>
-                <Text style={styles.floatingLabel}>Full Name</Text>
+                <Text style={[styles.floatingLabel, { backgroundColor: colors.background, color: colors.text }]}>
+                  Full Name
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { 
+                    borderColor: colors.border, 
+                    backgroundColor: colors.inputBackground,
+                    color: colors.text 
+                  }]}
                   placeholder="e.g. Jenny Wilson"
-                  placeholderTextColor="#B0B0B0"
+                  placeholderTextColor={colors.secondaryText}
                 />
               </View>
             </View>
@@ -47,8 +56,8 @@ export default function ProfileScreenWeb() {
                 source={require('../../assets/images/profile.jpg')}
                 style={styles.avatar}
               />
-              <View style={styles.editIcon}>
-                <Text style={styles.editIconText}>✎</Text>
+              <View style={[styles.editIcon, { backgroundColor: colors.background }]}>
+                <Text style={[styles.editIconText, { color: colors.primary }]}>✎</Text>
               </View>
             </View>
           </View>
@@ -57,11 +66,17 @@ export default function ProfileScreenWeb() {
           <View style={styles.rowInputs}>
             <View style={styles.inputGroup}>
               <View style={styles.floatingLabelWrapper}>
-                <Text style={styles.floatingLabel}>Email Address</Text>
+                <Text style={[styles.floatingLabel, { backgroundColor: colors.background, color: colors.text }]}>
+                  Email Address
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { 
+                    borderColor: colors.border, 
+                    backgroundColor: colors.inputBackground,
+                    color: colors.text 
+                  }]}
                   placeholder="e.g. wilson09@gmail.com"
-                  placeholderTextColor="#B0B0B0"
+                  placeholderTextColor={colors.secondaryText}
                   keyboardType="email-address"
                 />
               </View>
@@ -69,11 +84,17 @@ export default function ProfileScreenWeb() {
 
             <View style={styles.inputGroup}>
               <View style={styles.floatingLabelWrapper}>
-                <Text style={styles.floatingLabel}>Phone Number</Text>
+                <Text style={[styles.floatingLabel, { backgroundColor: colors.background, color: colors.text }]}>
+                  Phone Number
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { 
+                    borderColor: colors.border, 
+                    backgroundColor: colors.inputBackground,
+                    color: colors.text 
+                  }]}
                   placeholder="0 123 456 7890"
-                  placeholderTextColor="#B0B0B0"
+                  placeholderTextColor={colors.secondaryText}
                   keyboardType="phone-pad"
                 />
               </View>
@@ -83,17 +104,17 @@ export default function ProfileScreenWeb() {
           {/* Change Password + Save Button */}
           <View style={styles.actionRow}>
             <TouchableOpacity>
-              <Text style={styles.changePassword}>Change Password</Text>
+              <Text style={[styles.changePassword, { color: colors.primary }]}>Change Password</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton}>
+            <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.primary }]}>
               <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutButton}>
-          <Text style={styles.logoutText}>Logout</Text>
+        <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.primary }]}>
+          <Text style={styles.saveButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -105,20 +126,16 @@ const AVATAR_SIZE = 110;
 const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
-    backgroundColor: '#fff',
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   topHeader: {
     paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
     alignItems: 'center',
   },
   appName: {
-    color: '#0060FF',
     fontSize: 32,
     fontWeight: '700',
     letterSpacing: 1,
@@ -129,7 +146,6 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   headerTitle: {
-    color: '#0060FF',
     fontSize: 24,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -162,7 +178,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     right: 6,
-    backgroundColor: '#fff',
     borderRadius: 15,
     width: 28,
     height: 28,
@@ -170,8 +185,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 3,
   },
+  
   editIconText: {
-    color: '#0060FF',
     fontSize: 15,
   },
 
@@ -196,22 +211,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -7,
     left: 16,
-    backgroundColor: '#FFF',
     paddingHorizontal: 6,
     fontSize: 13,
-    color: '#000',
     fontFamily: 'Geist-Bold',
     zIndex: 2,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E0E0E0',
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
     fontSize: 15,
-    color: '#000',
-    backgroundColor: '#fff',
   },
 
   /** Buttons **/
@@ -224,11 +234,9 @@ const styles = StyleSheet.create({
   },
   changePassword: {
     fontSize: 14,
-    color: '#000',
     fontWeight: '600',
   },
   saveButton: {
-    backgroundColor: '#0060FF',
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 40,
@@ -243,16 +251,10 @@ const styles = StyleSheet.create({
   logoutButton: {
     marginTop: 120,
     width: 180,
-    backgroundColor: '#0060FF',
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-  },
-  logoutText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
   },
 });

@@ -1,3 +1,4 @@
+import { ThemeProvider } from '@/context/ThemeContext'; // ✅ import your ThemeProvider
 import * as Font from 'expo-font';
 import { Stack } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -18,17 +19,15 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded) {
-      const timer = setTimeout(() => setShowSplash(false), 5000); // show splash for 3s
+      const timer = setTimeout(() => setShowSplash(false), 5000); // show splash for 5s
       return () => clearTimeout(timer);
     }
   }, [fontsLoaded]);
 
-  // Wait for fonts to load before showing anything
   if (!fontsLoaded) {
-    return null; // or return a simple loading view
+    return null;
   }
 
-  // Show splash screen
   if (showSplash) {
     return (
       <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
@@ -37,6 +36,10 @@ export default function RootLayout() {
     );
   }
 
-  // Normal app navigation after splash
-  return <Stack screenOptions={{ headerShown: false }} />;
+  // ✅ Wrap your navigation in ThemeProvider
+  return (
+    <ThemeProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </ThemeProvider>
+  );
 }
