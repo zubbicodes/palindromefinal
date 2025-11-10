@@ -10,6 +10,7 @@ import {
   Image,
   PanResponder,
   Pressable,
+  SafeAreaView,
   StyleSheet,
   Text,
   View
@@ -17,7 +18,7 @@ import {
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 import { Switch } from 'react-native-switch';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export default function GameLayoutWeb() {
   const router = useRouter();
@@ -59,6 +60,7 @@ export default function GameLayoutWeb() {
 
   useEffect(() => {
     spawnBulldogs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const colorGradients = [
@@ -81,7 +83,7 @@ export default function GameLayoutWeb() {
           letter = word[row - (center - halfWord)];
         }
         return (
-          <View key={col} style={[styles.cell, { backgroundColor: colors.card }]}>
+          <View key={col} style={[styles.cell, {backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff', }]}>
             {isBulldog && (
               <Image
                 source={require('../../assets/images/bulldog.png')}
@@ -136,193 +138,343 @@ export default function GameLayoutWeb() {
   });
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.accent }]}>PALINDROME</Text>
+    <SafeAreaView style={{ flex: 1 }}>
+      {/* ✅ REMOVED ScrollView - Using View instead for proper layout */}
+      <View style={{ flex: 1 }}>
+        <LinearGradient
+          colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.container}
+        >
 
-      <View style={styles.statusRow}>
-        <View style={[styles.scoreBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sideLabel, { color: colors.secondaryText }]}>Score</Text>
-          <Text style={[styles.sideValue, { color: colors.accent }]}>{score}</Text>
-        </View>
+          
 
-        <View style={styles.timerContainer}>
-          <Svg height="40" width="300">
-            <Defs>
-              <SvgLinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
-                <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
-              </SvgLinearGradient>
-            </Defs>
-            <SvgText fill="url(#grad)" fontSize="24" fontFamily="Geist-Regular" fontWeight="Bold" x="50%" y="60%" textAnchor="middle">
-              {time}
-            </SvgText>
-          </Svg>
-        </View>
+          <Text style={[styles.title, { color: colors.accent }]}>PALINDROME</Text>
 
-        <View style={[styles.scoreBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sideLabel, { color: colors.secondaryText }]}>Hints</Text>
-          <Text style={[styles.sideValue, { color: '#C35DD9' }]}>{hints}</Text>
-        </View>
-      </View>
+          <View
+  style={{
+    height: 1,
+    width: '100%',
+    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
+  }}
+/>
 
-      <View style={styles.mainLayout}>
-        <View style={styles.sideColumn}>
-          <View style={[styles.colorBlockWrapper, { backgroundColor: colors.card }]}>
-            <View style={styles.colorBlockContainer}>{colorBlocks}</View>
+
+          {/* ✅ Status Row */}
+          <View style={styles.statusRow}>
+            <View style={[styles.scoreBox, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff',
+            borderColor: colors.border }]}>
+              <Text style={[styles.sideLabel, { color: colors.secondaryText }]}>Score</Text>
+              <Text style={[styles.sideValue, { color: colors.accent }]}>{score}</Text>
+            </View>
+
+            <View style={styles.timerContainer}>
+              <Svg height="40" width="300">
+                <Defs>
+                  <SvgLinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+                    <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
+                    <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
+                  </SvgLinearGradient>
+                </Defs>
+                <SvgText fill="url(#grad)" fontSize="24" fontFamily="Geist-Regular" fontWeight="Bold" x="50%" y="60%" textAnchor="middle">
+                  {time}
+                </SvgText>
+              </Svg>
+            </View>
+
+            <View style={[styles.scoreBox, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff',
+            borderColor: colors.border }]}>
+              <Text style={[styles.sideLabel, { color: colors.secondaryText }]}>Hints</Text>
+              <Text style={[styles.sideValue, { color: '#C35DD9' }]}>{hints}</Text>
+            </View>
           </View>
-        </View>
 
-        <View style={[styles.board, { backgroundColor: colors.card }]}>{grid}</View>
-
-        <View style={styles.sideColumn}>
-          <View style={[styles.colorBlockWrapper, { backgroundColor: colors.card }]}>
-            <View style={styles.colorBlockContainer}>{colorBlocks}</View>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.controlsRow}>
-        <Pressable>
-          <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
-            <Ionicons name="play" size={20} color="#1a63cc" />
-          </LinearGradient>
-        </Pressable>
-        <Pressable onPress={() => setPause(true)}>
-          <LinearGradient colors={['#ffee60', '#ffa40b']} style={styles.controlBtn}>
-            <Ionicons name="pause" size={20} color="#de5f07" />
-          </LinearGradient>
-        </Pressable>
-        <Pressable onPress={() => router.push('/profile')}>
-          <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
-            <Ionicons name="list" size={20} color="#1a63cc" />
-          </LinearGradient>
-        </Pressable>
-        <Pressable onPress={() => setSettingsVisible(true)}>
-          <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
-            <Ionicons name="settings" size={20} color="#1a63cc" />
-          </LinearGradient>
-        </Pressable>
-      </View>
-
-      {/* ✅ Settings Modal Overlay */}
-      {settingsVisible && (
-        <View style={StyleSheet.absoluteFill}>
-          <BlurView intensity={20} tint="default" experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
-            <View style={styles.settingsOverlay}>
-              <View style={[styles.settingsCard, { backgroundColor: colors.card }]}>
-                <View style={styles.headerRow}>
-                  <View style={styles.headerSpacer} /> 
-                  <Text style={[styles.settingsTitle, { color: colors.text }]}>Settings</Text>
-                  <Pressable onPress={() => setSettingsVisible(false)} style={styles.closeButton}>
-                    <Text style={[styles.closeIcon, { color: colors.accent }]}>×</Text>
-                  </Pressable>
-                </View>
-
-                {/* ✅ Profile */}
-                <View style={styles.profileSection}>
-                  <Image
-                    source={require('../../assets/images/profile.jpg')}
-                    style={styles.profileImage}
-                  />
-                  <View style={styles.profileTextContainer}>
-                    <Text style={[styles.profileName, { color: colors.text }]}>Lorem Ipsum</Text>
-                    <Pressable onPress={() => router.push('/profile')}>
-                      <Text style={[styles.profileLink, { color: colors.accent }]}>Edit Profile</Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                {/* ✅ Options */}
-                <View style={styles.optionRow}>
-                  <Text style={[styles.optionLabel, { color: colors.text }]}>Sound</Text>
-                  <Switch value={soundEnabled} onValueChange={setSoundEnabled} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#ccc" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5}/>
-                </View>
-
-                <View style={styles.optionRow}>
-                  <Text style={[styles.optionLabel, { color: colors.text }]}>Vibration</Text>
-                  <Switch value={vibrationEnabled} onValueChange={setVibrationEnabled} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#ccc" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5}/>
-                </View>
-
-                <View style={styles.optionRow}>
-                  <Text style={[styles.optionLabel, { color: colors.text }]}>Dark Mode</Text>
-                  <Switch value={theme === 'dark'} onValueChange={toggleTheme} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#E5E5E5" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5}/>
-                </View>
-
-                {/* ✅ Links */}
-                <Pressable style={styles.linkRow}>
-                  <Text style={[styles.linkText, { color: colors.text }]}>Privacy Policy</Text>
-                  <Text style={[styles.arrow, { color: colors.accent }]}>›</Text>
-                </Pressable>
-                <Pressable style={styles.linkRow}>
-                  <Text style={[styles.linkText, { color: colors.text }]}>Terms & Conditions</Text>
-                  <Text style={[styles.arrow, { color: colors.accent }]}>›</Text>
-                </Pressable>
+          {/* ✅ Main Game Area */}
+          <View style={styles.mainLayout}>
+            <View style={styles.sideColumn}>
+              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',}]}>
+                <View style={styles.colorBlockContainer}>{colorBlocks}</View>
               </View>
             </View>
-          </BlurView>
-        </View>
-      )}
 
-      {/* Pause Overlay */}
-      {pause && (
-        <View style={StyleSheet.absoluteFill}>
-          <BlurView intensity={20} tint="dark" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill}/>
-          <View style={styles.pauseOverlay}>
-            <View style={[styles.pauseCard, { backgroundColor: colors.card }]}>
-              <Text style={[styles.pauseTitle, { color: colors.text }]}>Game Paused</Text>
-              <Pressable onPress={() => setPause(false)} style={styles.resumeButton}>
-                <Text style={styles.resumeButtonText}>Resume</Text>
-              </Pressable>
+            <View style={[styles.board, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',}]}>{grid}</View>
+
+            <View style={styles.sideColumn}>
+              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',}]}>
+                <View style={styles.colorBlockContainer}>{colorBlocks}</View>
+              </View>
             </View>
           </View>
-        </View>
-      )}
-    </View>
+
+          {/* ✅ Bottom Controls - Now always visible */}
+          <View style={styles.controlsRow}>
+            <Pressable>
+              <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
+                <Ionicons name="play" size={20} color="#1a63cc" />
+              </LinearGradient>
+            </Pressable>
+            <Pressable onPress={() => setPause(true)}>
+              <LinearGradient colors={['#ffee60', '#ffa40b']} style={styles.controlBtn}>
+                <Ionicons name="pause" size={20} color="#de5f07" />
+              </LinearGradient>
+            </Pressable>
+            <Pressable onPress={() => router.push('/profile')}>
+              <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
+                <Ionicons name="list" size={20} color="#1a63cc" />
+              </LinearGradient>
+            </Pressable>
+            <Pressable onPress={() => setSettingsVisible(true)}>
+              <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
+                <Ionicons name="settings" size={20} color="#1a63cc" />
+              </LinearGradient>
+            </Pressable>
+          </View>
+
+          {/* ✅ Settings Modal Overlay */}
+          {settingsVisible && (
+            <View style={StyleSheet.absoluteFill}>
+              <BlurView intensity={20} 
+              tint="default" 
+              experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
+                <View style={styles.settingsOverlay}>
+                  <LinearGradient
+                    colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.settingsCard}
+                  >
+
+                    <View style={styles.headerRow}>
+                      <View style={styles.headerSpacer} /> 
+                      <Text style={[styles.settingsTitle, { color: colors.text }]}>Settings</Text>
+                      <Pressable onPress={() => setSettingsVisible(false)} style={styles.closeButton}>
+                        <Text style={[styles.closeIcon, { color: colors.accent }]}>×</Text>
+                      </Pressable>
+                    </View>
+
+                    {/* ✅ Profile */}
+                    <View style={styles.profileSection}>
+                      <Image
+                        source={require('../../assets/images/profile.jpg')}
+                        style={styles.profileImage}
+                      />
+                      <View style={styles.profileTextContainer}>
+                        <Text style={[styles.profileName, { color: colors.text }]}>Lorem Ipsum</Text>
+                        <Pressable onPress={() => router.push('/profile')}>
+                          <Text style={[styles.profileLink, { color: colors.accent }]}>Edit Profile</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {/* ✅ Options */}
+                    <View style={styles.optionRow}>
+                      <Text style={[styles.optionLabel, { color: colors.text }]}>Sound</Text>
+                      <Switch value={soundEnabled} onValueChange={setSoundEnabled} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#ccc" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5} 
+                      renderActiveText={false} renderInActiveText={false} />
+                    </View>
+
+                    <View style={styles.optionRow}>
+                      <Text style={[styles.optionLabel, { color: colors.text }]}>Vibration</Text>
+                      <Switch value={vibrationEnabled} onValueChange={setVibrationEnabled} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#ccc" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5}
+                      renderActiveText={false} renderInActiveText={false} />
+                    </View>
+
+                    <View style={styles.optionRow}>
+                      <Text style={[styles.optionLabel, { color: colors.text }]}>Dark Mode</Text>
+                      <Switch value={theme === 'dark'} onValueChange={toggleTheme} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#E5E5E5" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5}
+                      renderActiveText={false} renderInActiveText={false} />
+                    </View>
+
+                    {/* ✅ Links */}
+                    <Pressable style={styles.linkRow}>
+                      <Text style={[styles.linkText, { color: colors.text }]}>Privacy Policy</Text>
+                      <Text style={[styles.arrow, { color: colors.accent }]}>›</Text>
+                    </Pressable>
+                    <Pressable style={styles.linkRow}>
+                      <Text style={[styles.linkText, { color: colors.text }]}>Terms & Conditions</Text>
+                      <Text style={[styles.arrow, { color: colors.accent }]}>›</Text>
+                    </Pressable>
+                  </LinearGradient>
+                </View>
+              </BlurView>
+            </View>
+          )}
+
+          {/* Pause Overlay */}
+          {pause && (
+            <View style={StyleSheet.absoluteFill}>
+              <BlurView intensity={20} tint="dark" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill}/>
+              <View style={styles.pauseOverlay}>
+                <View style={[styles.pauseCard, { backgroundColor: colors.card }]}>
+                  <Text style={[styles.pauseTitle, { color: colors.text }]}>Game Paused</Text>
+                  <Pressable onPress={() => setPause(false)} style={styles.resumeButton}>
+                    <Text style={styles.resumeButtonText}>Resume</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+            
+          )}
+        
+        </LinearGradient>
+      </View>
+    </SafeAreaView>
+    
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', paddingVertical: 20 },
-  title: { fontSize: 26, fontWeight: '900', marginBottom: 10, textAlign: 'center' },
-  timerContainer: { marginBottom: 12 },
-  mainLayout: { flexDirection: 'row', justifyContent: 'center', alignItems: 'stretch', gap: 20 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '48%', marginBottom: 12 },
-  sideColumn: { alignItems: 'center', gap: 10, marginHorizontal: 40 },
-  colorBlockWrapper: { borderRadius: 14, paddingVertical: 16, paddingHorizontal: 16, alignItems: 'center', width: 90, height: '100%', justifyContent: 'space-between' },
-  scoreBox: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, width: 90, height: 40, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3 },
+  container: { 
+    flex: 1, 
+    alignItems: 'center', 
+    paddingVertical: -1,
+    
+    justifyContent: 'space-between',
+  },
+  title: { 
+    fontSize: 26, 
+    fontWeight: '900', 
+    marginBottom: 10, // ⬅ Added little more space below title
+    textAlign: 'center',
+    marginTop: 15,
+  },
+  timerContainer: { 
+    marginBottom: 15,
+    marginTop:13
+  },
+ statusRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+  gap: 110, // ⬅ gap matches the mainLayout side columns distance
+  marginBottom: 30,
+},
+
+  scoreBox: { 
+    flexDirection: 'row', 
+    borderWidth: 1, 
+    borderRadius: 12, 
+    width: 90, 
+    height: 40, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    shadowColor: '#000', 
+    shadowOpacity: 0.1, 
+    shadowRadius: 3,
+  },
   sideLabel: { fontSize: 10 },
   sideValue: { marginLeft: 8, fontSize: 20, fontWeight: '600' },
-  board: { width: width > 900 ? 440 : width * 0.6, aspectRatio: 1, borderRadius: 16, padding: 6, justifyContent: 'center', alignItems: 'center' },
-  row: { flexDirection: 'row' },
-  cell: { width: 32, height: 32, borderWidth: 1, borderColor: '#CCDAE466', borderRadius: 6, margin: 3.3, justifyContent: 'center', alignItems: 'center' },
-  letterText: { fontWeight: '700' },
-  bulldogImage: { width: 20, height: 20 },
-  colorBlockContainer: { alignItems: 'center', justifyContent: 'space-between', flex: 1 },
-  colorBlock: { width: 70, height: 70, borderRadius: 10, marginVertical: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 3, elevation: 3 },
-  gradientBlock: { flex: 1, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  
+  mainLayout: { 
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 60, // ⬅ Increased gap between left, board, right
+    flex: 1,
+    marginVertical: 10,
+  },
+  
+  sideColumn: { 
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colorBlockWrapper: { 
+    borderRadius: 14, 
+    paddingVertical: 12, // ⬅ Added equal top & bottom padding for vertical spacing
+    paddingHorizontal: 16, 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    width: 90, 
+    height: 'auto', 
+  },
+  colorBlockContainer: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: 16, // ⬅ Added gap between color blocks vertically
+  },
+  colorBlock: { 
+    width: 67, 
+    height: 65, 
+    borderRadius: 10, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.2, 
+    shadowRadius: 3, 
+    elevation: 3,
+  },
+  gradientBlock: { 
+    flex: 1, 
+    borderRadius: 10, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
   blockText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  controlsRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 12, gap: 16 },
-  controlBtn: { width: 35, height: 35, borderRadius: 22.5, alignItems: 'center', justifyContent: 'center' },
+  
+  board: { 
+    width: width > 900 ? 400 : Math.min(width * 0.6, 400),
+    aspectRatio: 1, 
+    borderRadius: 16, 
+    padding: 6, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    minWidth: 400,
+    maxWidth: 400,
+  },
+  row: { flexDirection: 'row' },
+  cell: { 
+    width: 28, 
+    height: 28, 
+    borderWidth: 1, 
+    borderColor: '#CCDAE466', 
+    borderRadius: 6, 
+    margin: 3,
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
+  letterText: { fontWeight: '700', fontSize: 12 },
+  bulldogImage: { width: 18, height: 18 },
+  
+  controlsRow: { 
+    position: 'relative', // ⬅ fix position
+    bottom: -10,           // ⬅ distance from bottom
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 18,
+    paddingVertical: 20,
+    
+  },
+
+
+  controlBtn: { 
+    width: 35, 
+    height: 35, 
+    borderRadius: 22.5, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+  },
   settingsOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
   settingsCard: { width: '100%', maxWidth: 340, borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, height: '65%' },
   headerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   headerSpacer: { flex: 1 },
   closeButton: { flex: 1, alignItems: 'flex-end' },
   settingsTitle: { fontSize: 22, fontWeight: '900', fontFamily: 'Geist-Regular', marginTop: -10 },
-  closeIcon: { fontSize: 26, marginTop: -10 },
-  profileSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  profileImage: { width: 70, height: 70, borderRadius: 35, marginBottom: 10, marginRight: 12 },
-  profileName: { fontWeight: '500', fontSize: 18, fontFamily: 'Geist-Bold', marginBottom: 4 },
-  profileLink: { fontSize: 14, fontWeight: '400' },
-  profileTextContainer: { flexDirection: 'column', justifyContent: 'center'},
-  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13 },
-  optionLabel: { fontSize: 16, fontWeight: '500' },
-  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  linkText: { fontSize: 16, fontWeight: '500' },
-  arrow: { fontSize: 32 },
-  pauseOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  pauseCard: { width: '70%', maxWidth: 320, borderRadius: 20, paddingVertical: 30, paddingHorizontal: 20, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
-  pauseTitle: { fontSize: 22, fontWeight: '500', fontFamily: 'Geist-Bold', textAlign: 'center', marginBottom: 20 },
-  resumeButton: { backgroundColor: '#0060FF', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 24, alignItems: 'center' },
-  resumeButtonText: { color: '#fff', fontSize: 16, fontWeight: '500', fontFamily: 'Geist-Regular' },
+  closeIcon: { fontSize: 28, fontWeight: '700', fontFamily: 'Geist-Regular' },
+  profileSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  profileImage: { width: 50, height: 50, borderRadius: 25, marginRight: 15 },
+  profileTextContainer: { flex: 1 },
+  profileName: { fontSize: 16, fontWeight: '700' },
+  profileLink: { fontSize: 13, textDecorationLine: 'underline' },
+  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 8 },
+  optionLabel: { fontSize: 16 },
+  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
+  linkText: { fontSize: 15 },
+  arrow: { fontSize: 22, fontWeight: '600' },
+  pauseOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  pauseCard: { padding: 20, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8 },
+  pauseTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 12 },
+  resumeButton: { backgroundColor: '#4CAF50', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
+  resumeButtonText: { color: '#fff', fontWeight: '700' },
 });

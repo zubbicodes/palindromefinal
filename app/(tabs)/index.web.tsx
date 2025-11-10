@@ -1,11 +1,21 @@
 import { useTheme } from '@/context/ThemeContext'; // ✅ Theme import
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 export default function LoginWeb() {
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const { colors, theme } = useTheme(); // ✅ Theme hook
+
+  // Update width on resize
+  useEffect(() => {
+    function handleResize() {
+      setWindowWidth(window.innerWidth);
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // CSS for placeholder
   const placeholderStyles = `
@@ -25,8 +35,13 @@ export default function LoginWeb() {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          background: colors.gradient, // ✅ Gradient background
+          justifyContent: 'flex-start',
+          background: theme === 'dark'
+            ? 'linear-gradient(to right, #000017, #000074)'
+            : '#FFFFFF',
           fontFamily: 'Geist, sans-serif',
+          overflowY: windowWidth < 900 ? 'auto' : 'hidden', // ✅ small screens scroll
+          boxSizing: 'border-box',
         }}
       >
         {/* Top Bar */}
@@ -40,7 +55,7 @@ export default function LoginWeb() {
             color: colors.primary,
             fontSize: '22px',
             letterSpacing: '0.5px',
-            background: theme === 'dark' ? 'rgba(0, 0, 23, 0.8)' : 'rgba(255, 255, 255, 0.9)',
+            background: theme === 'dark' ? 'linear-gradient(to right, #000017, #000074)' : '#FFFFFF',
             backdropFilter: 'blur(10px)',
           }}
         >
@@ -56,9 +71,10 @@ export default function LoginWeb() {
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'flex-start',
-            padding: '80px 40px',
+            padding: '60px 40px',
             gap: '60px',
             flexWrap: 'wrap',
+            boxSizing: 'border-box',
           }}
         >
           {/* Left Text */}
@@ -71,18 +87,13 @@ export default function LoginWeb() {
               alignItems: 'flex-start',
             }}
           >
-            <div
-              style={{
-                width: '400px',
-                textAlign: 'right',
-              }}
-            >
+            <div style={{ width: '400px', textAlign: 'right' }}>
               <h1
                 style={{
                   fontSize: '36px',
                   fontWeight: 700,
                   marginBottom: '10px',
-                  color: colors.text, // ✅ Theme text color
+                  color: colors.text,
                 }}
               >
                 Login to your account
@@ -90,7 +101,7 @@ export default function LoginWeb() {
               <p
                 style={{
                   fontSize: '18px',
-                  color: colors.secondaryText, // ✅ Theme secondary text
+                  color: colors.secondaryText,
                 }}
               >
                 Continue Your Palindrome Journey
@@ -113,11 +124,11 @@ export default function LoginWeb() {
                 border: `1px solid ${colors.border}`,
                 borderRadius: '16px',
                 padding: '32px',
-                boxShadow: theme === 'dark' 
-                  ? '0 8px 32px rgba(0, 96, 255, 0.15)' 
+                boxShadow: theme === 'dark'
+                  ? '0 4px 20px rgba(0, 96, 255, 0.1)'
                   : '0 2px 10px rgba(0,0,0,0.04)',
                 marginBottom: '20px',
-                background: colors.card, // ✅ Theme card background
+                backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
                 backdropFilter: 'blur(10px)',
               }}
             >
@@ -138,7 +149,7 @@ export default function LoginWeb() {
                       position: 'absolute',
                       top: '0',
                       left: '16px',
-                      backgroundColor: colors.card,
+                      backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
                       padding: '0 6px',
                       fontSize: '13px',
                       fontWeight: 600,
@@ -160,7 +171,7 @@ export default function LoginWeb() {
                       fontSize: '16px',
                       outline: 'none',
                       boxSizing: 'border-box',
-                      backgroundColor: colors.inputBackground,
+                      backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
                       color: colors.text,
                     }}
                   />
@@ -173,7 +184,7 @@ export default function LoginWeb() {
                       position: 'absolute',
                       top: '0',
                       left: '16px',
-                      backgroundColor: colors.card,
+                      backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
                       padding: '0 6px',
                       fontSize: '13px',
                       fontWeight: 600,
@@ -196,7 +207,7 @@ export default function LoginWeb() {
                       fontSize: '16px',
                       outline: 'none',
                       boxSizing: 'border-box',
-                      backgroundColor: colors.inputBackground,
+                      backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
                       color: colors.text,
                     }}
                   />
@@ -223,17 +234,11 @@ export default function LoginWeb() {
                 </div>
 
                 {/* Forgot password */}
-                <div
-                  style={{
-                    textAlign: 'right',
-                    marginTop: '-10px',
-                    marginBottom: '0',
-                  }}
-                >
+                <div style={{ textAlign: 'right', marginTop: '-10px', marginBottom: '0' }}>
                   <span
                     style={{
                       fontSize: '14px',
-                      color: colors.error, // ✅ Theme error color
+                      color: colors.error,
                       fontWeight: 600,
                       textDecoration: 'none',
                       cursor: 'pointer',
@@ -250,7 +255,7 @@ export default function LoginWeb() {
                     width: '100%',
                     padding: '14px',
                     borderRadius: '50px',
-                    backgroundColor: colors.buttonPrimary, // ✅ Theme button color
+                    backgroundColor: colors.buttonPrimary,
                     color: colors.buttonText,
                     border: 'none',
                     fontWeight: 600,
@@ -264,36 +269,29 @@ export default function LoginWeb() {
               </div>
             </div>
 
-            {/* Divider */}
+            {/* Divider & Social Buttons */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginBottom: '20px',
+                gap: '10px',
+                flexWrap: 'wrap',
               }}
             >
               <div style={{ width: '70px', height: '1px', background: colors.border }} />
-              <span
-                style={{
-                  margin: '0 10px',
-                  color: colors.primary,
-                  fontWeight: 600,
-                  fontSize: '14px',
-                }}
-              >
-                or
-              </span>
+              <span style={{ color: colors.primary, fontWeight: 600, fontSize: '14px' }}>or</span>
               <div style={{ width: '70px', height: '1px', background: colors.border }} />
             </div>
 
-            {/* Social Buttons */}
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 gap: '12px',
                 marginBottom: '24px',
+                flexWrap: 'wrap',
               }}
             >
               <button
@@ -306,14 +304,13 @@ export default function LoginWeb() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  background: colors.card,
+                  background: theme === 'dark' ? 'rgba(25,25,91,1)' : '#FFFFFF',
                   color: colors.text,
                 }}
               >
                 <img src="/images/google.png" alt="Google" style={{ width: '18px', marginRight: '8px' }} />
                 Sign in with Google
               </button>
-
               <button
                 style={{
                   flex: 1,
@@ -324,7 +321,7 @@ export default function LoginWeb() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  background: colors.card,
+                  backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
                   color: colors.text,
                 }}
               >

@@ -1,14 +1,38 @@
-import { ThemeProvider } from '@/context/ThemeContext'; // ✅ import your ThemeProvider
+import { ThemeProvider, useThemeContext } from '@/context/ThemeContext';
 import * as Font from 'expo-font';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import Animated, { FadeOut } from 'react-native-reanimated';
 
 const SplashScreen = Platform.select({
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   web: require('../screens/loadscreen.web').default,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   default: require('../screens/loadscreen.native').default,
 });
+
+// Separate component to apply gradient background globally
+function AppContent() {
+  const { theme } = useThemeContext();
+
+  // Figma dark gradient colors
+  const darkGradient = ['#0F172A', '#1E1B4B', '#312E81'] as const;
+const lightGradient = ['#FFFFFF', '#E2E8F0'] as const;
+
+
+  return (
+    <LinearGradient
+      colors={theme === 'dark' ? darkGradient : lightGradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradient}
+    >
+      <Stack screenOptions={{ headerShown: false }} />
+    </LinearGradient>
+  );
+}
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
@@ -19,14 +43,12 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded) {
-      const timer = setTimeout(() => setShowSplash(false), 5000); // show splash for 5s
+      const timer = setTimeout(() => setShowSplash(false), 5000);
       return () => clearTimeout(timer);
     }
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  if (!fontsLoaded) return null;
 
   if (showSplash) {
     return (
@@ -36,10 +58,16 @@ export default function RootLayout() {
     );
   }
 
-  // ✅ Wrap your navigation in ThemeProvider
+  // ✅ Wrap your entire app in ThemeProvider
   return (
     <ThemeProvider>
-      <Stack screenOptions={{ headerShown: false }} />
+      <AppContent />
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+});

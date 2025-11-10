@@ -1,13 +1,23 @@
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect, useState } from 'react';
 
 export default function SignUpWeb() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [agree, setAgree] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const { colors, theme } = useTheme();
 
-  // CSS styles for placeholder
+  // Track screen width for responsive scroll
+  useEffect(() => {
+    function handleResize() {
+      setWindowWidth(window.innerWidth);
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const placeholderStyles = `
     input::placeholder {
       color: ${colors.secondaryText} !important;
@@ -21,45 +31,60 @@ export default function SignUpWeb() {
         width: '100%',
         minHeight: '100vh',
         display: 'flex',
+        overflowY: windowWidth < 900 ? 'auto' : 'hidden', // ✅ small screens scroll
         flexDirection: 'column',
-        alignItems: 'center',
-        backgroundColor: colors.background,
+        alignItems: 'flex-start',
+        justifyContent: 'flex-start',
+        background:
+          theme === 'dark'
+            ? 'linear-gradient(to right, #000017, #000074)'
+            : '#FFFFFF',
         fontFamily: 'Geist, sans-serif',
-        transition: 'all 0.3s ease',
+        overflowX: 'hidden',
+        boxSizing: 'border-box',
       }}
     >
-      {/* Add CSS for placeholder */}
       <style>{placeholderStyles}</style>
 
-      {/* Top Bar */}
-      <div
+      {/* ✅ Top Bar */}
+      <LinearGradient
+        colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
         style={{
           width: '100%',
-          borderBottom: `1px solid ${colors.border}`,
-          padding: '20px 0',
-          textAlign: 'center',
-          fontWeight: 700,
-          color: colors.primary,
-          fontSize: '22px',
-          letterSpacing: '0.5px',
-          background: theme === 'dark' ? 'rgba(10, 15, 45, 0.9)' : '#FFFFFF',
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          paddingVertical: 20,
+          justifyContent: 'center',
+          alignItems: 'center',
         }}
       >
-        PALINDROME
-      </div>
+        <span
+          style={{
+            fontWeight: 700,
+            color: colors.primary,
+            fontSize: '22px',
+            letterSpacing: '0.5px',
+          }}
+        >
+          PALINDROME
+        </span>
+      </LinearGradient>
 
-      {/* Main Section */}
+      {/* ✅ Main Section */}
       <div
         style={{
           flex: 1,
           width: '100%',
-          maxWidth: '1100px',
+          maxWidth: '1200px',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'flex-start',
-          padding: '80px 40px',
+          padding: '60px 40px',
           gap: '60px',
           flexWrap: 'wrap',
+          boxSizing: 'border-box',
         }}
       >
         {/* Left Text */}
@@ -74,8 +99,10 @@ export default function SignUpWeb() {
         >
           <div
             style={{
-              width: '400px',
+              width: '100%',
+              maxWidth: '400px',
               textAlign: 'right',
+              margin: '0 auto',
             }}
           >
             <h1
@@ -84,7 +111,6 @@ export default function SignUpWeb() {
                 fontWeight: 700,
                 marginBottom: '10px',
                 color: colors.text,
-                transition: 'color 0.3s ease',
               }}
             >
               Create your account
@@ -93,7 +119,6 @@ export default function SignUpWeb() {
               style={{
                 fontSize: '18px',
                 color: colors.secondaryText,
-                transition: 'color 0.3s ease',
               }}
             >
               Enter the Palindrome Realm
@@ -105,23 +130,27 @@ export default function SignUpWeb() {
         <div
           style={{
             flex: 1,
-            minWidth: '400px',
+            minWidth: '380px',
             maxWidth: '400px',
             width: '100%',
+            margin: '0 auto',
           }}
         >
-          {/* Form Card */}
           <div
             style={{
               border: `1px solid ${colors.border}`,
               borderRadius: '16px',
               padding: '32px',
-              boxShadow: theme === 'dark' 
-                ? '0 4px 20px rgba(0, 96, 255, 0.1)' 
-                : '0 2px 10px rgba(0,0,0,0.04)',
+              boxShadow:
+                theme === 'dark'
+                  ? '0 4px 20px rgba(0, 96, 255, 0.1)'
+                  : '0 2px 10px rgba(0,0,0,0.04)',
               marginBottom: '20px',
-              background: colors.card,
-              transition: 'all 0.3s ease',
+              background:
+                theme === 'dark'
+                  ? 'rgba(25, 25, 91, 0.7)'
+                  : '#FFFFFF',
+              backdropFilter: 'blur(10px)',
             }}
           >
             <div
@@ -141,14 +170,16 @@ export default function SignUpWeb() {
                     position: 'absolute',
                     top: '0',
                     left: '16px',
-                    backgroundColor: colors.card,
+                    backgroundColor:
+                      theme === 'dark'
+                        ? 'rgba(25, 25, 91, 0.7)'
+                        : '#F9FAFB',
                     padding: '0 6px',
                     fontSize: '13px',
                     fontWeight: 600,
                     color: colors.text,
                     transform: 'translateY(-50%)',
                     lineHeight: '1',
-                    transition: 'all 0.3s ease',
                   }}
                 >
                   Name
@@ -163,10 +194,12 @@ export default function SignUpWeb() {
                     borderRadius: '10px',
                     fontSize: '16px',
                     outline: 'none',
-                    boxSizing: 'border-box',
-                    backgroundColor: colors.inputBackground,
+                    backgroundColor:
+                      theme === 'dark'
+                        ? 'rgba(25, 25, 91, 0.7)'
+                        : '#F9FAFB',
                     color: colors.text,
-                    transition: 'all 0.3s ease',
+                    boxSizing: 'border-box',
                   }}
                 />
               </div>
@@ -178,14 +211,15 @@ export default function SignUpWeb() {
                     position: 'absolute',
                     top: '0',
                     left: '16px',
-                    backgroundColor: colors.card,
+                    backgroundColor:
+                      theme === 'dark'
+                        ? 'rgba(25, 25, 91, 0.7)'
+                        : '#F9FAFB',
                     padding: '0 6px',
                     fontSize: '13px',
                     fontWeight: 600,
                     color: colors.text,
                     transform: 'translateY(-50%)',
-                    lineHeight: '1',
-                    transition: 'all 0.3s ease',
                   }}
                 >
                   Email address
@@ -200,10 +234,12 @@ export default function SignUpWeb() {
                     borderRadius: '10px',
                     fontSize: '16px',
                     outline: 'none',
-                    boxSizing: 'border-box',
-                    backgroundColor: colors.inputBackground,
+                    backgroundColor:
+                      theme === 'dark'
+                        ? 'rgba(25, 25, 91, 0.7)'
+                        : '#F9FAFB',
                     color: colors.text,
-                    transition: 'all 0.3s ease',
+                    boxSizing: 'border-box',
                   }}
                 />
               </div>
@@ -215,15 +251,16 @@ export default function SignUpWeb() {
                     position: 'absolute',
                     top: '0',
                     left: '16px',
-                    backgroundColor: colors.card,
+                    backgroundColor:
+                      theme === 'dark'
+                        ? 'rgba(25, 25, 91, 0.7)'
+                        : '#F9FAFB',
                     padding: '0 6px',
                     fontSize: '13px',
                     fontWeight: 600,
                     color: colors.text,
                     transform: 'translateY(-50%)',
                     lineHeight: '1',
-                    zIndex: 1,
-                    transition: 'all 0.3s ease',
                   }}
                 >
                   Password
@@ -238,10 +275,12 @@ export default function SignUpWeb() {
                     borderRadius: '10px',
                     fontSize: '16px',
                     outline: 'none',
-                    boxSizing: 'border-box',
-                    backgroundColor: colors.inputBackground,
+                    backgroundColor:
+                      theme === 'dark'
+                        ? 'rgba(25, 25, 91, 0.7)'
+                        : '#F9FAFB',
                     color: colors.text,
-                    transition: 'all 0.3s ease',
+                    boxSizing: 'border-box',
                   }}
                 />
                 <button
@@ -256,7 +295,6 @@ export default function SignUpWeb() {
                     border: 'none',
                     cursor: 'pointer',
                     color: colors.secondaryText,
-                    transition: 'color 0.3s ease',
                   }}
                 >
                   <Ionicons
@@ -272,10 +310,8 @@ export default function SignUpWeb() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  marginBottom: '20px',
                   fontSize: '14px',
                   color: colors.text,
-                  transition: 'color 0.3s ease',
                 }}
               >
                 <input
@@ -291,24 +327,24 @@ export default function SignUpWeb() {
                   }}
                 />
                 <label htmlFor="agree">
-                  I have read and agree to the{' '}
+                  I agree to the{' '}
                   <span
                     style={{
-                      color: colors.primary,
-                      fontWeight: 500,
-                      cursor: 'pointer',
+                      color: '#FF0000',
+                      fontWeight: 600,
                       textDecoration: 'underline',
+                      cursor: 'pointer',
                     }}
                   >
-                    terms 
+                    terms
                   </span>{' '}
-                  or{' '}
+                  and{' '}
                   <span
                     style={{
-                      color: colors.primary,
-                      fontWeight: 500,
-                      cursor: 'pointer',
+                      color: '#FF0000',
+                      fontWeight: 600,
                       textDecoration: 'underline',
+                      cursor: 'pointer',
                     }}
                   >
                     privacy policy
@@ -316,20 +352,18 @@ export default function SignUpWeb() {
                 </label>
               </div>
 
-              {/* Sign Up button */}
+              {/* Signup Button */}
               <button
                 style={{
                   width: '100%',
                   padding: '14px',
                   borderRadius: '50px',
-                  backgroundColor: colors.primary,
+                  backgroundColor: colors.buttonPrimary,
                   color: colors.buttonText,
                   border: 'none',
                   fontWeight: 600,
                   fontSize: '16px',
                   cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  opacity: agree ? 1 : 0.6,
                 }}
                 disabled={!agree}
               >
@@ -339,19 +373,21 @@ export default function SignUpWeb() {
           </div>
 
           {/* Footer */}
-          <div style={{ 
-            textAlign: 'center', 
-            fontSize: '14px', 
-            color: colors.text,
-            transition: 'color 0.3s ease',
-          }}>
+          <div
+            style={{
+              textAlign: 'center',
+              fontSize: '14px',
+              color: colors.text,
+            }}
+          >
             Already have an account?{' '}
-            <span style={{ 
-              color: colors.primary, 
-              fontWeight: 600, 
-              cursor: 'pointer',
-              textDecoration: 'none',
-            }}>
+            <span
+              style={{
+                color: colors.primary,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
               Log In
             </span>
           </div>

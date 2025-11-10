@@ -1,4 +1,6 @@
+import { useThemeContext } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
   Platform,
@@ -12,6 +14,8 @@ import {
 import SignUpWeb from './signup.web';
 
 export default function SignupScreen() {
+  const { theme } = useThemeContext();
+
   if (Platform.OS === 'web') {
     return <SignUpWeb />;
   }
@@ -20,119 +24,245 @@ export default function SignupScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+    <LinearGradient
+      colors={
+        theme === 'dark'
+          ? ['#000017', '#000074'] // 🌙 Dark theme gradient
+          : ['#E6F0FF', '#FFFFFF'] // ☀️ Light theme gradient
+      }
+      style={{ flex: 1 }}
     >
-      <View style={styles.container}>
-        {/* Header */}
-        <Text style={styles.title}>Create your account</Text>
-        <Text style={styles.subtitle}>Enter the Palindrome Realm</Text>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+      >
+        <View style={styles.container}>
+          {/* Header */}
+          <Text
+            style={[
+              styles.title,
+              { color: theme === 'dark' ? '#FFF' : '#000' },
+            ]}
+          >
+            Create your account
+          </Text>
+          <Text
+            style={[
+              styles.subtitle,
+              { color: theme === 'dark' ? '#CCC' : '#49463F' },
+            ]}
+          >
+            Enter the Palindrome Realm
+          </Text>
 
-        {/* Full Name Input */}
-        <View style={styles.inputGroup}>
-          <View style={styles.floatingLabelWrapper}>
-            <Text style={styles.floatingLabel}>Full Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Jenny Wilson"
-              placeholderTextColor="#B0B0B0"
-              keyboardType="default"
-            />
-          </View>
-        </View>
-
-        {/* Email Input */}
-        <View style={styles.inputGroup}>
-          <View style={styles.floatingLabelWrapper}>
-            <Text style={styles.floatingLabel}>Email address</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. wilson09@gmail.com"
-              placeholderTextColor="#B0B0B0"
-              keyboardType="email-address"
-            />
-          </View>
-        </View>
-
-        {/* Password Input */}
-        <View style={styles.inputGroup}>
-          <View style={styles.floatingLabelWrapper}>
-            <Text style={styles.floatingLabel}>Password</Text>
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="********"
-                placeholderTextColor="#B0B0B0"
-                secureTextEntry={!passwordVisible}
-              />
-              <TouchableOpacity
-                onPress={() => setPasswordVisible(!passwordVisible)}
-                style={styles.iconButton}
+          {/* Full Name Input */}
+          <View style={styles.inputGroup}>
+            <View style={styles.floatingLabelWrapper}>
+              <Text
+                style={[
+                  styles.floatingLabel,
+                  {
+                    color: theme === 'dark' ? '#FFF' : '#000',
+                    backgroundColor: theme === 'dark' ? '#00002A' : '#FFF',
+                  },
+                ]}
               >
-                <Ionicons
-                  name={passwordVisible ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color="#999"
-                />
-              </TouchableOpacity>
+                Full Name
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor:
+                      theme === 'dark'
+                        ? 'rgba(0,0,50,0.4)'
+                        : 'rgba(255,255,255,0.6)',
+                    borderColor:
+                      theme === 'dark'
+                        ? 'rgba(255,255,255,0.2)'
+                        : 'rgba(0,0,0,0.1)',
+                    color: theme === 'dark' ? '#FFF' : '#000',
+                  },
+                ]}
+                placeholder="e.g. Jenny Wilson"
+                placeholderTextColor={theme === 'dark' ? '#AAA' : '#B0B0B0'}
+                keyboardType="default"
+              />
             </View>
           </View>
-        </View>
 
-        {/* ✅ Terms & Conditions Checkbox */}
-        <TouchableOpacity
-          onPress={() => setAgree(!agree)}
-          activeOpacity={0.8}
-          style={styles.checkboxRow}
-        >
-          <View style={[styles.checkboxBox, agree && styles.checkboxChecked]}>
-            {agree && <Ionicons name="checkmark" size={14} color="#fff" />}
+          {/* Email Input */}
+          <View style={styles.inputGroup}>
+            <View style={styles.floatingLabelWrapper}>
+              <Text
+                style={[
+                  styles.floatingLabel,
+                  {
+                    color: theme === 'dark' ? '#FFF' : '#000',
+                    backgroundColor: theme === 'dark' ? '#00002A' : '#FFF',
+                  },
+                ]}
+              >
+                Email address
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor:
+                      theme === 'dark'
+                        ? 'rgba(0,0,50,0.4)'
+                        : 'rgba(255,255,255,0.6)',
+                    borderColor:
+                      theme === 'dark'
+                        ? 'rgba(255,255,255,0.2)'
+                        : 'rgba(0,0,0,0.1)',
+                    color: theme === 'dark' ? '#FFF' : '#000',
+                  },
+                ]}
+                placeholder="e.g. wilson09@gmail.com"
+                placeholderTextColor={theme === 'dark' ? '#AAA' : '#B0B0B0'}
+                keyboardType="email-address"
+              />
+            </View>
           </View>
 
-          <Text style={styles.checkboxText}>
-            I've read and agree to the{' '}
-            <Text style={[styles.linkText, { textDecorationLine: 'underline' }]}>
-            terms{' '}
-            </Text>
-            or{' '}
-            <Text style={[styles.linkText, { textDecorationLine: 'underline' }]}>
-            privacy policy
-            </Text>
-          </Text>
-        </TouchableOpacity>
+          {/* Password Input */}
+          <View style={styles.inputGroup}>
+            <View style={styles.floatingLabelWrapper}>
+              <Text
+                style={[
+                  styles.floatingLabel,
+                  {
+                    color: theme === 'dark' ? '#FFF' : '#000',
+                    backgroundColor: theme === 'dark' ? '#00002A' : '#FFF',
+                  },
+                ]}
+              >
+                Password
+              </Text>
+              <View
+                style={[
+                  styles.passwordContainer,
+                  {
+                    backgroundColor:
+                      theme === 'dark'
+                        ? 'rgba(0,0,50,0.4)'
+                        : 'rgba(255,255,255,0.6)',
+                    borderColor:
+                      theme === 'dark'
+                        ? 'rgba(255,255,255,0.2)'
+                        : 'rgba(0,0,0,0.1)',
+                  },
+                ]}
+              >
+                <TextInput
+                  style={[
+                    styles.passwordInput,
+                    { color: theme === 'dark' ? '#FFF' : '#000' },
+                  ]}
+                  placeholder="********"
+                  placeholderTextColor={theme === 'dark' ? '#AAA' : '#B0B0B0'}
+                  secureTextEntry={!passwordVisible}
+                />
+                <TouchableOpacity
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                  style={styles.iconButton}
+                >
+                  <Ionicons
+                    name={passwordVisible ? 'eye-outline' : 'eye-off-outline'}
+                    size={20}
+                    color={theme === 'dark' ? '#DDD' : '#999'}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
 
-        {/* Sign Up Button */}
-        <TouchableOpacity
-          style={[
-            styles.loginButton,
-            { backgroundColor: agree ? '#007BFF' : '#A0C8FF' },
-          ]}
-          disabled={!agree}
-        >
-          <Text style={styles.loginButtonText}>Sign Up</Text>
-        </TouchableOpacity>
+          {/* ✅ Terms & Conditions Checkbox */}
+          <TouchableOpacity
+            onPress={() => setAgree(!agree)}
+            activeOpacity={0.8}
+            style={styles.checkboxRow}
+          >
+            <View
+              style={[
+                styles.checkboxBox,
+                {
+                  backgroundColor:
+                    theme === 'dark' ? '#00002A' : '#FFF',
+                  borderColor:
+                    theme === 'dark' ? '#999' : '#B0B0B0',
+                },
+                agree && {
+                  backgroundColor: '#007BFF',
+                  borderColor: '#007BFF',
+                },
+              ]}
+            >
+              {agree && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Already have an account?{' '}
-            <Text style={styles.footerBold}>Log In</Text>
-          </Text>
+            <Text
+              style={[
+                styles.checkboxText,
+                { color: theme === 'dark' ? '#DDD' : '#333' },
+              ]}
+            >
+              I've read and agree to the{' '}
+              <Text
+                style={[styles.linkText, { textDecorationLine: 'underline' }]}
+              >
+                terms{' '}
+              </Text>
+              or{' '}
+              <Text
+                style={[styles.linkText, { textDecorationLine: 'underline' }]}
+              >
+                privacy policy
+              </Text>
+            </Text>
+          </TouchableOpacity>
+
+          {/* Sign Up Button */}
+          <TouchableOpacity
+            style={[
+              styles.loginButton,
+              { backgroundColor: agree ? '#007BFF' : '#A0C8FF' },
+            ]}
+            disabled={!agree}
+          >
+            <Text style={styles.loginButtonText}>Sign Up</Text>
+          </TouchableOpacity>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text
+              style={[
+                styles.footerText,
+                { color: theme === 'dark' ? '#CCC' : '#2A2A2A' },
+              ]}
+            >
+              Already have an account?{' '}
+              <Text
+                style={[
+                  styles.footerBold,
+                  { color: theme === 'dark' ? '#66A3FF' : '#007BFF' },
+                ]}
+              >
+                Log In
+              </Text>
+            </Text>
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: '#FFF',
-  },
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
     paddingHorizontal: 24,
     paddingTop: 80,
     paddingBottom: 60,
@@ -142,14 +272,12 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Geist-Bold',
     fontSize: 26,
-    color: '#000',
     marginBottom: 6,
     textAlign: 'left',
   },
   subtitle: {
     fontFamily: 'Geist-Regular',
     fontSize: 14,
-    color: '#49463F',
     marginBottom: 40,
     textAlign: 'left',
   },
@@ -165,38 +293,30 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -7,
     left: 16,
-    backgroundColor: '#FFF',
     paddingHorizontal: 6,
     fontSize: 13,
-    color: '#000',
     fontFamily: 'Geist-Bold',
     zIndex: 2,
   },
   input: {
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE8E8',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#000',
     fontFamily: 'Geist-Regular',
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#EFE8E8',
     borderRadius: 12,
-    backgroundColor: '#FFF',
     paddingHorizontal: 16,
   },
   passwordInput: {
     flex: 1,
     fontFamily: 'Geist-Regular',
     fontSize: 16,
-    color: '#000',
     paddingVertical: 14,
   },
   iconButton: {
@@ -214,30 +334,22 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#B0B0B0',
     marginRight: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  checkboxChecked: {
-    backgroundColor: '#B7463F',
-    borderColor: '#B7463F',
   },
   checkboxText: {
     fontSize: 14,
-    color: '#333',
     flex: 1,
     fontFamily: 'Geist-Regular',
   },
   linkText: {
-    color: '#B7463F',
+    color: '#007BFF',
     fontWeight: '500',
   },
 
   // --- Buttons ---
   loginButton: {
-    backgroundColor: '#007BFF',
     borderRadius: 80,
     paddingVertical: 15,
     alignItems: 'center',
@@ -257,10 +369,8 @@ const styles = StyleSheet.create({
   footerText: {
     fontFamily: 'Geist-Regular',
     fontSize: 14,
-    color: '#2A2A2A',
   },
   footerBold: {
     fontFamily: 'Geist-Bold',
-    color: '#007BFF',
   },
 });
