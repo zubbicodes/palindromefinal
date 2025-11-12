@@ -142,7 +142,7 @@ export default function GameLayoutWeb() {
       {/* ✅ REMOVED ScrollView - Using View instead for proper layout */}
       <View style={{ flex: 1 }}>
         <LinearGradient
-          colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF']}
+          colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF', '#F5F5F5']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.container}
@@ -170,14 +170,14 @@ export default function GameLayoutWeb() {
             </View>
 
             <View style={styles.timerContainer}>
-              <Svg height="40" width="300">
+              <Svg height="60" width="300">
                 <Defs>
                   <SvgLinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
                     <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
                     <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
                   </SvgLinearGradient>
                 </Defs>
-                <SvgText fill="url(#grad)" fontSize="24" fontFamily="Geist-Regular" fontWeight="Bold" x="50%" y="60%" textAnchor="middle">
+                <SvgText fill="url(#grad)" fontSize="34" fontFamily="Geist-Regular" fontWeight="Bold" x="50%" y="60%" textAnchor="middle">
                   {time}
                 </SvgText>
               </Svg>
@@ -239,7 +239,7 @@ export default function GameLayoutWeb() {
               experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
                 <View style={styles.settingsOverlay}>
                   <LinearGradient
-                    colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF']}
+                    colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF', '#F5F5F5']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.settingsCard}
@@ -340,38 +340,37 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   timerContainer: { 
-    marginBottom: 15,
-    marginTop:13
   },
  statusRow: {
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'center',
   width: '100%',
-  gap: 110, // ⬅ gap matches the mainLayout side columns distance
-  marginBottom: 30,
+  gap: 220, // ⬅ gap matches the mainLayout side columns distance
+  marginBottom: 40,
+  marginTop: 40
 },
 
   scoreBox: { 
     flexDirection: 'row', 
     borderWidth: 1, 
-    borderRadius: 12, 
-    width: 90, 
-    height: 40, 
+    borderRadius: 16, 
+    width: 120, 
+    height: 60, 
     justifyContent: 'center', 
     alignItems: 'center', 
     shadowColor: '#000', 
     shadowOpacity: 0.1, 
     shadowRadius: 3,
   },
-  sideLabel: { fontSize: 10 },
-  sideValue: { marginLeft: 8, fontSize: 20, fontWeight: '600' },
+  sideLabel: { fontSize: 16 },
+  sideValue: { marginLeft: 16, fontSize: 28, fontWeight: '600' },
   
   mainLayout: { 
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 60, // ⬅ Increased gap between left, board, right
+    gap: 70, // ⬅ Increased gap between left, board, right
     flex: 1,
     marginVertical: 10,
   },
@@ -386,18 +385,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, 
     alignItems: 'center', 
     justifyContent: 'space-between',
-    width: 90, 
+    width: 130, 
     height: 'auto', 
   },
   colorBlockContainer: { 
     alignItems: 'center', 
     justifyContent: 'center', 
     gap: 16, // ⬅ Added gap between color blocks vertically
+    height: 580,
   },
   colorBlock: { 
-    width: 67, 
-    height: 65, 
-    borderRadius: 10, 
+    width: 100, 
+    height: 98, 
+    borderRadius: 32, 
     shadowColor: '#000', 
     shadowOpacity: 0.2, 
     shadowRadius: 3, 
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center',
   },
-  blockText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  blockText: { color: '#fff', fontSize: 24, fontWeight: '700' },
   
   board: { 
     width: width > 900 ? 400 : Math.min(width * 0.6, 400),
@@ -418,13 +418,13 @@ const styles = StyleSheet.create({
     padding: 6, 
     justifyContent: 'center', 
     alignItems: 'center',
-    minWidth: 400,
-    maxWidth: 400,
+    minWidth: 600,
+    maxWidth: 600,
   },
   row: { flexDirection: 'row' },
   cell: { 
-    width: 28, 
-    height: 28, 
+    width: 46, 
+    height: 46, 
     borderWidth: 1, 
     borderColor: '#CCDAE466', 
     borderRadius: 6, 
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   letterText: { fontWeight: '700', fontSize: 12 },
-  bulldogImage: { width: 18, height: 18 },
+  bulldogImage: { width: 32, height: 32 },
   
   controlsRow: { 
     position: 'relative', // ⬅ fix position
@@ -456,25 +456,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   settingsOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
-  settingsCard: { width: '100%', maxWidth: 340, borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, height: '65%' },
+  settingsCard: { width: '100%', maxWidth: 340, borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, height: '45%' },
   headerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   headerSpacer: { flex: 1 },
   closeButton: { flex: 1, alignItems: 'flex-end' },
   settingsTitle: { fontSize: 22, fontWeight: '900', fontFamily: 'Geist-Regular', marginTop: -10 },
   closeIcon: { fontSize: 28, fontWeight: '700', fontFamily: 'Geist-Regular' },
   profileSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  profileImage: { width: 50, height: 50, borderRadius: 25, marginRight: 15 },
+  profileImage: { width: 60, height: 60, borderRadius: 25, marginRight: 15 },
   profileTextContainer: { flex: 1 },
   profileName: { fontSize: 16, fontWeight: '700' },
-  profileLink: { fontSize: 13, textDecorationLine: 'underline' },
-  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 8 },
+  profileLink: { fontSize: 13, textDecorationLine: 'underline', marginTop: 8 },
+  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10 },
   optionLabel: { fontSize: 16 },
-  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
+  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, marginVertical: 10 },
   linkText: { fontSize: 15 },
   arrow: { fontSize: 22, fontWeight: '600' },
   pauseOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  pauseCard: { padding: 20, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8 },
-  pauseTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 12 },
-  resumeButton: { backgroundColor: '#4CAF50', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
-  resumeButtonText: { color: '#fff', fontWeight: '700' },
+  pauseCard: { padding: 60, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8 },
+  pauseTitle: { fontSize: 32, fontWeight: 'bold', marginBottom: 12 },
+  resumeButton: { backgroundColor: '#0060FF', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 12 },
+  resumeButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

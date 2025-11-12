@@ -81,10 +81,11 @@ export default function LoginWeb() {
           <div
             style={{
               flex: 1,
-              minWidth: '340px',
+              minWidth: '360px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'flex-start',
+              marginTop: '100px'
             }}
           >
             <div style={{ width: '400px', textAlign: 'right' }}>
@@ -116,6 +117,7 @@ export default function LoginWeb() {
               minWidth: '400px',
               maxWidth: '400px',
               width: '100%',
+              marginTop: '120px'
             }}
           >
             {/* Bordered Card */}
@@ -128,7 +130,7 @@ export default function LoginWeb() {
                   ? '0 4px 20px rgba(0, 96, 255, 0.1)'
                   : '0 2px 10px rgba(0,0,0,0.04)',
                 marginBottom: '20px',
-                backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
+                backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#FFFFFF',
                 backdropFilter: 'blur(10px)',
               }}
             >
@@ -321,7 +323,7 @@ export default function LoginWeb() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
+                  backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#FFFFFF',
                   color: colors.text,
                 }}
               >

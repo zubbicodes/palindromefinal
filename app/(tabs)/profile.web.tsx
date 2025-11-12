@@ -19,8 +19,8 @@ export default function ProfileScreenWeb() {
 
   const gradientColors =
     theme === 'dark'
-      ? ['#000017', '#000074']
-      : ['#FFFFFF', '#FFFFFF'];
+      ? (['#000017', '#000074'] as const)
+      : (['#FFFFFF', '#FFFFFF'] as const);
 
   const inputBackground = theme === 'dark' ? 'rgba(0, 0, 35, 0)' : '#FFFFFF';
 
@@ -209,7 +209,8 @@ const styles = StyleSheet.create({
     maxWidth: MAX_CONTAINER_WIDTH,
     width: '100%',
     alignSelf: 'center',
-    marginTop: 20,
+    marginTop: 160,
+    marginBottom: -50
   },
   headerTitle: {
     fontSize: Math.min(screenWidth * 0.02, 24),
@@ -245,14 +246,14 @@ const styles = StyleSheet.create({
     bottom: 6,
     right: 6,
     borderRadius: 15,
-    width: AVATAR_SIZE * 0.25,
-    height: AVATAR_SIZE * 0.25,
+    width: AVATAR_SIZE * 1.5,
+    height: AVATAR_SIZE * 1.5,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 3,
   },
   editIconText: {
-    fontSize: AVATAR_SIZE * 0.13,
+    fontSize: AVATAR_SIZE * 0.3,
   },
   rowInputs: {
     flexDirection: 'row',

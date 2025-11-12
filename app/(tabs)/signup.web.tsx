@@ -48,7 +48,7 @@ export default function SignUpWeb() {
 
       {/* ✅ Top Bar */}
       <LinearGradient
-        colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF']}
+        colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF', '#FFFFFF']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={{
@@ -85,6 +85,8 @@ export default function SignUpWeb() {
           gap: '60px',
           flexWrap: 'wrap',
           boxSizing: 'border-box',
+          marginLeft: 260,
+          marginTop: 100,
         }}
       >
         {/* Left Text */}
@@ -134,6 +136,7 @@ export default function SignUpWeb() {
             maxWidth: '400px',
             width: '100%',
             margin: '0 auto',
+            
           }}
         >
           <div
