@@ -18,25 +18,31 @@ import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText }
 import { Switch } from 'react-native-switch';
 import GameLayoutWeb from './gamelayout.web';
 
+// ✅ Import theme context
+import { useThemeContext } from '@/context/ThemeContext';
+
 export default function GameLayout() {
   if (Platform.OS === 'web') {
     return <GameLayoutWeb />;
   }
+
+  // ✅ Get theme and toggle function from context
+  const { theme, toggleTheme} = useThemeContext();
 
   const [score, setScore] = useState(0);
   const [hints, setHints] = useState(2);
   const [time, setTime] = useState('00:00');
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([]);
   const [remainingBlocks, setRemainingBlocks] = useState(5);
-  const [settingsVisible, setSettingsVisible] = useState(false); // 🆕 added state
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [pause, setPause] = useState(false);
 
-  const handlePlay = () => {
-    setScore(prev => prev + 1);
-  };
+  // ✅ Local state sync with context
+  const [darkModeEnabled, setDarkModeEnabled] = useState(theme === 'dark');
+
+  const handlePlay = () => setScore(prev => prev + 1);
 
   const spawnBulldogs = () => {
     const totalBulldogs = 5;
@@ -48,8 +54,6 @@ export default function GameLayout() {
 
     for (let i = 0; i < word.length; i++) {
       blockedPositions.add(`${center},${center - halfWord + i}`);
-    }
-    for (let i = 0; i < word.length; i++) {
       blockedPositions.add(`${center - halfWord + i},${center}`);
     }
 
@@ -65,9 +69,7 @@ export default function GameLayout() {
     setBulldogPositions(newPositions);
   };
 
-  useEffect(() => {
-    spawnBulldogs();
-  }, []);
+  useEffect(() => spawnBulldogs(), []);
 
   const gridSize = 11;
   const center = Math.floor(gridSize / 2);
@@ -89,14 +91,19 @@ export default function GameLayout() {
         return (
           <Pressable
             key={col}
-            style={styles.cell}
+            style={[
+              styles.cell,
+              {
+                backgroundColor:
+                  theme === 'dark' ? 'rgba(25,25,91,0.7)' : '#FFFFFF',
+                borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#CCDAE466',
+              },
+            ]}
             onPress={() => {
               if (isBulldog) {
                 setScore(prev => prev + 5);
                 spawnBulldogs();
-              } else {
-                handlePlay();
-              }
+              } else handlePlay();
             }}
           >
             {isBulldog && (
@@ -106,7 +113,16 @@ export default function GameLayout() {
                 resizeMode="contain"
               />
             )}
-            {letter && <Text style={styles.letterText}>{letter}</Text>}
+            {letter && (
+              <Text
+                style={[
+                  styles.letterText,
+                  { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                ]}
+              >
+                {letter}
+              </Text>
+            )}
             <View style={styles.innerShadow} />
           </Pressable>
         );
@@ -127,20 +143,28 @@ export default function GameLayout() {
     const panResponder = useRef(
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+        onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
+          useNativeDriver: false,
+        }),
         onPanResponderRelease: () => {
-          Animated.spring(pan, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: false,
-          }).start();
+          Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
           setRemainingBlocks(prev => Math.max(prev - 1, 0));
         },
       })
     ).current;
 
     return (
-      <Animated.View key={index} style={[styles.colorBlock, { transform: pan.getTranslateTransform() }]} {...panResponder.panHandlers}>
-        <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientColorBlock}>
+      <Animated.View
+        key={index}
+        style={[styles.colorBlock, { transform: pan.getTranslateTransform() }]}
+        {...panResponder.panHandlers}
+      >
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientColorBlock}
+        >
           <Text style={styles.blockText}>16</Text>
         </LinearGradient>
       </Animated.View>
@@ -149,16 +173,62 @@ export default function GameLayout() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>PALINDROME</Text>
+<LinearGradient
+  colors={
+    theme === 'dark'
+      ? ['rgba(0, 0, 23, 1)', 'rgba(0, 0, 116, 1)'] // dark mode colors
+      : ['#FFFFFF', '#FFFFFF'] // light mode colors
+  }
+  style={styles.background}
+/>
+      <Text style={[styles.title, { color: theme === 'dark' ? '#FFFFFF' : '#0060FF' }]}>
+        PALINDROME
+      </Text>
 
-      <View style={styles.rectangleLeft}>
-        <Text style={styles.rectangleLabel}>Score</Text>
-        <Text style={styles.rectangleValue}>{score}</Text>
+      <View
+        style={[
+          styles.rectangleLeft,
+          {
+            backgroundColor:
+              theme === 'dark' ? 'rgba(25,25,91,0.7)' : 'rgba(229,236,241,0.5)',
+            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#C7D5DF',
+          },
+        ]}
+      >
+        <Text style={[styles.rectangleLabel, { color: theme === 'dark' ? '#FFFFFF' : '#4C575F' }]}>
+          Score
+        </Text>
+        <Text
+          style={[
+            styles.rectangleValue,
+            { color: theme === 'dark' ? '#FFFFFF' : '#0060FF' },
+          ]}
+        >
+          {score}
+        </Text>
       </View>
 
-      <View style={styles.rectangleRight}>
-        <Text style={styles.rectangleLabel}>Hints</Text>
-        <Text style={[styles.rectangleValue, { color: '#C35DD9' }]}>{hints}</Text>
+      <View
+        style={[
+          styles.rectangleRight,
+          {
+            backgroundColor:
+              theme === 'dark' ? 'rgba(25,25,91,0.7)' : 'rgba(229,236,241,0.5)',
+            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#C7D5DF',
+          },
+        ]}
+      >
+        <Text style={[styles.rectangleLabel, { color: theme === 'dark' ? '#FFFFFF' : '#4C575F' }]}>
+          Hints
+        </Text>
+        <Text
+          style={[
+            styles.rectangleValue,
+            { color: '#C35DD9' },
+          ]}
+        >
+          {hints}
+        </Text>
       </View>
 
       <View style={styles.timerContainer}>
@@ -169,15 +239,34 @@ export default function GameLayout() {
               <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
             </SvgLinearGradient>
           </Defs>
-          <SvgText fill="url(#grad)" fontSize="24" fontWeight="bold" x="50%" y="60%" textAnchor="middle">
+          <SvgText
+            fill="url(#grad)"
+            fontSize="24"
+            fontWeight="bold"
+            x="50%"
+            y="60%"
+            textAnchor="middle"
+          >
             {time}
           </SvgText>
         </Svg>
       </View>
 
-      <View style={styles.board}>{grid}</View>
+      <View
+        style={[
+          styles.board,
+          { backgroundColor: theme === 'dark' ? 'rgba(25,25,91,0.7)' : '#E4EBF0' },
+        ]}
+      >
+        {grid}
+      </View>
 
-      <View style={styles.colorBlocksContainer}>
+      <View
+        style={[
+          styles.colorBlocksContainer,
+          { backgroundColor: theme === 'dark' ? 'rgba(25,25,91,0.7)' : '#E4EBF0' },
+        ]}
+      >
         <View style={styles.colorBlocksRow}>{blocks}</View>
       </View>
 
@@ -210,42 +299,73 @@ export default function GameLayout() {
       {/* ⚙️ Settings Modal */}
       {settingsVisible && (
         <View style={StyleSheet.absoluteFill}>
-          <BlurView intensity={20} tint="dark" experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
+          <BlurView
+            intensity={20}
+            tint={theme === 'dark' ? 'dark' : 'light'}
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          >
             <View style={styles.settingsOverlay}>
-              <View style={styles.settingsCard}>
+                 <LinearGradient
+          colors={
+            theme === 'dark'
+              ? ['rgba(0, 0, 23, 1)', 'rgba(0, 0, 116, 1)'] // Dark gradient
+              : ['#FFFFFF', '#FFFFFF'] // Light theme pure white
+          }
+          style={[styles.settingsCard, { padding: 20, borderRadius: 20 }]}
+        >
                 {/* Header */}
                 <View style={styles.headerRow}>
-                    <View style={styles.headerSpacer} /> 
-                    <Text style={styles.settingsTitle}>Settings</Text>
+                  <View style={styles.headerSpacer} />
+                  <Text
+                    style={[
+                      styles.settingsTitle,
+                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                    ]}
+                  >
+                    Settings
+                  </Text>
                   <Pressable onPress={() => setSettingsVisible(false)} style={styles.closeButton}>
-                    <Text style={styles.closeIcon}>×</Text>
+                    <Text style={[styles.closeIcon, { color: '#007AFF' }]}>×</Text>
                   </Pressable>
                 </View>
+
                 {/* Profile */}
                 <View style={styles.profileSection}>
                   <Image
                     source={require('../../assets/images/profile.jpg')}
                     style={styles.profileImage}
                   />
-
-                <View style={styles.profileTextContainer}>
-                  <Text style={styles.profileName}>Lorem Ipsum</Text>
-                  <Pressable
-                  onPress={() => {setSettingsVisible(false);
-                  setTimeout(() => {
-                    router.push('/profile');
-                  }, 50);
-                }}
-              >
-                <Text style={styles.profileLink}>Edit Profile</Text>
-              </Pressable>
-
+                  <View style={styles.profileTextContainer}>
+                    <Text
+                      style={[
+                        styles.profileName,
+                        { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                      ]}
+                    >
+                      Lorem Ipsum
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        setSettingsVisible(false);
+                        setTimeout(() => router.push('/profile'), 50);
+                      }}
+                    >
+                      <Text style={styles.profileLink}>Edit Profile</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
 
                 {/* Toggles */}
                 <View style={styles.optionRow}>
-                  <Text style={styles.optionLabel}>Sound</Text>
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                    ]}
+                  >
+                    Sound
+                  </Text>
                   <Switch
                     value={soundEnabled}
                     onValueChange={setSoundEnabled}
@@ -263,9 +383,16 @@ export default function GameLayout() {
                     switchWidthMultiplier={2.5}
                   />
                 </View>
-                
+
                 <View style={styles.optionRow}>
-                  <Text style={styles.optionLabel}>Vibration</Text>
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                    ]}
+                  >
+                    Vibration
+                  </Text>
                   <Switch
                     value={vibrationEnabled}
                     onValueChange={setVibrationEnabled}
@@ -283,12 +410,22 @@ export default function GameLayout() {
                     switchWidthMultiplier={2.5}
                   />
                 </View>
-                
+
                 <View style={styles.optionRow}>
-                  <Text style={styles.optionLabel}>Dark Mode</Text>
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                    ]}
+                  >
+                    Dark Mode
+                  </Text>
                   <Switch
                     value={darkModeEnabled}
-                    onValueChange={setDarkModeEnabled}
+                    onValueChange={() => {
+                      toggleTheme(); // ✅ Toggle context theme
+                      setDarkModeEnabled(prev => !prev); // Sync switch state
+                    }}
                     disabled={false}
                     activeText=""
                     inActiveText=""
@@ -306,62 +443,77 @@ export default function GameLayout() {
 
                 {/* Links */}
                 <Pressable style={styles.linkRow}>
-                  <Text style={styles.linkText}>Privacy Policy</Text>
+                  <Text
+                    style={[
+                      styles.linkText,
+                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                    ]}
+                  >
+                    Privacy Policy
+                  </Text>
                   <Ionicons name="chevron-forward" size={20} color="#0060FF" />
                 </Pressable>
 
                 <Pressable style={[styles.linkRow, { borderBottomWidth: 0 }]}>
-                  <Text style={styles.linkText}>Terms & Conditions</Text>
+                  <Text
+                    style={[
+                      styles.linkText,
+                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                    ]}
+                  >
+                    Terms & Conditions
+                  </Text>
                   <Ionicons name="chevron-forward" size={20} color="#0060FF" />
                 </Pressable>
+                </LinearGradient>
               </View>
-            </View>
+            
           </BlurView>
         </View>
       )}
+
       {/* Pause Overlay */}
-        {pause && (
-  <View style={StyleSheet.absoluteFill}>
-    {/* Background Blur */}
-    <BlurView
-      intensity={20}
-      tint="dark"
-      experimentalBlurMethod="dimezisBlurView"
-      style={StyleSheet.absoluteFill}
-    />
-
-    {/* Centered Card */}
-    <View style={styles.pauseOverlay}>
-      <View style={styles.pauseCard}>
-        <Text style={styles.pauseTitle}>Game Paused</Text>
-
-        <Pressable onPress={() => setPause(false)} style={styles.resumeButton}>
-          <Text style={styles.resumeButtonText}>Resume</Text>
-        </Pressable>
-      </View>
-    </View>
-  </View>
-)}
-
+      {pause && (
+        <View style={StyleSheet.absoluteFill}>
+          <BlurView
+            intensity={20}
+            tint={theme === 'dark' ? 'dark' : 'light'}
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.pauseOverlay}>
+            <View style={styles.pauseCard}>
+              <Text style={styles.pauseTitle}>Game Paused</Text>
+              <Pressable onPress={() => setPause(false)} style={styles.resumeButton}>
+                <Text style={styles.resumeButtonText}>Resume</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center' },
+ container: { flex: 1, alignItems: 'center' },
+ background: {
+  ...StyleSheet.absoluteFillObject,
+},
   title: { position: 'absolute', top: 70, fontFamily: 'Geist-Bold', fontSize: 26, color: '#0060FF' },
-  rectangleLeft: { position: 'absolute', top: 128, left: '50%', marginLeft: -104 / 2 - 124.5, width: 104, height: 64, backgroundColor: 'rgba(229,236,241,0.5)', borderWidth: 1, borderColor: '#C7D5DF', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  rectangleRight: { position: 'absolute', top: 128, left: '50%', marginLeft: 125.5 - 104 / 2, width: 104, height: 64, backgroundColor: 'rgba(229,236,241,0.5)', borderWidth: 1, borderColor: '#C7D5DF', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  rectangleLeft: { position: 'absolute', top: 170, left: '50%', marginLeft: -134 / 2 - 124.5, width: 104, height: 64, backgroundColor: 'rgba(229,236,241,0.5)', borderWidth: 1, borderColor: '#C7D5DF', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  rectangleRight: { position: 'absolute', top: 170, left: '50%', marginLeft: 137.5 - 104 / 2, width: 104, height: 64, backgroundColor: 'rgba(229,236,241,0.5)', borderWidth: 1, borderColor: '#C7D5DF', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   rectangleLabel: { fontSize: 14, color: '#4C575F' },
   rectangleValue: { fontSize: 24, fontWeight: '900', color: '#0060FF' },
-  timerContainer: { position: 'absolute', top: 145, alignSelf: 'center' },
-  board: { position: 'absolute', top: 212, width: 354, height: 354, backgroundColor: '#E4EBF0', borderRadius: 16, padding: 6, alignItems: 'center' },
+  timerContainer: { position: 'absolute', top: 185, alignSelf: 'center' },
+  board: { position: 'relative', top: 222, width: 384, height: 390, backgroundColor: '#E4EBF0', borderRadius: 16, padding: 6, alignItems: 'center' },
   row: { flexDirection: 'row' },
-  cell: { width: 28, height: 28, borderWidth: 1, borderColor: '#CCDAE466', backgroundColor: '#FFFFFF', margin: 1.5, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
+  cell: { width: 31, height: 31, borderWidth: 1, borderColor: '#CCDAE466', backgroundColor: '#FFFFFF', margin: 1.5, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
   letterText: { fontFamily: 'Geist-Bold', color: '#000', fontSize: 14 },
   innerShadow: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 6 },
   bulldogImage: { width: 20, height: 20, position: 'absolute', top: 4, left: 4 },
-  colorBlocksContainer: { position: 'absolute', top: 585, width: 320, height: 70, backgroundColor: '#E4EBF0', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  colorBlocksContainer: { position: 'absolute', top: 665, width: 320, height: 70, backgroundColor: '#E4EBF0', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
   colorBlocksRow: { flexDirection: 'row', justifyContent: 'space-between', width: 300 },
   colorBlock: { width: 50, height: 50, borderRadius: 8, marginHorizontal: 4 },
   gradientColorBlock: { flex: 1, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },

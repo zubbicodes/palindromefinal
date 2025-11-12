@@ -1,13 +1,38 @@
+import { ThemeProvider, useThemeContext } from '@/context/ThemeContext';
 import * as Font from 'expo-font';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import Animated, { FadeOut } from 'react-native-reanimated';
 
 const SplashScreen = Platform.select({
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   web: require('../screens/loadscreen.web').default,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   default: require('../screens/loadscreen.native').default,
 });
+
+// Separate component to apply gradient background globally
+function AppContent() {
+  const { theme } = useThemeContext();
+
+  // Figma dark gradient colors
+  const darkGradient = ['#0F172A', '#1E1B4B', '#312E81'] as const;
+const lightGradient = ['#FFFFFF', '#E2E8F0'] as const;
+
+
+  return (
+    <LinearGradient
+      colors={theme === 'dark' ? darkGradient : lightGradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradient}
+    >
+      <Stack screenOptions={{ headerShown: false }} />
+    </LinearGradient>
+  );
+}
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
@@ -18,17 +43,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded) {
-      const timer = setTimeout(() => setShowSplash(false), 5000); // show splash for 3s
+      const timer = setTimeout(() => setShowSplash(false), 5000);
       return () => clearTimeout(timer);
     }
   }, [fontsLoaded]);
 
-  // Wait for fonts to load before showing anything
-  if (!fontsLoaded) {
-    return null; // or return a simple loading view
-  }
+  if (!fontsLoaded) return null;
 
-  // Show splash screen
   if (showSplash) {
     return (
       <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
@@ -37,6 +58,16 @@ export default function RootLayout() {
     );
   }
 
-  // Normal app navigation after splash
-  return <Stack screenOptions={{ headerShown: false }} />;
+  // ✅ Wrap your entire app in ThemeProvider
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
 }
+
+const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+});
