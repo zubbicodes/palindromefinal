@@ -150,7 +150,7 @@ export default function GameLayoutWeb() {
 
           
 
-          <Text style={[styles.title, { color: colors.accent }]}>PALINDROME</Text>
+          <Text style={[styles.title, { color: colors.accent,}]}>PALINDROME</Text>
 
           <View
   style={{
@@ -193,15 +193,15 @@ export default function GameLayoutWeb() {
           {/* ✅ Main Game Area */}
           <View style={styles.mainLayout}>
             <View style={styles.sideColumn}>
-              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',}]}>
+              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff',}]}>
                 <View style={styles.colorBlockContainer}>{colorBlocks}</View>
               </View>
             </View>
 
-            <View style={[styles.board, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',}]}>{grid}</View>
+            <View style={[styles.board, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff',}]}>{grid}</View>
 
             <View style={styles.sideColumn}>
-              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',}]}>
+              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff',}]}>
                 <View style={styles.colorBlockContainer}>{colorBlocks}</View>
               </View>
             </View>
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center',
   },
-  letterText: { fontWeight: '700', fontSize: 12 },
+  letterText: { fontWeight: '700', fontSize: 16 },
   bulldogImage: { width: 32, height: 32 },
   
   controlsRow: { 
@@ -466,11 +466,11 @@ const styles = StyleSheet.create({
   profileImage: { width: 60, height: 60, borderRadius: 25, marginRight: 15 },
   profileTextContainer: { flex: 1 },
   profileName: { fontSize: 16, fontWeight: '700' },
-  profileLink: { fontSize: 13, textDecorationLine: 'underline', marginTop: 8 },
+  profileLink: { fontSize: 14, textDecorationLine: 'underline', marginTop: 10 },
   optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 10 },
   optionLabel: { fontSize: 16 },
-  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, marginVertical: 10 },
-  linkText: { fontSize: 15 },
+  linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, marginVertical: 6 },
+  linkText: { fontSize: 16 },
   arrow: { fontSize: 22, fontWeight: '600' },
   pauseOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pauseCard: { padding: 60, borderRadius: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8 },
