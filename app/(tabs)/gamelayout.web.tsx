@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   settingsOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
-  settingsCard: { width: '100%', maxWidth: 340, borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, height: '45%' },
+  settingsCard: { width: '100%', maxWidth: 340, borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, maxHeight: 500 },
   headerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   headerSpacer: { flex: 1 },
   closeButton: { flex: 1, alignItems: 'flex-end' },
