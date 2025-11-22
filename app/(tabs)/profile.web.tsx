@@ -242,15 +242,17 @@ const styles = StyleSheet.create({
     borderRadius: AVATAR_SIZE / 2,
   },
   editIcon: {
-    position: 'absolute',
-    bottom: 6,
-    right: 6,
-    borderRadius: 15,
-    width: AVATAR_SIZE * 1.5,
-    height: AVATAR_SIZE * 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 3,
+  position: 'absolute',
+  bottom: 6,
+  right: 6,
+  borderRadius: 15,
+  width: AVATAR_SIZE * 0.3, // Much smaller relative size
+  height: AVATAR_SIZE * 0.3, // Much smaller relative size
+  justifyContent: 'center',
+  alignItems: 'center',
+  elevation: 3,
+  backgroundColor: 'transparent', // Make it transparent
+  borderWidth: 2,
   },
   editIconText: {
     fontSize: AVATAR_SIZE * 0.3,

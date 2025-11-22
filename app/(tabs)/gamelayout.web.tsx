@@ -20,6 +20,58 @@ import { Switch } from 'react-native-switch';
 
 const { width, height } = Dimensions.get('window');
 
+// Responsive layout configuration based on screen size
+const getLayoutConfig = () => {
+  if (width >= 1920) {
+    return {
+      statusGap: 220,
+      mainLayoutGap: 70,
+      boardSize: 600,
+      cellSize: 46,
+      colorBlockWrapper: { width: 130, height: 580 },
+      colorBlock: { width: 100, height: 98 },
+      controlsBottom: -10,
+      statusMargin: { top: 40, bottom: 40 }
+    };
+  } else if (width >= 1440) {
+    // 1440x900 configuration
+    return {
+      statusGap: 160,
+      mainLayoutGap: 50,
+      boardSize: 520,
+      cellSize: 40,
+      colorBlockWrapper: { width: 110, height: 500 },
+      colorBlock: { width: 85, height: 83 },
+      controlsBottom: -5,
+      statusMargin: { top: 30, bottom: 30 }
+    };
+  } else if (width >= 1366) {
+    // 1366x768 configuration
+    return {
+      statusGap: 120,
+      mainLayoutGap: 30,
+      boardSize: 500,
+      cellSize: 38,
+      colorBlockWrapper: { width: 100, height: 450 },
+      colorBlock: { width: 75, height: 73 },
+      controlsBottom: 0,
+      statusMargin: { top: 25, bottom: 25 }
+    };
+  } else {
+    // Fallback for smaller screens
+    return {
+      statusGap: 80,
+      mainLayoutGap: 20,
+      boardSize: Math.min(width * 0.7, 400),
+      cellSize: 32,
+      colorBlockWrapper: { width: 90, height: 400 },
+      colorBlock: { width: 65, height: 63 },
+      controlsBottom: 5,
+      statusMargin: { top: 20, bottom: 20 }
+    };
+  }
+};
+
 export default function GameLayoutWeb() {
   const router = useRouter();
   const { theme, colors, toggleTheme } = useThemeContext();
@@ -37,6 +89,8 @@ export default function GameLayoutWeb() {
   const center = Math.floor(gridSize / 2);
   const word = 'PALINDROME';
   const halfWord = Math.floor(word.length / 2);
+
+  const layoutConfig = getLayoutConfig();
 
   const spawnBulldogs = () => {
     const totalBulldogs = 5;
@@ -83,16 +137,16 @@ export default function GameLayoutWeb() {
           letter = word[row - (center - halfWord)];
         }
         return (
-          <View key={col} style={[styles.cell, {backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff', }]}>
+          <View key={col} style={[styles.cell, {backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff', width: layoutConfig.cellSize, height: layoutConfig.cellSize }]}>
             {isBulldog && (
               <Image
                 source={require('../../assets/images/bulldog.png')}
-                style={styles.bulldogImage}
+                style={[styles.bulldogImage, { width: layoutConfig.cellSize - 14, height: layoutConfig.cellSize - 14 }]}
                 resizeMode="contain"
               />
             )}
             {letter && (
-              <Text style={[styles.letterText, { color: colors.text }]}>
+              <Text style={[styles.letterText, { color: colors.text, fontSize: layoutConfig.cellSize > 40 ? 16 : 14 }]}>
                 {letter}
               </Text>
             )}
@@ -122,7 +176,7 @@ export default function GameLayoutWeb() {
     return (
       <Animated.View
         key={i}
-        style={[styles.colorBlock, { transform: pan.getTranslateTransform() }]}
+        style={[styles.colorBlock, { transform: pan.getTranslateTransform(), width: layoutConfig.colorBlock.width, height: layoutConfig.colorBlock.height }]}
         {...panResponder.panHandlers}
       >
         <LinearGradient
@@ -131,7 +185,7 @@ export default function GameLayoutWeb() {
           end={{ x: 1, y: 1 }}
           style={styles.gradientBlock}
         >
-          <Text style={styles.blockText}>16</Text>
+          <Text style={[styles.blockText, { fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20 }]}>16</Text>
         </LinearGradient>
       </Animated.View>
     );
@@ -139,7 +193,6 @@ export default function GameLayoutWeb() {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      {/* ✅ REMOVED ScrollView - Using View instead for proper layout */}
       <View style={{ flex: 1 }}>
         <LinearGradient
           colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF', '#F5F5F5']}
@@ -147,8 +200,6 @@ export default function GameLayoutWeb() {
           end={{ x: 1, y: 1 }}
           style={styles.container}
         >
-
-          
 
           <Text style={[styles.title, { color: colors.accent,}]}>PALINDROME</Text>
 
@@ -162,7 +213,7 @@ export default function GameLayoutWeb() {
 
 
           {/* ✅ Status Row */}
-          <View style={styles.statusRow}>
+          <View style={[styles.statusRow, { gap: layoutConfig.statusGap, marginTop: layoutConfig.statusMargin.top, marginBottom: layoutConfig.statusMargin.bottom }]}>
             <View style={[styles.scoreBox, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff',
             borderColor: colors.border }]}>
               <Text style={[styles.sideLabel, { color: colors.secondaryText }]}>Score</Text>
@@ -191,24 +242,24 @@ export default function GameLayoutWeb() {
           </View>
 
           {/* ✅ Main Game Area */}
-          <View style={styles.mainLayout}>
+          <View style={[styles.mainLayout, { gap: layoutConfig.mainLayoutGap }]}>
             <View style={styles.sideColumn}>
-              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff',}]}>
+              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff', width: layoutConfig.colorBlockWrapper.width, height: layoutConfig.colorBlockWrapper.height }]}>
                 <View style={styles.colorBlockContainer}>{colorBlocks}</View>
               </View>
             </View>
 
-            <View style={[styles.board, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff',}]}>{grid}</View>
+            <View style={[styles.board, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff', width: layoutConfig.boardSize, height: layoutConfig.boardSize }]}>{grid}</View>
 
             <View style={styles.sideColumn}>
-              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff',}]}>
+              <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff', width: layoutConfig.colorBlockWrapper.width, height: layoutConfig.colorBlockWrapper.height }]}>
                 <View style={styles.colorBlockContainer}>{colorBlocks}</View>
               </View>
             </View>
           </View>
 
           {/* ✅ Bottom Controls - Now always visible */}
-          <View style={styles.controlsRow}>
+          <View style={[styles.controlsRow, { bottom: layoutConfig.controlsBottom }]}>
             <Pressable>
               <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.controlBtn}>
                 <Ionicons name="play" size={20} color="#1a63cc" />
@@ -329,28 +380,23 @@ const styles = StyleSheet.create({
     flex: 1, 
     alignItems: 'center', 
     paddingVertical: -1,
-    
     justifyContent: 'space-between',
   },
   title: { 
     fontSize: 26, 
     fontWeight: '900', 
-    marginBottom: 10, // ⬅ Added little more space below title
+    marginBottom: 10,
     textAlign: 'center',
     marginTop: 15,
   },
   timerContainer: { 
   },
- statusRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '100%',
-  gap: 220, // ⬅ gap matches the mainLayout side columns distance
-  marginBottom: 40,
-  marginTop: 40
-},
-
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
   scoreBox: { 
     flexDirection: 'row', 
     borderWidth: 1, 
@@ -370,7 +416,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 70, // ⬅ Increased gap between left, board, right
     flex: 1,
     marginVertical: 10,
   },
@@ -381,22 +426,17 @@ const styles = StyleSheet.create({
   },
   colorBlockWrapper: { 
     borderRadius: 14, 
-    paddingVertical: 12, // ⬅ Added equal top & bottom padding for vertical spacing
+    paddingVertical: 12,
     paddingHorizontal: 16, 
     alignItems: 'center', 
     justifyContent: 'space-between',
-    width: 130, 
-    height: 'auto', 
   },
   colorBlockContainer: { 
     alignItems: 'center', 
     justifyContent: 'center', 
-    gap: 16, // ⬅ Added gap between color blocks vertically
-    height: 580,
+    gap: 16,
   },
   colorBlock: { 
-    width: 100, 
-    height: 98, 
     borderRadius: 32, 
     shadowColor: '#000', 
     shadowOpacity: 0.2, 
@@ -409,22 +449,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center',
   },
-  blockText: { color: '#fff', fontSize: 24, fontWeight: '700' },
+  blockText: { color: '#fff', fontWeight: '700' },
   
   board: { 
-    width: width > 900 ? 400 : Math.min(width * 0.6, 400),
-    aspectRatio: 1, 
     borderRadius: 16, 
     padding: 6, 
     justifyContent: 'center', 
     alignItems: 'center',
-    minWidth: 600,
-    maxWidth: 600,
   },
   row: { flexDirection: 'row' },
   cell: { 
-    width: 46, 
-    height: 46, 
     borderWidth: 1, 
     borderColor: '#CCDAE466', 
     borderRadius: 6, 
@@ -432,22 +466,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center',
   },
-  letterText: { fontWeight: '700', fontSize: 16 },
-  bulldogImage: { width: 32, height: 32 },
+  letterText: { fontWeight: '700' },
+  bulldogImage: { 
+    resizeMode: 'contain',
+  },
   
   controlsRow: { 
-    position: 'relative', // ⬅ fix position
-    bottom: -10,           // ⬅ distance from bottom
+    position: 'relative',
     left: 0,
     right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 18,
     paddingVertical: 20,
-    
   },
-
-
   controlBtn: { 
     width: 35, 
     height: 35, 
