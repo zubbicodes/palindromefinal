@@ -1,24 +1,24 @@
 // FirebaseService.ts (in project root)
 import { FirebaseApp, initializeApp } from 'firebase/app';
 import {
-    Auth,
-    User,
-    UserCredential,
-    createUserWithEmailAndPassword,
-    getAuth,
-    sendEmailVerification,
-    sendPasswordResetEmail,
-    signInWithEmailAndPassword,
-    signOut,
-    updateProfile
+  Auth,
+  User,
+  UserCredential,
+  createUserWithEmailAndPassword,
+  getAuth,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile
 } from 'firebase/auth';
 import {
-    Firestore,
-    doc,
-    getDoc,
-    getFirestore,
-    setDoc,
-    updateDoc
+  Firestore,
+  doc,
+  getDoc,
+  getFirestore,
+  setDoc,
+  updateDoc
 } from 'firebase/firestore';
 import { FirebaseStorage, getStorage } from 'firebase/storage';
 
@@ -51,13 +51,13 @@ export interface UserProfile {
 class FirebaseService {
   // Singleton instance
   private static instance: FirebaseService;
-  
+
   // Firebase services
   public app: FirebaseApp;
   public auth: Auth;
   public db: Firestore;
   public storage: FirebaseStorage;
-  
+
   private constructor() {
     // Firebase configuration from environment variables
     const firebaseConfig: FirebaseConfig = {
@@ -77,7 +77,7 @@ class FirebaseService {
     this.auth = getAuth(this.app);
     this.db = getFirestore(this.app);
     this.storage = getStorage(this.app);
-    
+
     console.log('FirebaseService initialized successfully');
   }
 
@@ -92,12 +92,12 @@ class FirebaseService {
   // Validate Firebase configuration
   private validateConfig(config: FirebaseConfig): void {
     const requiredFields: (keyof FirebaseConfig)[] = [
-      'apiKey', 'authDomain', 'projectId', 
+      'apiKey', 'authDomain', 'projectId',
       'storageBucket', 'messagingSenderId', 'appId'
     ];
-    
+
     const missingFields = requiredFields.filter(field => !config[field]?.trim());
-    
+
     if (missingFields.length > 0) {
       throw new Error(
         `Missing Firebase configuration fields: ${missingFields.join(', ')}. ` +
@@ -112,8 +112,8 @@ class FirebaseService {
    * Sign up a new user with email and password
    */
   async signUp(
-    email: string, 
-    password: string, 
+    email: string,
+    password: string,
     displayName?: string
   ): Promise<AuthResult> {
     try {
@@ -125,11 +125,31 @@ class FirebaseService {
 
       // Update profile if displayName provided
       if (displayName && userCredential.user) {
-        await updateProfile(userCredential.user, { displayName });
+        try {
+          console.log('[FirebaseService] Updating profile...');
+          await this.withTimeout(
+            updateProfile(userCredential.user, { displayName }),
+            5000,
+            'Auth: updateProfile'
+          );
+          console.log('[FirebaseService] Profile updated');
+        } catch (e) {
+          console.warn('[FirebaseService] Profile update failed (non-critical):', e);
+        }
       }
 
       // Send email verification
-      await sendEmailVerification(userCredential.user);
+      try {
+        console.log('[FirebaseService] Sending verification email...');
+        await this.withTimeout(
+          sendEmailVerification(userCredential.user),
+          5000,
+          'Auth: sendEmailVerification'
+        );
+        console.log('[FirebaseService] Verification email sent');
+      } catch (e) {
+        console.warn('[FirebaseService] Email verification failed (non-critical):', e);
+      }
 
       // Create user document in Firestore
       await this.createUserDocument(userCredential.user.uid, {
@@ -238,10 +258,10 @@ class FirebaseService {
 
     try {
       await updateProfile(user, updates);
-      
+
       // Also update in Firestore
       await this.updateUserDocument(user.uid, updates);
-      
+
       return { success: true, user };
     } catch (error: any) {
       return {
@@ -254,52 +274,94 @@ class FirebaseService {
   // ==================== FIRESTORE METHODS ====================
 
   /**
+   * Helper to race a promise against a timeout
+   */
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number = 5000, operationName: string): Promise<T> {
+    let timeoutHandle: ReturnType<typeof setTimeout>;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    try {
+      const result = await Promise.race([promise, timeoutPromise]);
+      clearTimeout(timeoutHandle!);
+      return result;
+    } catch (error) {
+      clearTimeout(timeoutHandle!);
+      throw error;
+    }
+  }
+
+  /**
    * Create user document in Firestore
    */
-private async createUserDocument(userId: string, userData: UserProfile): Promise<void> {
-  try {
-    const userRef = doc(this.db, 'users', userId);
-    
-    // Clean data - remove undefined values
-    const cleanData: Record<string, any> = {
-      uid: userId,
-      updatedAt: new Date()
-    };
-    
-    // Only add properties that are not undefined
-    if (userData.displayName !== undefined && userData.displayName !== '') {
-      cleanData.displayName = userData.displayName;
+  private async createUserDocument(userId: string, userData: UserProfile): Promise<void> {
+    console.log(`[FirebaseService] Starting createUserDocument for ${userId}...`);
+    try {
+      const userRef = doc(this.db, 'users', userId);
+
+      // Clean data - remove undefined values
+      const cleanData: Record<string, any> = {
+        uid: userId,
+        updatedAt: new Date()
+      };
+
+      // Only add properties that are not undefined
+      if (userData.displayName !== undefined && userData.displayName !== '') {
+        cleanData.displayName = userData.displayName;
+      }
+      if (userData.email !== undefined) {
+        cleanData.email = userData.email;
+      }
+      if (userData.createdAt !== undefined) {
+        cleanData.createdAt = userData.createdAt;
+      }
+      if (userData.lastLogin !== undefined) {
+        cleanData.lastLogin = userData.lastLogin;
+      }
+
+      console.log('[FirebaseService] Data prepared, calling setDoc...');
+
+      // Use timeout to prevent hanging
+      await this.withTimeout(
+        setDoc(userRef, cleanData),
+        5000,
+        'Firestore: createUserDocument'
+      );
+
+      console.log('✅ [FirebaseService] Firestore document created successfully');
+    } catch (error: any) {
+      // CRITICAL: We catch all errors here so the auth flow doesn't fail
+      // just because Firestore is having issues/hanging
+      console.error('❌ [FirebaseService] Error creating user document:', error);
+      console.warn('[FirebaseService] Continuing auth flow despite Firestore error');
     }
-    if (userData.email !== undefined) {
-      cleanData.email = userData.email;
-    }
-    if (userData.createdAt !== undefined) {
-      cleanData.createdAt = userData.createdAt;
-    }
-    if (userData.lastLogin !== undefined) {
-      cleanData.lastLogin = userData.lastLogin;
-    }
-    
-    await setDoc(userRef, cleanData);
-    console.log('✅ Firestore document created with clean data');
-  } catch (error) {
-    console.error('❌ Error creating user document:', error);
-    // Don't throw - let signup succeed even if Firestore fails
   }
-}
 
   /**
    * Update user document in Firestore
    */
   private async updateUserDocument(userId: string, updates: Partial<UserProfile>): Promise<void> {
+    console.log(`[FirebaseService] Starting updateUserDocument for ${userId}...`);
     try {
       const userRef = doc(this.db, 'users', userId);
-      await updateDoc(userRef, {
-        ...updates,
-        updatedAt: new Date()
-      });
-    } catch (error) {
-      console.error('Error updating user document:', error);
+
+      await this.withTimeout(
+        updateDoc(userRef, {
+          ...updates,
+          updatedAt: new Date()
+        }),
+        5000,
+        'Firestore: updateUserDocument'
+      );
+
+      console.log('✅ [FirebaseService] User document updated successfully');
+    } catch (error: any) {
+      console.error('❌ [FirebaseService] Error updating user document:', error);
+      console.warn('[FirebaseService] Continuing auth flow despite Firestore error');
     }
   }
 
@@ -310,7 +372,7 @@ private async createUserDocument(userId: string, userData: UserProfile): Promise
     try {
       const userRef = doc(this.db, 'users', userId);
       const userSnap = await getDoc(userRef);
-      
+
       if (userSnap.exists()) {
         return userSnap.data() as UserProfile;
       }
@@ -327,8 +389,8 @@ private async createUserDocument(userId: string, userData: UserProfile): Promise
    * Upload file to Firebase Storage
    */
   async uploadFile(
-    fileUri: string, 
-    path: string, 
+    fileUri: string,
+    path: string,
     metadata?: any
   ): Promise<{ success: boolean; url?: string; error?: string }> {
     // Implementation depends on your file handling

@@ -1,5 +1,6 @@
 import { useTheme } from '@/context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import React from 'react';
 import {
   Dimensions,
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import firebaseService from '../../firebaseService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -165,8 +167,18 @@ export default function ProfileScreenWeb() {
         </View>
 
         {/* Logout */}
+        {/* Logout */}
         <TouchableOpacity
           style={[styles.logoutButton, { backgroundColor: colors.primary }]}
+          onPress={async () => {
+            try {
+              await firebaseService.signOut();
+              router.replace('/');
+            } catch (error) {
+              console.error('Logout failed:', error);
+              alert('Failed to logout. Please try again.');
+            }
+          }}
         >
           <Text style={styles.saveButtonText}>Logout</Text>
         </TouchableOpacity>
@@ -197,13 +209,13 @@ const styles = StyleSheet.create({
     paddingVertical: -1,
     borderBottomWidth: 1,
     alignItems: 'center',
-    width: '120%', 
+    width: '120%',
   },
   appName: {
     fontSize: Math.min(screenWidth * 0.03, 30),
     fontWeight: '700',
     letterSpacing: 1,
-   
+
   },
   pageHeader: {
     maxWidth: MAX_CONTAINER_WIDTH,
@@ -242,17 +254,17 @@ const styles = StyleSheet.create({
     borderRadius: AVATAR_SIZE / 2,
   },
   editIcon: {
-  position: 'absolute',
-  bottom: 6,
-  right: 6,
-  borderRadius: 15,
-  width: AVATAR_SIZE * 0.3, // Much smaller relative size
-  height: AVATAR_SIZE * 0.3, // Much smaller relative size
-  justifyContent: 'center',
-  alignItems: 'center',
-  elevation: 3,
-  backgroundColor: 'transparent', // Make it transparent
-  borderWidth: 2,
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    borderRadius: 15,
+    width: AVATAR_SIZE * 0.3, // Much smaller relative size
+    height: AVATAR_SIZE * 0.3, // Much smaller relative size
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    backgroundColor: 'transparent', // Make it transparent
+    borderWidth: 2,
   },
   editIconText: {
     fontSize: AVATAR_SIZE * 0.3,
