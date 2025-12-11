@@ -1,12 +1,19 @@
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router'; // Added for navigation
 import React, { useEffect, useState } from 'react';
+import firebaseService from '../../firebaseService'; // Adjust path as needed
 
 export default function SignUpWeb() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [agree, setAgree] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const { colors, theme } = useTheme();
 
   // Track screen width for responsive scroll
@@ -17,6 +24,76 @@ export default function SignUpWeb() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Handle signup with Firebase
+const handleSignUp = async () => {
+  // Reset error
+  setError('');
+  console.log('🔧 handleSignUp called');
+  
+  // Validate inputs
+  if (!name || !email || !password) {
+    setError('Please fill in all fields');
+    return;
+  }
+
+  if (!agree) {
+    setError('You must agree to the terms and privacy policy');
+    return;
+  }
+
+  if (password.length < 6) {
+    setError('Password must be at least 6 characters');
+    return;
+  }
+
+  console.log('✅ Validation passed. Starting signup...');
+  setLoading(true);
+
+  // Add timeout to prevent hanging
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Signup timeout after 10 seconds')), 20000);
+  });
+
+  try {
+    // Race between signup and timeout
+    const result = await Promise.race([
+      firebaseService.signUp(email, password, name),
+      timeoutPromise
+    ]) as any; // Type assertion since we know it's AuthResult
+
+    console.log('📦 signUp result:', result);
+    
+    if (result.success && result.user) {
+      console.log('✅ Firebase signup successful!');
+      
+      // Show success and navigate
+      alert('Account created successfully! Please check your email for verification.');
+      
+      // Clear form
+      setName('');
+      setEmail('');
+      setPassword('');
+      setAgree(false);
+      
+      // Short delay then navigate
+      setTimeout(() => {
+        console.log('Navigating to home...');
+        router.push('/');
+      }, 1000);
+      
+    } else {
+      console.log('❌ Firebase signup failed:', result.error);
+      setError(result.error || 'Signup failed. Please try again.');
+    }
+  } catch (err: any) {
+    console.error('💥 Error in handleSignUp:', err);
+    setError(err.message || 'An unexpected error occurred');
+  } finally {
+    console.log('🏁 Setting loading to false');
+    setLoading(false);
+  }
+};
 
   const placeholderStyles = `
     input::placeholder {
@@ -45,6 +122,29 @@ export default function SignUpWeb() {
       }}
     >
       <style>{placeholderStyles}</style>
+
+      {/* Error Message Display */}
+      {error && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '80px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '12px 24px',
+            backgroundColor: colors.error + '20',
+            border: `1px solid ${colors.error}`,
+            borderRadius: '8px',
+            color: colors.error,
+            fontSize: '14px',
+            maxWidth: '400px',
+            textAlign: 'center',
+            zIndex: 1000,
+          }}
+        >
+          {error}
+        </div>
+      )}
 
       {/* ✅ Top Bar */}
       <LinearGradient
@@ -190,6 +290,9 @@ export default function SignUpWeb() {
                 <input
                   type="text"
                   placeholder="e.g. John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={loading}
                   style={{
                     width: '100%',
                     padding: '16px',
@@ -230,6 +333,9 @@ export default function SignUpWeb() {
                 <input
                   type="email"
                   placeholder="e.g. wilson09@gmail.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
                   style={{
                     width: '100%',
                     padding: '16px',
@@ -271,6 +377,9 @@ export default function SignUpWeb() {
                 <input
                   type={passwordVisible ? 'text' : 'password'}
                   placeholder="********"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
                   style={{
                     width: '100%',
                     padding: '16px 42px 16px 16px',
@@ -289,6 +398,7 @@ export default function SignUpWeb() {
                 <button
                   type="button"
                   onClick={() => setPasswordVisible(!passwordVisible)}
+                  disabled={loading}
                   style={{
                     position: 'absolute',
                     top: '50%',
@@ -296,7 +406,7 @@ export default function SignUpWeb() {
                     transform: 'translateY(-50%)',
                     background: 'none',
                     border: 'none',
-                    cursor: 'pointer',
+                    cursor: loading ? 'not-allowed' : 'pointer',
                     color: colors.secondaryText,
                   }}
                 >
@@ -321,12 +431,13 @@ export default function SignUpWeb() {
                   type="checkbox"
                   id="agree"
                   checked={agree}
-                  onChange={() => setAgree(!agree)}
+                  onChange={() => !loading && setAgree(!agree)}
+                  disabled={loading}
                   style={{
                     marginRight: '8px',
                     width: '16px',
                     height: '16px',
-                    cursor: 'pointer',
+                    cursor: loading ? 'not-allowed' : 'pointer',
                   }}
                 />
                 <label htmlFor="agree">
@@ -336,7 +447,7 @@ export default function SignUpWeb() {
                       color: '#FF0000',
                       fontWeight: 600,
                       textDecoration: 'underline',
-                      cursor: 'pointer',
+                      cursor: loading ? 'not-allowed' : 'pointer',
                     }}
                   >
                     terms
@@ -347,7 +458,7 @@ export default function SignUpWeb() {
                       color: '#FF0000',
                       fontWeight: 600,
                       textDecoration: 'underline',
-                      cursor: 'pointer',
+                      cursor: loading ? 'not-allowed' : 'pointer',
                     }}
                   >
                     privacy policy
@@ -357,20 +468,22 @@ export default function SignUpWeb() {
 
               {/* Signup Button */}
               <button
+                onClick={handleSignUp}
+                disabled={loading || !agree}
                 style={{
                   width: '100%',
                   padding: '14px',
                   borderRadius: '50px',
-                  backgroundColor: colors.buttonPrimary,
+                  backgroundColor: (loading || !agree) ? colors.secondaryText : colors.buttonPrimary,
                   color: colors.buttonText,
                   border: 'none',
                   fontWeight: 600,
                   fontSize: '16px',
-                  cursor: 'pointer',
+                  cursor: (loading || !agree) ? 'not-allowed' : 'pointer',
+                  opacity: (loading || !agree) ? 0.7 : 1,
                 }}
-                disabled={!agree}
               >
-                Sign Up
+                {loading ? 'Creating Account...' : 'Sign Up'}
               </button>
             </div>
           </div>
@@ -385,10 +498,12 @@ export default function SignUpWeb() {
           >
             Already have an account?{' '}
             <span
+              onClick={() => !loading && router.push('/')}
               style={{
                 color: colors.primary,
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.5 : 1,
               }}
             >
               Log In

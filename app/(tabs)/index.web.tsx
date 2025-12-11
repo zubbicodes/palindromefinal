@@ -1,12 +1,20 @@
-import { useTheme } from '@/context/ThemeContext'; // ✅ Theme import
+import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
+import firebaseService from '../../firebaseService';
+import { getFriendlyErrorMessage } from '../../utils/authErrors';
 
 export default function LoginWeb() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
-  const { colors, theme } = useTheme(); // ✅ Theme hook
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { colors, theme } = useTheme();
+  
+
 
   // Update width on resize
   useEffect(() => {
@@ -25,6 +33,74 @@ export default function LoginWeb() {
     }
   `;
 
+  // Handle login with Firebase
+  const handleLogin = async () => {
+    // Reset error
+    setError('');
+    
+    // Validate inputs
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const result = await firebaseService.signIn(email, password);
+      
+      if (result.success && result.user) {
+        // Login successful - navigate to game layout
+        // Use replace instead of push to prevent back navigation issues
+        router.push('/gamelayout');
+      } else {
+        // Show friendly error message
+        const friendlyError = result.error ? getFriendlyErrorMessage(result.error) : 'Login failed. Please try again.';
+        setError(friendlyError);
+        setLoading(false);
+      }
+    } catch (err: any) {
+      console.error('Login error:', err);
+      const friendlyError = err.code ? getFriendlyErrorMessage(err.code) : 'An unexpected error occurred';
+      setError(friendlyError);
+      setLoading(false);
+    }
+  };
+
+  // Handle forgot password
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Please enter your email to reset password');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    
+    try {
+      const result = await firebaseService.resetPassword(email);
+      
+      if (result.success) {
+        alert('Password reset email sent! Check your inbox.');
+        setError('');
+      } else {
+        setError(result.error || 'Failed to send reset email');
+      }
+    } catch (err: any) {
+      console.error('Reset password error:', err);
+      setError(err.message || 'Failed to send reset email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle enter key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !loading) {
+      handleLogin();
+    }
+  };
+
   return (
     <>
       <style>{placeholderStyles}</style>
@@ -40,7 +116,7 @@ export default function LoginWeb() {
             ? 'linear-gradient(to right, #000017, #000074)'
             : '#FFFFFF',
           fontFamily: 'Geist, sans-serif',
-          overflowY: windowWidth < 900 ? 'auto' : 'hidden', // ✅ small screens scroll
+          overflowY: windowWidth < 900 ? 'auto' : 'hidden',
           boxSizing: 'border-box',
         }}
       >
@@ -61,6 +137,25 @@ export default function LoginWeb() {
         >
           PALINDROME
         </div>
+
+        {/* Error Message (Only shown if there's an error) */}
+        {error && (
+          <div
+            style={{
+              marginTop: '20px',
+              padding: '12px 20px',
+              backgroundColor: colors.error + '20',
+              border: `1px solid ${colors.error}`,
+              borderRadius: '8px',
+              color: colors.error,
+              fontSize: '14px',
+              maxWidth: '400px',
+              textAlign: 'center',
+            }}
+          >
+            {error}
+          </div>
+        )}
 
         {/* Main Section */}
         <div
@@ -165,6 +260,9 @@ export default function LoginWeb() {
                   <input
                     type="email"
                     placeholder="e.g. wilson09@gmail.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyPress={handleKeyPress}
                     style={{
                       width: '100%',
                       padding: '16px',
@@ -176,6 +274,7 @@ export default function LoginWeb() {
                       backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
                       color: colors.text,
                     }}
+                    disabled={loading}
                   />
                 </div>
 
@@ -201,6 +300,9 @@ export default function LoginWeb() {
                   <input
                     type={passwordVisible ? 'text' : 'password'}
                     placeholder="********"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyPress={handleKeyPress}
                     style={{
                       width: '100%',
                       padding: '16px 42px 16px 16px',
@@ -212,10 +314,12 @@ export default function LoginWeb() {
                       backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#F9FAFB',
                       color: colors.text,
                     }}
+                    disabled={loading}
                   />
                   <button
                     type="button"
                     onClick={() => setPasswordVisible(!passwordVisible)}
+                    disabled={loading}
                     style={{
                       position: 'absolute',
                       top: '50%',
@@ -223,7 +327,7 @@ export default function LoginWeb() {
                       transform: 'translateY(-50%)',
                       background: 'none',
                       border: 'none',
-                      cursor: 'pointer',
+                      cursor: loading ? 'not-allowed' : 'pointer',
                       color: colors.secondaryText,
                     }}
                   >
@@ -238,12 +342,14 @@ export default function LoginWeb() {
                 {/* Forgot password */}
                 <div style={{ textAlign: 'right', marginTop: '-10px', marginBottom: '0' }}>
                   <span
+                    onClick={handleForgotPassword}
                     style={{
                       fontSize: '14px',
                       color: colors.error,
                       fontWeight: 600,
                       textDecoration: 'none',
-                      cursor: 'pointer',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      opacity: loading ? 0.5 : 1,
                     }}
                   >
                     Forgot password?
@@ -252,21 +358,23 @@ export default function LoginWeb() {
 
                 {/* Login Button */}
                 <button
-                  onClick={() => router.push('/gamelayout')}
+                  onClick={handleLogin}
+                  disabled={loading}
                   style={{
                     width: '100%',
                     padding: '14px',
                     borderRadius: '50px',
-                    backgroundColor: colors.buttonPrimary,
+                    backgroundColor: loading ? colors.secondaryText : colors.buttonPrimary,
                     color: colors.buttonText,
                     border: 'none',
                     fontWeight: 600,
                     fontSize: '16px',
-                    cursor: 'pointer',
+                    cursor: loading ? 'not-allowed' : 'pointer',
                     boxShadow: '0 4px 12px rgba(0, 96, 255, 0.3)',
+                    opacity: loading ? 0.7 : 1,
                   }}
                 >
-                  Log In
+                  {loading ? 'Logging in...' : 'Log In'}
                 </button>
               </div>
             </div>
@@ -297,6 +405,7 @@ export default function LoginWeb() {
               }}
             >
               <button
+                disabled={loading}
                 style={{
                   flex: 1,
                   borderRadius: '50px',
@@ -305,15 +414,17 @@ export default function LoginWeb() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'pointer',
+                  cursor: loading ? 'not-allowed' : 'pointer',
                   background: theme === 'dark' ? 'rgba(25,25,91,1)' : '#FFFFFF',
                   color: colors.text,
+                  opacity: loading ? 0.5 : 1,
                 }}
               >
                 <img src="/images/google.png" alt="Google" style={{ width: '18px', marginRight: '8px' }} />
                 Sign in with Google
               </button>
               <button
+                disabled={loading}
                 style={{
                   flex: 1,
                   borderRadius: '50px',
@@ -322,9 +433,10 @@ export default function LoginWeb() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  cursor: 'pointer',
+                  cursor: loading ? 'not-allowed' : 'pointer',
                   backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#FFFFFF',
                   color: colors.text,
+                  opacity: loading ? 0.5 : 1,
                 }}
               >
                 <img src="/images/apple.png" alt="Apple" style={{ width: '18px', marginRight: '8px' }} />
@@ -337,15 +449,17 @@ export default function LoginWeb() {
               New on Palindrome?{' '}
               <button
                 onClick={() => router.push('/signup')}
+                disabled={loading}
                 style={{
                   color: colors.primary,
                   fontWeight: 600,
                   textDecoration: 'none',
-                  cursor: 'pointer',
+                  cursor: loading ? 'not-allowed' : 'pointer',
                   background: 'none',
                   border: 'none',
                   padding: 0,
                   fontSize: '14px',
+                  opacity: loading ? 0.5 : 1,
                 }}
               >
                 Create an account
