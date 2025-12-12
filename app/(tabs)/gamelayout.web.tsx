@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 import { Switch } from 'react-native-switch';
+import firebaseService from '../../firebaseService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -84,6 +85,7 @@ export default function GameLayoutWeb() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [pause, setPause] = useState(false);
+  const [userName, setUserName] = useState('');
 
   const gridSize = 11;
   const center = Math.floor(gridSize / 2);
@@ -114,7 +116,18 @@ export default function GameLayoutWeb() {
 
   useEffect(() => {
     spawnBulldogs();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    // Fetch current user
+    const user = firebaseService.getCurrentUser();
+    if (user && user.displayName) {
+      setUserName(user.displayName);
+    } else if (user && user.email) {
+      // Fallback to email username if display name not set
+      setUserName(user.email.split('@')[0]);
+    } else {
+      setUserName('User');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const colorGradients = [
@@ -137,7 +150,7 @@ export default function GameLayoutWeb() {
           letter = word[row - (center - halfWord)];
         }
         return (
-          <View key={col} style={[styles.cell, {backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff', width: layoutConfig.cellSize, height: layoutConfig.cellSize }]}>
+          <View key={col} style={[styles.cell, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff', width: layoutConfig.cellSize, height: layoutConfig.cellSize }]}>
             {isBulldog && (
               <Image
                 source={require('../../assets/images/bulldog.png')}
@@ -201,21 +214,23 @@ export default function GameLayoutWeb() {
           style={styles.container}
         >
 
-          <Text style={[styles.title, { color: colors.accent,}]}>PALINDROME</Text>
+          <Text style={[styles.title, { color: colors.accent, }]}>PALINDROME</Text>
 
           <View
-  style={{
-    height: 1,
-    width: '100%',
-    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
-  }}
-/>
+            style={{
+              height: 1,
+              width: '100%',
+              backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
+            }}
+          />
 
 
           {/* ✅ Status Row */}
           <View style={[styles.statusRow, { gap: layoutConfig.statusGap, marginTop: layoutConfig.statusMargin.top, marginBottom: layoutConfig.statusMargin.bottom }]}>
-            <View style={[styles.scoreBox, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff',
-            borderColor: colors.border }]}>
+            <View style={[styles.scoreBox, {
+              backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff',
+              borderColor: colors.border
+            }]}>
               <Text style={[styles.sideLabel, { color: colors.secondaryText }]}>Score</Text>
               <Text style={[styles.sideValue, { color: colors.accent }]}>{score}</Text>
             </View>
@@ -223,19 +238,21 @@ export default function GameLayoutWeb() {
             <View style={styles.timerContainer}>
               <Svg height="60" width="300">
                 <Defs>
-                  <SvgLinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+                  <SvgLinearGradient id="timeGradWeb" x1="0" y1="0" x2="1" y2="1">
                     <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
                     <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
                   </SvgLinearGradient>
                 </Defs>
-                <SvgText fill="url(#grad)" fontSize="34" fontFamily="Geist-Regular" fontWeight="Bold" x="50%" y="60%" textAnchor="middle">
+                <SvgText fill="url(#timeGradWeb)" fontSize="34" fontFamily="Geist-Regular" fontWeight="bold" x="50%" y="60%" textAnchor="middle">
                   {time}
                 </SvgText>
               </Svg>
             </View>
 
-            <View style={[styles.scoreBox, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff',
-            borderColor: colors.border }]}>
+            <View style={[styles.scoreBox, {
+              backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff',
+              borderColor: colors.border
+            }]}>
               <Text style={[styles.sideLabel, { color: colors.secondaryText }]}>Hints</Text>
               <Text style={[styles.sideValue, { color: '#C35DD9' }]}>{hints}</Text>
             </View>
@@ -285,9 +302,9 @@ export default function GameLayoutWeb() {
           {/* ✅ Settings Modal Overlay */}
           {settingsVisible && (
             <View style={StyleSheet.absoluteFill}>
-              <BlurView intensity={20} 
-              tint="default" 
-              experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
+              <BlurView intensity={20}
+                tint="default"
+                experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
                 <View style={styles.settingsOverlay}>
                   <LinearGradient
                     colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF', '#F5F5F5']}
@@ -297,7 +314,7 @@ export default function GameLayoutWeb() {
                   >
 
                     <View style={styles.headerRow}>
-                      <View style={styles.headerSpacer} /> 
+                      <View style={styles.headerSpacer} />
                       <Text style={[styles.settingsTitle, { color: colors.text }]}>Settings</Text>
                       <Pressable onPress={() => setSettingsVisible(false)} style={styles.closeButton}>
                         <Text style={[styles.closeIcon, { color: colors.accent }]}>×</Text>
@@ -311,7 +328,7 @@ export default function GameLayoutWeb() {
                         style={styles.profileImage}
                       />
                       <View style={styles.profileTextContainer}>
-                        <Text style={[styles.profileName, { color: colors.text }]}>Lorem Ipsum</Text>
+                        <Text style={[styles.profileName, { color: colors.text }]}>{userName}</Text>
                         <Pressable onPress={() => router.push('/profile')}>
                           <Text style={[styles.profileLink, { color: colors.accent }]}>Edit Profile</Text>
                         </Pressable>
@@ -321,20 +338,20 @@ export default function GameLayoutWeb() {
                     {/* ✅ Options */}
                     <View style={styles.optionRow}>
                       <Text style={[styles.optionLabel, { color: colors.text }]}>Sound</Text>
-                      <Switch value={soundEnabled} onValueChange={setSoundEnabled} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#ccc" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5} 
-                      renderActiveText={false} renderInActiveText={false} />
+                      <Switch value={soundEnabled} onValueChange={setSoundEnabled} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#ccc" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5}
+                        renderActiveText={false} renderInActiveText={false} />
                     </View>
 
                     <View style={styles.optionRow}>
                       <Text style={[styles.optionLabel, { color: colors.text }]}>Vibration</Text>
                       <Switch value={vibrationEnabled} onValueChange={setVibrationEnabled} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#ccc" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5}
-                      renderActiveText={false} renderInActiveText={false} />
+                        renderActiveText={false} renderInActiveText={false} />
                     </View>
 
                     <View style={styles.optionRow}>
                       <Text style={[styles.optionLabel, { color: colors.text }]}>Dark Mode</Text>
                       <Switch value={theme === 'dark'} onValueChange={toggleTheme} circleSize={18} barHeight={22} backgroundActive={colors.accent} backgroundInactive="#E5E5E5" circleActiveColor="#fff" circleInActiveColor="#fff" switchWidthMultiplier={2.5}
-                      renderActiveText={false} renderInActiveText={false} />
+                        renderActiveText={false} renderInActiveText={false} />
                     </View>
 
                     {/* ✅ Links */}
@@ -355,7 +372,7 @@ export default function GameLayoutWeb() {
           {/* Pause Overlay */}
           {pause && (
             <View style={StyleSheet.absoluteFill}>
-              <BlurView intensity={20} tint="dark" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill}/>
+              <BlurView intensity={20} tint="dark" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
               <View style={styles.pauseOverlay}>
                 <View style={[styles.pauseCard, { backgroundColor: colors.card }]}>
                   <Text style={[styles.pauseTitle, { color: colors.text }]}>Game Paused</Text>
@@ -365,31 +382,31 @@ export default function GameLayoutWeb() {
                 </View>
               </View>
             </View>
-            
+
           )}
-        
+
         </LinearGradient>
       </View>
     </SafeAreaView>
-    
+
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    alignItems: 'center', 
+  container: {
+    flex: 1,
+    alignItems: 'center',
     paddingVertical: -1,
     justifyContent: 'space-between',
   },
-  title: { 
-    fontSize: 26, 
-    fontWeight: '900', 
+  title: {
+    fontSize: 26,
+    fontWeight: '900',
     marginBottom: 10,
     textAlign: 'center',
     marginTop: 15,
   },
-  timerContainer: { 
+  timerContainer: {
   },
   statusRow: {
     flexDirection: 'row',
@@ -397,81 +414,81 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
-  scoreBox: { 
-    flexDirection: 'row', 
-    borderWidth: 1, 
-    borderRadius: 16, 
-    width: 120, 
-    height: 60, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    shadowColor: '#000', 
-    shadowOpacity: 0.1, 
+  scoreBox: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 16,
+    width: 120,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
     shadowRadius: 3,
   },
   sideLabel: { fontSize: 16 },
   sideValue: { marginLeft: 16, fontSize: 28, fontWeight: '600' },
-  
-  mainLayout: { 
+
+  mainLayout: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     flex: 1,
     marginVertical: 10,
   },
-  
-  sideColumn: { 
+
+  sideColumn: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  colorBlockWrapper: { 
-    borderRadius: 14, 
+  colorBlockWrapper: {
+    borderRadius: 14,
     paddingVertical: 12,
-    paddingHorizontal: 16, 
-    alignItems: 'center', 
+    paddingHorizontal: 16,
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
-  colorBlockContainer: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
+  colorBlockContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 16,
   },
-  colorBlock: { 
-    borderRadius: 32, 
-    shadowColor: '#000', 
-    shadowOpacity: 0.2, 
-    shadowRadius: 3, 
+  colorBlock: {
+    borderRadius: 32,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
     elevation: 3,
   },
-  gradientBlock: { 
-    flex: 1, 
-    borderRadius: 10, 
-    justifyContent: 'center', 
+  gradientBlock: {
+    flex: 1,
+    borderRadius: 10,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   blockText: { color: '#fff', fontWeight: '700' },
-  
-  board: { 
-    borderRadius: 16, 
-    padding: 6, 
-    justifyContent: 'center', 
+
+  board: {
+    borderRadius: 16,
+    padding: 6,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   row: { flexDirection: 'row' },
-  cell: { 
-    borderWidth: 1, 
-    borderColor: '#CCDAE466', 
-    borderRadius: 6, 
+  cell: {
+    borderWidth: 1,
+    borderColor: '#CCDAE466',
+    borderRadius: 6,
     margin: 3,
-    justifyContent: 'center', 
+    justifyContent: 'center',
     alignItems: 'center',
   },
   letterText: { fontWeight: '700' },
-  bulldogImage: { 
+  bulldogImage: {
     resizeMode: 'contain',
   },
-  
-  controlsRow: { 
+
+  controlsRow: {
     position: 'relative',
     left: 0,
     right: 0,
@@ -480,11 +497,11 @@ const styles = StyleSheet.create({
     gap: 18,
     paddingVertical: 20,
   },
-  controlBtn: { 
-    width: 35, 
-    height: 35, 
-    borderRadius: 22.5, 
-    alignItems: 'center', 
+  controlBtn: {
+    width: 35,
+    height: 35,
+    borderRadius: 22.5,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   settingsOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
