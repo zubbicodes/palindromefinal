@@ -1,5 +1,6 @@
 import { useThemeContext } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -86,6 +87,7 @@ export default function GameLayoutWeb() {
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [pause, setPause] = useState(false);
   const [userName, setUserName] = useState('');
+  const [avatar, setAvatar] = useState<string | null>(null);
 
   const gridSize = 11;
   const center = Math.floor(gridSize / 2);
@@ -118,17 +120,34 @@ export default function GameLayoutWeb() {
     spawnBulldogs();
 
     // Fetch current user
-    const user = firebaseService.getCurrentUser();
-    if (user && user.displayName) {
-      setUserName(user.displayName);
-    } else if (user && user.email) {
-      // Fallback to email username if display name not set
-      setUserName(user.email.split('@')[0]);
-    } else {
-      setUserName('User');
-    }
+    const loadUserData = async () => {
+      const user = firebaseService.getCurrentUser();
+
+      if (user) {
+        if (user.displayName) {
+          setUserName(user.displayName);
+        } else if (user.email) {
+          setUserName(user.email.split('@')[0]);
+        }
+
+        try {
+          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.uid}`);
+          if (storedAvatar) {
+            setAvatar(storedAvatar);
+          } else if (user.photoURL) {
+            setAvatar(user.photoURL);
+          }
+        } catch (error) {
+          console.error("Error loading avatar", error);
+        }
+      } else {
+        setUserName('User');
+      }
+    };
+
+    loadUserData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [settingsVisible]); // Reload when settings open to ensure fresh avatar
 
   const colorGradients = [
     ['#C40111', '#F01D2E'],
@@ -321,10 +340,9 @@ export default function GameLayoutWeb() {
                       </Pressable>
                     </View>
 
-                    {/* ✅ Profile */}
                     <View style={styles.profileSection}>
                       <Image
-                        source={require('../../assets/images/profile.jpg')}
+                        source={avatar ? { uri: avatar } : require('../../assets/images/profile.jpg')}
                         style={styles.profileImage}
                       />
                       <View style={styles.profileTextContainer}>

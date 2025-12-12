@@ -20,7 +20,7 @@ import {
   setDoc,
   updateDoc
 } from 'firebase/firestore';
-import { FirebaseStorage, getStorage } from 'firebase/storage';
+import { FirebaseStorage, getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 
 // Define types for better TypeScript support
 export interface FirebaseConfig {
@@ -393,9 +393,33 @@ class FirebaseService {
     path: string,
     metadata?: any
   ): Promise<{ success: boolean; url?: string; error?: string }> {
-    // Implementation depends on your file handling
-    // This is a placeholder for storage upload logic
-    return { success: false, error: 'Storage upload not implemented' };
+    try {
+      console.log(`[FirebaseService] Starting upload for ${path}...`);
+
+      // Convert URI to Blob
+      const response = await fetch(fileUri);
+      const blob = await response.blob();
+
+      // Create storage reference
+      const storageRef = ref(this.storage, path);
+
+      // Upload bytes
+      console.log('[FirebaseService] Uploading bytes...');
+      await uploadBytes(storageRef, blob, metadata);
+      console.log('[FirebaseService] Upload complete');
+
+      // Get download URL
+      const url = await getDownloadURL(storageRef);
+      console.log('[FirebaseService] Download URL:', url);
+
+      return { success: true, url };
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   }
 
   // ==================== UTILITY METHODS ====================
