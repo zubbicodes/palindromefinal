@@ -591,7 +591,7 @@ export default function GameLayoutWeb() {
 
           {/* ✅ Settings Modal Overlay */}
           {settingsVisible && (
-            <View style={StyleSheet.absoluteFill}>
+            <View style={[StyleSheet.absoluteFill, { zIndex: 10000 }]}>
               <BlurView intensity={20}
                 tint="default"
                 experimentalBlurMethod='dimezisBlurView' style={StyleSheet.absoluteFill}>
