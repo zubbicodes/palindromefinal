@@ -14,7 +14,7 @@ import {
   SafeAreaView,
   StyleSheet,
   Text,
-  View
+  View,
 } from 'react-native';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 import { Switch } from 'react-native-switch';
@@ -74,6 +74,128 @@ const getLayoutConfig = () => {
   }
 };
 
+const DraggableBlock = ({
+  colorIndex,
+  gradient,
+  count,
+  layoutConfig,
+  onDrop
+}: {
+  colorIndex: number;
+  gradient: readonly [string, string];
+  count: number;
+  layoutConfig: any;
+  onDrop: (x: number, y: number, colorIndex: number) => Promise<boolean>;
+}) => {
+  const pan = useRef(new Animated.ValueXY()).current;
+  const [isDragging, setIsDragging] = useState(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => count > 0,
+      onPanResponderGrant: () => {
+        setIsDragging(true);
+        pan.setOffset({
+          x: (pan.x as any)._value,
+          y: (pan.y as any)._value
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: async (e, gestureState) => {
+        pan.flattenOffset();
+        setIsDragging(false);
+        const dropped = await onDrop(gestureState.moveX, gestureState.moveY, colorIndex);
+        if (dropped) {
+          pan.setValue({ x: 0, y: 0 });
+        } else {
+          Animated.spring(pan, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: false,
+          }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        pan.flattenOffset();
+        setIsDragging(false);
+        Animated.spring(pan, {
+          toValue: { x: 0, y: 0 },
+          useNativeDriver: false,
+        }).start();
+      },
+    })
+  ).current;
+
+  // Static Block (The Stack)
+  const StaticBlock = () => (
+    <View
+      style={[
+        styles.colorBlock,
+        {
+          width: layoutConfig.colorBlock.width,
+          height: layoutConfig.colorBlock.height,
+          position: 'absolute',
+          opacity: count > 1 ? 1 : 0 // Show stack if we have more than 1
+        }
+      ]}
+    >
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientBlock}
+      >
+        <Text style={[styles.blockText, { fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20 }]}>{count}</Text>
+      </LinearGradient>
+    </View>
+  );
+
+  return (
+    <View style={{ width: layoutConfig.colorBlock.width, height: layoutConfig.colorBlock.height, position: 'relative', zIndex: isDragging ? 2000 : 1 }}>
+      {/* Render stack only if dragging or count > 1? User wants to see 'picking one'. */}
+      {/* Simple logic: If count > 0, we can drag. 
+            If dragging, we show the static stack (representing count) and dragging one (representing 1).
+            When dragging ends and dropped, we update count. 
+            Actually, let's keep it simple: Static block shows `count`. Top block shows `1` when dragging, or `count` when not. */}
+
+      {count > 0 && <StaticBlock />}
+
+      <Animated.View
+        style={[
+          styles.colorBlock,
+          {
+            transform: pan.getTranslateTransform(),
+            width: layoutConfig.colorBlock.width,
+            height: layoutConfig.colorBlock.height,
+            zIndex: isDragging ? 9999 : 2,
+            elevation: isDragging ? 9999 : 3,
+            opacity: count > 0 ? 1 : 0,
+            // @ts-ignore
+            cursor: count > 0 ? 'grab' : 'default',
+          } as any
+        ]}
+        {...panResponder.panHandlers}
+      >
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.gradientBlock, { userSelect: 'none' } as any]}
+        >
+          <Text
+            selectable={false}
+            style={[styles.blockText, { fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20 }, { userSelect: 'none' } as any]}
+          >
+            {isDragging ? "1" : count}
+          </Text>
+        </LinearGradient>
+      </Animated.View>
+    </View>
+  );
+};
+
 export default function GameLayoutWeb() {
   const router = useRouter();
   const { theme, colors, toggleTheme } = useThemeContext();
@@ -89,12 +211,30 @@ export default function GameLayoutWeb() {
   const [userName, setUserName] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
 
+  // Game Logic State
   const gridSize = 11;
+  const [gridState, setGridState] = useState<(number | null)[][]>(
+    Array.from({ length: gridSize }, () => Array(gridSize).fill(null))
+  );
+  // Shared block counts - initially 16 for each of 5 colors
+  const [blockCounts, setBlockCounts] = useState<number[]>([16, 16, 16, 16, 16]);
+
+  const boardRef = useRef<View>(null);
+  const [boardLayout, setBoardLayout] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
+
   const center = Math.floor(gridSize / 2);
   const word = 'PALINDROME';
   const halfWord = Math.floor(word.length / 2);
 
   const layoutConfig = getLayoutConfig();
+
+  const colorGradients = [
+    ['#C40111', '#F01D2E'],
+    ['#757F35', '#99984D'],
+    ['#1177FE', '#48B7FF'],
+    ['#111111', '#3C3C3C'],
+    ['#E7CC01', '#E7E437'],
+  ] as const;
 
   const spawnBulldogs = () => {
     const totalBulldogs = 5;
@@ -147,15 +287,142 @@ export default function GameLayoutWeb() {
 
     loadUserData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsVisible]); // Reload when settings open to ensure fresh avatar
+  }, [settingsVisible]);
 
-  const colorGradients = [
-    ['#C40111', '#F01D2E'],
-    ['#757F35', '#99984D'],
-    ['#1177FE', '#48B7FF'],
-    ['#111111', '#3C3C3C'],
-    ['#E7CC01', '#E7E437'],
-  ] as const;
+  // Capture board layout for drop detection
+  const measureBoard = () => {
+    if (boardRef.current) {
+      boardRef.current.measure((x, y, width, height, pageX, pageY) => {
+        setBoardLayout({ x: pageX, y: pageY, width, height });
+      });
+    }
+  }
+
+  // Measure on mount and layout change
+  useEffect(() => {
+    const timer = setTimeout(measureBoard, 200);
+    return () => clearTimeout(timer);
+  }, [width, height]);
+
+  const handleDrop = async (dropX: number, dropY: number, colorIndex: number): Promise<boolean> => {
+    if (!boardLayout) return false;
+
+    // Add some hit slop tolerance
+    const hitSlop = 20;
+
+    // Check if within board bounds
+    if (
+      dropX < boardLayout.x - hitSlop ||
+      dropX > boardLayout.x + boardLayout.width + hitSlop ||
+      dropY < boardLayout.y - hitSlop ||
+      dropY > boardLayout.y + boardLayout.height + hitSlop
+    ) {
+      return false;
+    }
+
+    // Calculate grid cell relative to board
+    const relativeX = dropX - boardLayout.x;
+    const relativeY = dropY - boardLayout.y;
+
+    const boardPadding = 6;
+    const effectiveX = relativeX - boardPadding;
+    const effectiveY = relativeY - boardPadding;
+
+    const cellPitch = layoutConfig.cellSize + 6; // width + margin*2 (3+3)
+
+    const col = Math.floor(effectiveX / cellPitch);
+    const row = Math.floor(effectiveY / cellPitch);
+
+    if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) {
+      return false;
+    }
+
+    // Check if cell is empty
+    if (gridState[row][col] !== null) {
+      return false;
+    }
+
+    // VALID DROP
+    // 1. Update Grid
+    const newGrid = gridState.map(r => [...r]);
+    newGrid[row][col] = colorIndex;
+
+    // 2. Decrement Count
+    setBlockCounts(prev => {
+      const next = [...prev];
+      if (next[colorIndex] > 0) next[colorIndex]--;
+      return next;
+    });
+
+    // 3. Check Palindromes Logic
+    const points = checkAndProcessPalindromes(row, col, colorIndex, newGrid);
+
+    setGridState(newGrid);
+
+    if (points > 0) {
+      setScore(s => s + points);
+    }
+
+    return true;
+  };
+
+  const checkAndProcessPalindromes = (row: number, col: number, colorIdx: number, currentGrid: (number | null)[][]) => {
+    let scoreFound = 0;
+
+    // Helper to check line
+    const checkLine = (lineIsRow: boolean) => {
+      const line: { color: number, r: number, c: number }[] = [];
+      if (lineIsRow) {
+        for (let c = 0; c < gridSize; c++) {
+          if (currentGrid[row][c] !== null) {
+            line.push({ color: currentGrid[row][c]!, r: row, c: c });
+          } else {
+            line.push({ color: -1, r: row, c: c });
+          }
+        }
+      } else {
+        for (let r = 0; r < gridSize; r++) {
+          if (currentGrid[r][col] !== null) {
+            line.push({ color: currentGrid[r][col]!, r: r, c: col });
+          } else {
+            line.push({ color: -1, r: r, c: col });
+          }
+        }
+      }
+
+      const targetIndex = lineIsRow ? col : row;
+
+      let start = targetIndex;
+      let end = targetIndex;
+
+      while (start > 0 && line[start - 1].color !== -1) start--;
+      while (end < gridSize - 1 && line[end + 1].color !== -1) end++;
+
+      const segment = line.slice(start, end + 1);
+      if (segment.length >= 3) {
+        const colors = segment.map(s => s.color);
+        const isPal = colors.join(',') === [...colors].reverse().join(',');
+
+        if (isPal) {
+          let segmentScore = segment.length * 10;
+          let hasBulldog = false;
+          segment.forEach(b => {
+            if (bulldogPositions.some(bp => bp.row === b.r && bp.col === b.c)) {
+              hasBulldog = true;
+            }
+          });
+
+          if (hasBulldog) segmentScore += 50;
+          scoreFound += segmentScore;
+        }
+      }
+    };
+
+    checkLine(true);
+    checkLine(false);
+
+    return scoreFound;
+  };
 
   const grid = Array.from({ length: gridSize }, (_, row) => (
     <View key={row} style={styles.row}>
@@ -168,60 +435,37 @@ export default function GameLayoutWeb() {
         if (col === center && row >= center - halfWord && row < center - halfWord + word.length) {
           letter = word[row - (center - halfWord)];
         }
+
+        const cellColorIndex = gridState[row][col];
+
         return (
           <View key={col} style={[styles.cell, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#ffffffff', width: layoutConfig.cellSize, height: layoutConfig.cellSize }]}>
-            {isBulldog && (
-              <Image
-                source={require('../../assets/images/bulldog.png')}
-                style={[styles.bulldogImage, { width: layoutConfig.cellSize - 14, height: layoutConfig.cellSize - 14 }]}
-                resizeMode="contain"
+            {cellColorIndex !== null ? (
+              <LinearGradient
+                colors={colorGradients[cellColorIndex]}
+                style={{ width: '100%', height: '100%', borderRadius: 4 }}
               />
-            )}
-            {letter && (
-              <Text style={[styles.letterText, { color: colors.text, fontSize: layoutConfig.cellSize > 40 ? 16 : 14 }]}>
-                {letter}
-              </Text>
+            ) : (
+              <>
+                {isBulldog && (
+                  <Image
+                    source={require('../../assets/images/bulldog.png')}
+                    style={[styles.bulldogImage, { width: layoutConfig.cellSize - 14, height: layoutConfig.cellSize - 14 }]}
+                    resizeMode="contain"
+                  />
+                )}
+                {letter && (
+                  <Text style={[styles.letterText, { color: colors.text, fontSize: layoutConfig.cellSize > 40 ? 16 : 14 }]}>
+                    {letter}
+                  </Text>
+                )}
+              </>
             )}
           </View>
         );
       })}
     </View>
   ));
-
-  const colorBlocks = colorGradients.map((gradient, i) => {
-    const pan = useRef(new Animated.ValueXY()).current;
-    const panResponder = useRef(
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
-          useNativeDriver: false,
-        }),
-        onPanResponderRelease: () => {
-          Animated.spring(pan, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: false,
-          }).start();
-        },
-      })
-    ).current;
-
-    return (
-      <Animated.View
-        key={i}
-        style={[styles.colorBlock, { transform: pan.getTranslateTransform(), width: layoutConfig.colorBlock.width, height: layoutConfig.colorBlock.height }]}
-        {...panResponder.panHandlers}
-      >
-        <LinearGradient
-          colors={gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradientBlock}
-        >
-          <Text style={[styles.blockText, { fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20 }]}>16</Text>
-        </LinearGradient>
-      </Animated.View>
-    );
-  });
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
@@ -278,18 +522,45 @@ export default function GameLayoutWeb() {
           </View>
 
           {/* ✅ Main Game Area */}
-          <View style={[styles.mainLayout, { gap: layoutConfig.mainLayoutGap }]}>
-            <View style={styles.sideColumn}>
+          <View style={[styles.mainLayout, { gap: layoutConfig.mainLayoutGap, zIndex: 1 }]}>
+            <View style={[styles.sideColumn, { zIndex: 100 }]}>
               <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff', width: layoutConfig.colorBlockWrapper.width, height: layoutConfig.colorBlockWrapper.height }]}>
-                <View style={styles.colorBlockContainer}>{colorBlocks}</View>
+                <View style={styles.colorBlockContainer}>
+                  {colorGradients.map((gradient, i) => (
+                    <DraggableBlock
+                      key={`left-${i}`}
+                      colorIndex={i}
+                      gradient={gradient}
+                      count={blockCounts[i]}
+                      layoutConfig={layoutConfig}
+                      onDrop={handleDrop}
+                    />
+                  ))}
+                </View>
               </View>
             </View>
 
-            <View style={[styles.board, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff', width: layoutConfig.boardSize, height: layoutConfig.boardSize }]}>{grid}</View>
+            <View
+              ref={boardRef}
+              style={[styles.board, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff', width: layoutConfig.boardSize, height: layoutConfig.boardSize, zIndex: 1 }]}
+            >
+              {grid}
+            </View>
 
-            <View style={styles.sideColumn}>
+            <View style={[styles.sideColumn, { zIndex: 100 }]}>
               <View style={[styles.colorBlockWrapper, { backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#f1f1f1ff', width: layoutConfig.colorBlockWrapper.width, height: layoutConfig.colorBlockWrapper.height }]}>
-                <View style={styles.colorBlockContainer}>{colorBlocks}</View>
+                <View style={styles.colorBlockContainer}>
+                  {colorGradients.map((gradient, i) => (
+                    <DraggableBlock
+                      key={`right-${i}`}
+                      colorIndex={i}
+                      gradient={gradient}
+                      count={blockCounts[i]}
+                      layoutConfig={layoutConfig}
+                      onDrop={handleDrop}
+                    />
+                  ))}
+                </View>
               </View>
             </View>
           </View>
