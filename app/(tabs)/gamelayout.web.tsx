@@ -108,12 +108,12 @@ const DraggableBlock = ({
         })
         pan.setValue({ x: 0, y: 0 })
       },
-      onPanResponderMove: (e, gestureState) => {
-        Animated.event([null, { dx: pan.x, dy: pan.y }], {
-          useNativeDriver: false,
-        })(e, gestureState)
-        onDragMove(gestureState.moveX, gestureState.moveY)
-      },
+      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
+        useNativeDriver: false,
+        listener: ((event: any, gestureState: any) => {
+          onDragMove(gestureState.moveX, gestureState.moveY)
+        }) as any,
+      }),
       onPanResponderRelease: async (e, gestureState) => {
         pan.flattenOffset()
         setIsDragging(false)
