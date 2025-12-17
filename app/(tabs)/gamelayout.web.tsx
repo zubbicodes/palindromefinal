@@ -1,23 +1,21 @@
 "use client"
 
 import { useThemeContext } from "@/context/ThemeContext"
+import { useSound } from "@/hooks/use-sound"
 import { Ionicons } from "@expo/vector-icons"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { BlurView } from "expo-blur"
-import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useEffect, useRef, useState } from "react"
 import {
-  Animated,
   Dimensions,
-  Image,
-  PanResponder,
-  Pressable,
-  SafeAreaView,
+  Pressable, // Keeps Pressable for unified event handling or allows simple onClick
   StyleSheet,
-  Text,
-  View,
 } from "react-native"
+// react-native-svg works on web, usually maps to <svg>, but we can also use native <svg> if RN-SVG gives trouble. 
+// However, sticking to RN-SVG is usually fine on web if setup correctly. The user snippet used Svg, let's stick to it or standard svg if safer.
+// User snippet had Svg imports, let's keep them if they work, but standard SVG is safer for "pure web".
+// Actually user snippet imports Svg from react-native-svg. I will try to use it, or fallback to standard svg if I can match styles.
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from "react-native-svg"
 import { Switch } from "react-native-switch"
 import firebaseService from "../../firebaseService"
@@ -28,17 +26,16 @@ const { width, height } = Dimensions.get("window")
 const getLayoutConfig = () => {
   if (width >= 1920) {
     return {
-      statusGap: 220,
+      statusGap: 230,
       mainLayoutGap: 70,
       boardSize: 600,
       cellSize: 46,
-      colorBlockWrapper: { width: 130, height: 580 },
+      colorBlockWrapper: { width: 100, height: 570 },
       colorBlock: { width: 100, height: 98 },
-      controlsBottom: -10,
-      statusMargin: { top: 40, bottom: 40 },
+      controlsBottom: 15,
+      statusMargin: { top: 15, bottom: 15 },
     }
   } else if (width >= 1440) {
-    // 1440x900 configuration
     return {
       statusGap: 160,
       mainLayoutGap: 50,
@@ -50,7 +47,6 @@ const getLayoutConfig = () => {
       statusMargin: { top: 30, bottom: 30 },
     }
   } else if (width >= 1366) {
-    // 1366x768 configuration
     return {
       statusGap: 120,
       mainLayoutGap: 30,
@@ -62,7 +58,6 @@ const getLayoutConfig = () => {
       statusMargin: { top: 25, bottom: 25 },
     }
   } else {
-    // Fallback for smaller screens
     return {
       statusGap: 80,
       mainLayoutGap: 20,
@@ -81,86 +76,33 @@ const DraggableBlock = ({
   gradient,
   count,
   layoutConfig,
-  onDrop,
   onDragStart,
-  onDragMove,
 }: {
   colorIndex: number
   gradient: readonly [string, string]
   count: number
   layoutConfig: any
-  onDrop: (x: number, y: number, colorIndex: number) => Promise<boolean>
-  onDragStart: () => void
-  onDragMove: (x: number, y: number) => void
+  onDragStart: (colorIndex: number) => void
 }) => {
-  const pan = useRef(new Animated.ValueXY()).current
   const [isDragging, setIsDragging] = useState(false)
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => count > 0,
-      onPanResponderGrant: () => {
-        onDragStart()
-        setIsDragging(true)
-        pan.setOffset({
-          x: (pan.x as any)._value,
-          y: (pan.y as any)._value,
-        })
-        pan.setValue({ x: 0, y: 0 })
-      },
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
-        useNativeDriver: false,
-        listener: ((event: any, gestureState: any) => {
-          onDragMove(gestureState.moveX, gestureState.moveY)
-        }) as any,
-      }),
-      onPanResponderRelease: async (e, gestureState) => {
-        pan.flattenOffset()
-        setIsDragging(false)
-        onDragMove(-1, -1)
-        const dropped = await onDrop(gestureState.moveX, gestureState.moveY, colorIndex)
-        if (dropped) {
-          pan.setValue({ x: 0, y: 0 })
-        } else {
-          Animated.spring(pan, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: false,
-          }).start()
-        }
-      },
-      onPanResponderTerminate: () => {
-        pan.flattenOffset()
-        setIsDragging(false)
-        onDragMove(-1, -1)
-        Animated.spring(pan, {
-          toValue: { x: 0, y: 0 },
-          useNativeDriver: false,
-        }).start()
-      },
-    }),
-  ).current
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    if (count > 0) {
+      e.dataTransfer.setData("color", colorIndex.toString())
+      e.dataTransfer.effectAllowed = "copy"
+      setIsDragging(true)
+      onDragStart(colorIndex)
+    } else {
+      e.preventDefault()
+    }
+  }
 
-  // Static Block (The Stack)
-  const StaticBlock = () => (
-    <View
-      style={[
-        styles.colorBlock,
-        {
-          width: layoutConfig.colorBlock.width,
-          height: layoutConfig.colorBlock.height,
-          position: "absolute",
-          opacity: count > 1 ? 1 : 0, // Show stack if we have more than 1
-        },
-      ]}
-    >
-      <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientBlock}>
-        <Text style={[styles.blockText, { fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20 }]}>{count}</Text>
-      </LinearGradient>
-    </View>
-  )
+  const handleDragEnd = () => {
+    setIsDragging(false)
+  }
 
   return (
-    <View
+    <div
       style={{
         width: layoutConfig.colorBlock.width,
         height: layoutConfig.colorBlock.height,
@@ -168,55 +110,94 @@ const DraggableBlock = ({
         zIndex: isDragging ? 2000 : 1,
       }}
     >
-      {/* Render stack only if dragging or count > 1? User wants to see 'picking one'. */}
-      {/* Simple logic: If count > 0, we can drag. 
-            If dragging, we show the static stack (representing count) and dragging one (representing 1).
-            When dragging ends and dropped, we update count. 
-            Actually, let's keep it simple: Static block shows `count`. Top block shows `1` when dragging, or `count` when not. */}
-
-      {count > 0 && <StaticBlock />}
-
-      <Animated.View
-        style={[
-          styles.colorBlock,
-          {
-            transform: pan.getTranslateTransform(),
+      {/* Static Block (The Stack) */}
+      {count > 1 && (
+        <div
+          style={{
+            position: "absolute",
             width: layoutConfig.colorBlock.width,
             height: layoutConfig.colorBlock.height,
-            zIndex: isDragging ? 9999 : 2,
-            elevation: isDragging ? 9999 : 3,
-            opacity: count > 0 ? 1 : 0,
-            // @ts-ignore
-            cursor: count > 0 ? "grab" : "default",
-          } as any,
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <LinearGradient
-          colors={gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gradientBlock, { userSelect: "none" } as any]}
+            borderRadius: 32,
+            boxShadow: "none",
+            overflow: "hidden",
+            display: "flex",
+          }}
         >
-          <Text
-            selectable={false}
-            style={[
-              styles.blockText,
-              { fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20 },
-              { userSelect: "none" } as any,
-            ]}
+          <div
+            style={{
+              background: `linear-gradient(to right bottom, ${gradient[0]}, ${gradient[1]})`,
+              width: "100%",
+              height: "100%",
+              borderRadius: 10,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
           >
-            {isDragging ? "" : count}
-          </Text>
-        </LinearGradient>
-      </Animated.View>
-    </View>
+            <span
+              style={{
+                color: "#fff",
+                fontWeight: "700",
+                fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20,
+              }}
+            >
+              {count}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Draggable Block */}
+      <div
+        draggable={count > 0}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        style={{
+          width: layoutConfig.colorBlock.width,
+          height: layoutConfig.colorBlock.height,
+          borderRadius: 32,
+          boxShadow: "none",
+          zIndex: isDragging ? 9999 : 2,
+          opacity: count > 0 ? 1 : 0.5,
+          cursor: count > 0 ? "grab" : "default",
+          position: "relative",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <div
+          style={{
+            background: `linear-gradient(to right bottom, ${gradient[0]}, ${gradient[1]})`,
+            width: "100%",
+            height: "100%",
+            borderRadius: 10,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            userSelect: "none",
+          }}
+        >
+          <span
+            style={{
+              color: "#fff",
+              fontWeight: "700",
+              fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20,
+              userSelect: "none",
+            }}
+          >
+            {count}
+          </span>
+        </div>
+      </div>
+    </div>
   )
 }
 
 export default function GameLayoutWeb() {
   const router = useRouter()
   const { theme, colors, toggleTheme } = useThemeContext()
+  const { playPickupSound, playDropSound, playErrorSound } = useSound()
 
   const [score, setScore] = useState(0)
   const [hints, setHints] = useState(2)
@@ -229,15 +210,18 @@ export default function GameLayoutWeb() {
   const [userName, setUserName] = useState("")
   const [avatar, setAvatar] = useState<string | null>(null)
 
+  // Drag State
+  const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null)
+  const [draggedColor, setDraggedColor] = useState<number | null>(null)
+
   // Game Logic State
   const gridSize = 11
   const [gridState, setGridState] = useState<(number | null)[][]>(
     Array.from({ length: gridSize }, () => Array(gridSize).fill(null)),
   )
-  // Shared block counts - initially 16 for each of 5 colors
   const [blockCounts, setBlockCounts] = useState<number[]>([16, 16, 16, 16, 16])
 
-  const boardRef = useRef<View>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
   const [boardLayout, setBoardLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
 
   const center = Math.floor(gridSize / 2)
@@ -277,7 +261,6 @@ export default function GameLayoutWeb() {
   useEffect(() => {
     spawnBulldogs()
 
-    // Fetch current user
     const loadUserData = async () => {
       const user = firebaseService.getCurrentUser()
 
@@ -307,52 +290,85 @@ export default function GameLayoutWeb() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsVisible])
 
-  // Capture board layout for drop detection
-  const measureBoard = () => {
-    if (boardRef.current) {
-      boardRef.current.measure((x, y, width, height, pageX, pageY) => {
-        // Fallback to layoutConfig.boardSize if measure returns 0
-        const finalWidth = width || layoutConfig.boardSize
-        const finalHeight = height || layoutConfig.boardSize
-        setBoardLayout({ x: pageX, y: pageY, width: finalWidth, height: finalHeight })
-      })
+  useEffect(() => {
+    const measureBoard = () => {
+      if (boardRef.current) {
+        const rect = boardRef.current.getBoundingClientRect()
+        setBoardLayout({
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+        })
+      }
+    }
+
+    const timer = setTimeout(measureBoard, 200)
+    window.addEventListener('resize', measureBoard)
+
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', measureBoard)
+    }
+  }, [width, height])
+
+  const handleDragStart = (colorIndex: number) => {
+    playPickupSound()
+    setDraggedColor(colorIndex)
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, row: number, col: number) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "copy"
+
+    // Only highlight if empty
+    if (gridState[row][col] === null) {
+      setDragOverCell({ row, col })
+    } else {
+      setDragOverCell(null)
     }
   }
 
-  // Measure on mount and layout change
-  useEffect(() => {
-    const timer = setTimeout(measureBoard, 200)
-    return () => clearTimeout(timer)
-  }, [width, height])
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, row: number, col: number) => {
+    e.preventDefault()
+    if (gridState[row][col] === null) {
+      setDragOverCell({ row, col })
+    }
+  }
 
-  const handleDrop = async (dropX: number, dropY: number, colorIndex: number): Promise<boolean> => {
-    if (!boardLayout) return false
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    // We clear dragOverCell only if we are leaving the currently highlighted cell?
+    // Or just clear it. But since enter/leave bubble, it's safer to rely on Enter/Over updates.
+    // However, if we leave a cell, we should clear it *if* it matches.
+    setDragOverCell(null)
+  }
 
-    // Cell has: margin: 3, borderWidth: 1, width/height: layoutConfig.cellSize
-    // Total space per cell = cellSize + (margin * 2) + (borderWidth * 2)
-    const BOARD_PADDING = 6
-    const CELL_MARGIN = 3
-    const CELL_BORDER = 1
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, row: number, col: number): Promise<boolean> => {
+    e.preventDefault()
+    setDragOverCell(null)
+    setDraggedColor(null)
 
-    const CELL_PITCH = layoutConfig.cellSize + CELL_MARGIN * 2 + CELL_BORDER * 2
+    const transferredColor = e.dataTransfer.getData("color")
+    if (!transferredColor) {
+      playErrorSound()
+      return false
+    }
 
-    // Grid origin (top-left of first cell's content area)
-    const originX = boardLayout.x + BOARD_PADDING + CELL_MARGIN + CELL_BORDER
-    const originY = boardLayout.y + BOARD_PADDING + CELL_MARGIN + CELL_BORDER
+    const colorIndex = parseInt(transferredColor, 10)
 
-    const localX = dropX - originX
-    const localY = dropY - originY
-
-    if (localX < 0 || localY < 0) return false
-
-    const col = Math.floor(localX / CELL_PITCH)
-    const row = Math.floor(localY / CELL_PITCH)
-
-    if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) {
+    if (isNaN(colorIndex) || colorIndex < 0 || colorIndex >= colorGradients.length) {
+      playErrorSound()
       return false
     }
 
     if (gridState[row][col] !== null) {
+      playErrorSound()
+      return false
+    }
+
+    if (blockCounts[colorIndex] <= 0) {
+      playErrorSound()
       return false
     }
 
@@ -367,13 +383,20 @@ export default function GameLayoutWeb() {
       return next
     })
 
+    playDropSound()
+    console.log(`Successfully placed color ${colorIndex} at ${row},${col}`)
+
+    const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid)
+    if (scoreFound > 0) {
+      setScore(prev => prev + scoreFound)
+    }
+
     return true
   }
 
   const checkAndProcessPalindromes = (row: number, col: number, colorIdx: number, currentGrid: (number | null)[][]) => {
     let scoreFound = 0
 
-    // Helper to check line
     const checkLine = (lineIsRow: boolean) => {
       const line: { color: number; r: number; c: number }[] = []
       if (lineIsRow) {
@@ -428,576 +451,636 @@ export default function GameLayoutWeb() {
     return scoreFound
   }
 
-  const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null)
-
-  const handleDragMove = (moveX: number, moveY: number) => {
-    if (!boardLayout || moveX < 0 || moveY < 0) {
-      setHoveredCell(null)
-      return
-    }
-
-    const BOARD_PADDING = 6
-    const CELL_MARGIN = 3
-    const CELL_BORDER = 1
-    const CELL_PITCH = layoutConfig.cellSize + CELL_MARGIN * 2 + CELL_BORDER * 2
-
-    const originX = boardLayout.x + BOARD_PADDING + CELL_MARGIN + CELL_BORDER
-    const originY = boardLayout.y + BOARD_PADDING + CELL_MARGIN + CELL_BORDER
-
-    const localX = moveX - originX
-    const localY = moveY - originY
-
-    if (localX < 0 || localY < 0) {
-      setHoveredCell(null)
-      return
-    }
-
-    const col = Math.floor(localX / CELL_PITCH)
-    const row = Math.floor(localY / CELL_PITCH)
-
-    if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) {
-      setHoveredCell(null)
-      return
-    }
-
-    // Only highlight if cell is empty
-    if (gridState[row][col] === null) {
-      setHoveredCell({ row, col })
-    } else {
-      setHoveredCell(null)
-    }
+  const containerStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    alignItems: "center",
+    paddingTop: 0,
+    justifyContent: "space-between",
+    background: theme === "dark"
+      ? "linear-gradient(to right bottom, #000017, #000074)"
+      : "linear-gradient(to right bottom, #FFFFFF, #F5F5F5)",
+    minHeight: "100vh",
+    width: "100%",
   }
 
-  const grid = Array.from({ length: gridSize }, (_, row) => (
-    <View key={row} style={styles.row}>
-      {Array.from({ length: gridSize }, (_, col) => {
-        const isBulldog = bulldogPositions.some((pos) => pos.row === row && pos.col === col)
-        let letter: string | null = null
-        if (row === center && col >= center - halfWord && col < center - halfWord + word.length) {
-          letter = word[col - (center - halfWord)]
-        }
-        if (col === center && row >= center - halfWord && row < center - halfWord + word.length) {
-          letter = word[row - (center - halfWord)]
-        }
-
-        const cellColorIndex = gridState[row][col]
-        const isHovered = hoveredCell?.row === row && hoveredCell?.col === col
-
-        return (
-          <View
-            key={col}
-            style={[
-              styles.cell,
-              {
-                backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
-                width: layoutConfig.cellSize,
-                height: layoutConfig.cellSize,
-                ...(isHovered && {
-                  backgroundColor: theme === "dark" ? "rgba(100, 200, 255, 0.4)" : "rgba(100, 200, 255, 0.3)",
-                  borderColor: theme === "dark" ? "rgba(100, 200, 255, 0.8)" : "rgba(50, 150, 255, 0.6)",
-                  borderWidth: 2,
-                  shadowColor: "#4A9EFF",
-                  shadowOpacity: 0.5,
-                  shadowRadius: 4,
-                  elevation: 3,
-                }),
-              },
-            ]}
-          >
-            {cellColorIndex !== null ? (
-              <LinearGradient
-                colors={colorGradients[cellColorIndex]}
-                style={{ width: "100%", height: "100%", borderRadius: 4 }}
-              />
-            ) : (
-              <>
-                {isBulldog && (
-                  <Image
-                    source={require("../../assets/images/bulldog.png")}
-                    style={[
-                      styles.bulldogImage,
-                      { width: layoutConfig.cellSize - 14, height: layoutConfig.cellSize - 14 },
-                    ]}
-                    resizeMode="contain"
-                  />
-                )}
-                {letter && (
-                  <Text
-                    style={[styles.letterText, { color: colors.text, fontSize: layoutConfig.cellSize > 40 ? 16 : 14 }]}
-                  >
-                    {letter}
-                  </Text>
-                )}
-              </>
-            )}
-          </View>
-        )
-      })}
-    </View>
-  ))
-
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <View style={{ flex: 1 }}>
-        <LinearGradient
-          colors={theme === "dark" ? ["#000017", "#000074"] : ["#FFFFFF", "#F5F5F5"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.container}
-        >
-          <Text style={[styles.title, { color: colors.accent }]}>PALINDROME</Text>
+    <div style={containerStyle}>
+      <div style={{
+        width: "100%",
+        maxWidth: "100vw",
+        padding: "20px", // from RN paddingVertical 20? No, original had paddingVertical: -1 which is weird, maybe typo. Let's strictly use 100% width.
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        flex: 1,
+      }}>
+        <h1 style={{
+          fontSize: 26,
+          fontWeight: "900",
+          marginBottom: 10,
+          textAlign: "center",
+          marginTop: 15,
+          color: colors.accent,
+          fontFamily: "system-ui, -apple-system, sans-serif", // Approximate RN font
+          margin: "15px 0 10px 0",
+        }}>PALINDROME</h1>
 
-          <View
+        <div style={{
+          height: 1,
+          width: "100%",
+          backgroundColor: theme === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)",
+        }} />
+
+        {/* Status Row */}
+        <div style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "100%",
+          gap: layoutConfig.statusGap,
+          marginTop: layoutConfig.statusMargin.top,
+          marginBottom: layoutConfig.statusMargin.bottom,
+        }}>
+          <div style={{
+            display: "flex",
+            flexDirection: "row",
+            borderWidth: 1,
+            borderStyle: "solid",
+            borderRadius: 16,
+            width: 120,
+            height: 60,
+            justifyContent: "center",
+            alignItems: "center",
+            boxShadow: "0px 3px 3px rgba(0, 0, 0, 0.1)",
+            backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
+            borderColor: colors.border,
+          }}>
+            <span style={{ fontSize: 16, color: colors.secondaryText, fontFamily: "system-ui" }}>Score</span>
+            <span style={{ marginLeft: 16, fontSize: 28, fontWeight: "600", color: colors.accent, fontFamily: "system-ui" }}>{score}</span>
+          </div>
+
+          <div style={{}}>
+            <Svg height="60" width="300">
+              <Defs>
+                <SvgLinearGradient id="timeGradWeb" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
+                  <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
+                </SvgLinearGradient>
+              </Defs>
+              <SvgText
+                fill="url(#timeGradWeb)"
+                fontSize="34"
+                fontFamily="Geist-Regular"
+                fontWeight="bold"
+                x="50%"
+                y="60%"
+                textAnchor="middle"
+              >
+                {time}
+              </SvgText>
+            </Svg>
+          </div>
+
+          <div style={{
+            display: "flex",
+            flexDirection: "row",
+            borderWidth: 1,
+            borderStyle: "solid",
+            borderRadius: 16,
+            width: 120,
+            height: 60,
+            justifyContent: "center",
+            alignItems: "center",
+            boxShadow: "0px 3px 3px rgba(0, 0, 0, 0.1)",
+            backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
+            borderColor: colors.border,
+          }}>
+            <span style={{ fontSize: 16, color: colors.secondaryText, fontFamily: "system-ui" }}>Hints</span>
+            <span style={{ marginLeft: 16, fontSize: 28, fontWeight: "600", color: "#C35DD9", fontFamily: "system-ui" }}>{hints}</span>
+          </div>
+        </div>
+
+        {/* Main Game Area */}
+        <div style={{
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "center",
+          flex: 1,
+          margin: "10px 0",
+          gap: layoutConfig.mainLayoutGap,
+          zIndex: 1,
+        }}>
+          {/* Left Color Blocks */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+            <div style={{
+              borderRadius: 14,
+              padding: "12px 16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontFamily: "Geist-Regular",
+              backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
+              width: layoutConfig.colorBlockWrapper.width,
+              height: layoutConfig.colorBlockWrapper.height,
+            }}>
+              <div style={{
+                display: "flex",
+                flexDirection: 'column',
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 16,
+              }}>
+                {colorGradients.map((gradient, i) => (
+                  <DraggableBlock
+                    key={`left-${i}`}
+                    colorIndex={i}
+                    gradient={gradient}
+                    count={blockCounts[i]}
+                    layoutConfig={layoutConfig}
+
+                    onDragStart={handleDragStart}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Game Board */}
+          <div
+            ref={boardRef}
             style={{
-              height: 1,
-              width: "100%",
-              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)",
+              borderRadius: 16,
+              padding: 6,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
+              width: layoutConfig.boardSize,
+              height: layoutConfig.boardSize,
+              zIndex: 1,
             }}
-          />
-
-          {/* ✅ Status Row */}
-          <View
-            style={[
-              styles.statusRow,
-              {
-                gap: layoutConfig.statusGap,
-                marginTop: layoutConfig.statusMargin.top,
-                marginBottom: layoutConfig.statusMargin.bottom,
-              },
-            ]}
           >
-            <View
-              style={[
-                styles.scoreBox,
-                {
-                  backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
-                  borderColor: colors.border,
-                },
-              ]}
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {Array.from({ length: gridSize }, (_, row) => (
+                <div key={row} style={{ display: "flex", flexDirection: "row" }}>
+                  {Array.from({ length: gridSize }, (_, col) => {
+                    const isBulldog = bulldogPositions.some((pos) => pos.row === row && pos.col === col)
+                    let letter: string | null = null
+                    if (row === center && col >= center - halfWord && col < center - halfWord + word.length) {
+                      letter = word[col - (center - halfWord)]
+                    }
+                    if (col === center && row >= center - halfWord && row < center - halfWord + word.length) {
+                      letter = word[row - (center - halfWord)]
+                    }
+
+                    const cellColorIndex = gridState[row][col]
+                    const isHovered = dragOverCell?.row === row && dragOverCell?.col === col
+
+                    const cellStyle: React.CSSProperties = {
+                      width: layoutConfig.cellSize,
+                      height: layoutConfig.cellSize,
+                      borderWidth: 1,
+                      borderStyle: "solid",
+                      borderColor: "#CCDAE466",
+                      borderRadius: 6,
+                      margin: 3,
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
+                      transition: "all 0.1s ease",
+                    }
+
+                    if (isHovered) {
+                      cellStyle.backgroundColor = theme === "dark" ? "rgba(100, 200, 255, 0.4)" : "rgba(100, 200, 255, 0.3)"
+                      cellStyle.borderColor = theme === "dark" ? "rgba(100, 200, 255, 0.8)" : "rgba(50, 150, 255, 0.6)"
+                      cellStyle.borderWidth = 2
+                      cellStyle.boxShadow = "0 0 4px #4A9EFF"
+                    }
+
+                    return (
+                      <div
+                        key={col}
+                        onDragOver={(e) => handleDragOver(e, row, col)}
+                        onDragEnter={(e) => handleDragEnter(e, row, col)}
+                        onDragLeave={(e) => handleDragLeave(e)}
+                        onDrop={(e) => handleDrop(e, row, col)}
+                        style={cellStyle}
+                      >
+                        {cellColorIndex !== null ? (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              borderRadius: 4,
+                              background: `linear-gradient(to right bottom, ${colorGradients[cellColorIndex][0]}, ${colorGradients[cellColorIndex][1]})`,
+                            }}
+                          />
+                        ) : (
+                          <>
+                            {isBulldog && (
+                              <img
+                                src="/bulldog.png"
+                                style={{
+                                  width: layoutConfig.cellSize - 14,
+                                  height: layoutConfig.cellSize - 14,
+                                  objectFit: "contain",
+                                }}
+                                alt="bulldog"
+                              />
+                            )}
+                            {letter && (
+                              <span
+                                style={{
+                                  color: colors.text,
+                                  fontSize: layoutConfig.cellSize > 40 ? 16 : 14,
+                                  fontWeight: "700",
+                                  fontFamily: "system-ui",
+                                }}
+                              >
+                                {letter}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Color Blocks */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+            <div style={{
+              borderRadius: 14,
+              padding: "12px 16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontFamily: "Geist-Regular",
+              backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
+              width: layoutConfig.colorBlockWrapper.width,
+              height: layoutConfig.colorBlockWrapper.height,
+            }}>
+              <div style={{
+                display: "flex",
+                flexDirection: 'column',
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 16,
+              }}>
+                {colorGradients.map((gradient, i) => (
+                  <DraggableBlock
+                    key={`right-${i}`}
+                    colorIndex={i}
+                    gradient={gradient}
+                    count={blockCounts[i]}
+                    layoutConfig={layoutConfig}
+                    onDragStart={handleDragStart}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Controls */}
+        <div style={{
+          position: "relative",
+          left: 0,
+          right: 0,
+          display: "flex",
+          flexDirection: "row",
+          justifyContent: "center",
+          gap: 18,
+          padding: "20px 0",
+          bottom: layoutConfig.controlsBottom,
+        }}>
+          <Pressable>
+            <div style={{
+              width: 35,
+              height: 35,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "linear-gradient(to right bottom, #8ed9fc, #3c8dea)",
+              cursor: 'pointer'
+            }}>
+              <Ionicons name="play" size={20} color="#1a63cc" />
+            </div>
+          </Pressable>
+          <Pressable onPress={() => setPause(true)}>
+            <div style={{
+              width: 35,
+              height: 35,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "linear-gradient(to right bottom, #ffee60, #ffa40b)",
+              cursor: 'pointer'
+            }}>
+              <Ionicons name="pause" size={20} color="#de5f07" />
+            </div>
+          </Pressable>
+          <Pressable onPress={() => router.push("/profile")}>
+            <div style={{
+              width: 35,
+              height: 35,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "linear-gradient(to right bottom, #8ed9fc, #3c8dea)",
+              cursor: 'pointer'
+            }}>
+              <Ionicons name="list" size={20} color="#1a63cc" />
+            </div>
+          </Pressable>
+          <Pressable onPress={() => setSettingsVisible(true)}>
+            <div style={{
+              width: 35,
+              height: 35,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "linear-gradient(to right bottom, #8ed9fc, #3c8dea)",
+              cursor: 'pointer'
+            }}>
+              <Ionicons name="settings" size={20} color="#1a63cc" />
+            </div>
+          </Pressable>
+        </div>
+
+        {/* Settings Modal - using fixed position div overlay */}
+        {settingsVisible && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10000,
+          }}>
+            <BlurView
+              intensity={20}
+              tint="default"
+              experimentalBlurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
             >
-              <Text style={[styles.sideLabel, { color: colors.secondaryText }]}>Score</Text>
-              <Text style={[styles.sideValue, { color: colors.accent }]}>{score}</Text>
-            </View>
+              <div style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 30px",
+                height: "100%", // ensure center
+                width: "100%",
+              }}>
+                <div style={{
+                  width: "100%",
+                  maxWidth: 340,
+                  borderRadius: 24,
+                  padding: 24,
+                  boxShadow: "0px 10px 20px rgba(0, 0, 0, 0.25)",
+                  maxHeight: 500,
+                  background: theme === "dark"
+                    ? "linear-gradient(to right bottom, #000017, #000074)"
+                    : "linear-gradient(to right bottom, #FFFFFF, #F5F5F5)",
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}>
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginBottom: 10,
+                  }}>
+                    <div style={{ flex: 1 }} />
+                    <span style={{
+                      fontSize: 22,
+                      fontWeight: "900",
+                      fontFamily: "Geist-Regular, system-ui",
+                      color: colors.text,
+                    }}>Settings</span>
+                    <Pressable onPress={() => setSettingsVisible(false)} style={{ flex: 1, alignItems: "flex-end" }}>
+                      <span style={{
+                        fontSize: 26,
+                        fontWeight: "700",
+                        fontFamily: "Geist-Regular, system-ui",
+                        color: colors.accent,
+                        cursor: 'pointer'
+                      }}>×</span>
+                    </Pressable>
+                  </div>
 
-            <View style={styles.timerContainer}>
-              <Svg height="60" width="300">
-                <Defs>
-                  <SvgLinearGradient id="timeGradWeb" x1="0" y1="0" x2="1" y2="1">
-                    <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
-                    <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
-                  </SvgLinearGradient>
-                </Defs>
-                <SvgText
-                  fill="url(#timeGradWeb)"
-                  fontSize="34"
-                  fontFamily="Geist-Regular"
-                  fontWeight="bold"
-                  x="50%"
-                  y="60%"
-                  textAnchor="middle"
-                >
-                  {time}
-                </SvgText>
-              </Svg>
-            </View>
-
-            <View
-              style={[
-                styles.scoreBox,
-                {
-                  backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.sideLabel, { color: colors.secondaryText }]}>Hints</Text>
-              <Text style={[styles.sideValue, { color: "#C35DD9" }]}>{hints}</Text>
-            </View>
-          </View>
-
-          {/* ✅ Main Game Area */}
-          <View style={[styles.mainLayout, { gap: layoutConfig.mainLayoutGap, zIndex: 1 }]}>
-            <View style={[styles.sideColumn, { zIndex: 100 }]}>
-              <View
-                style={[
-                  styles.colorBlockWrapper,
-                  {
-                    backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
-                    width: layoutConfig.colorBlockWrapper.width,
-                    height: layoutConfig.colorBlockWrapper.height,
-                  },
-                ]}
-              >
-                <View style={styles.colorBlockContainer}>
-                  {colorGradients.map((gradient, i) => (
-                    <DraggableBlock
-                      key={`left-${i}`}
-                      colorIndex={i}
-                      gradient={gradient}
-                      count={blockCounts[i]}
-                      layoutConfig={layoutConfig}
-                      onDrop={handleDrop}
-                      onDragStart={measureBoard}
-                      onDragMove={handleDragMove}
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 20,
+                  }}>
+                    <img
+                      src={avatar ? avatar : require("../../assets/images/profile.jpg")}
+                      style={{
+                        width: 70,
+                        height: 70,
+                        borderRadius: 25,
+                        marginRight: 15,
+                        objectFit: 'contain'
+                      }}
+                      alt="Profile"
                     />
-                  ))}
-                </View>
-              </View>
-            </View>
-
-            <View
-              ref={boardRef}
-              onLayout={() => measureBoard()}
-              style={[
-                styles.board,
-                {
-                  backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
-                  width: layoutConfig.boardSize,
-                  height: layoutConfig.boardSize,
-                  zIndex: 1,
-                },
-              ]}
-            >
-              {grid}
-            </View>
-
-            <View style={[styles.sideColumn, { zIndex: 100 }]}>
-              <View
-                style={[
-                  styles.colorBlockWrapper,
-                  {
-                    backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
-                    width: layoutConfig.colorBlockWrapper.width,
-                    height: layoutConfig.colorBlockWrapper.height,
-                  },
-                ]}
-              >
-                <View style={styles.colorBlockContainer}>
-                  {colorGradients.map((gradient, i) => (
-                    <DraggableBlock
-                      key={`right-${i}`}
-                      colorIndex={i}
-                      gradient={gradient}
-                      count={blockCounts[i]}
-                      layoutConfig={layoutConfig}
-                      onDrop={handleDrop}
-                      onDragStart={measureBoard}
-                      onDragMove={handleDragMove}
-                    />
-                  ))}
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* ✅ Bottom Controls - Now always visible */}
-          <View style={[styles.controlsRow, { bottom: layoutConfig.controlsBottom }]}>
-            <Pressable>
-              <LinearGradient colors={["#8ed9fc", "#3c8dea"]} style={styles.controlBtn}>
-                <Ionicons name="play" size={20} color="#1a63cc" />
-              </LinearGradient>
-            </Pressable>
-            <Pressable onPress={() => setPause(true)}>
-              <LinearGradient colors={["#ffee60", "#ffa40b"]} style={styles.controlBtn}>
-                <Ionicons name="pause" size={20} color="#de5f07" />
-              </LinearGradient>
-            </Pressable>
-            <Pressable onPress={() => router.push("/profile")}>
-              <LinearGradient colors={["#8ed9fc", "#3c8dea"]} style={styles.controlBtn}>
-                <Ionicons name="list" size={20} color="#1a63cc" />
-              </LinearGradient>
-            </Pressable>
-            <Pressable onPress={() => setSettingsVisible(true)}>
-              <LinearGradient colors={["#8ed9fc", "#3c8dea"]} style={styles.controlBtn}>
-                <Ionicons name="settings" size={20} color="#1a63cc" />
-              </LinearGradient>
-            </Pressable>
-          </View>
-
-          {/* ✅ Settings Modal Overlay */}
-          {settingsVisible && (
-            <View style={[StyleSheet.absoluteFill, { zIndex: 10000 }]}>
-              <BlurView
-                intensity={20}
-                tint="default"
-                experimentalBlurMethod="dimezisBlurView"
-                style={StyleSheet.absoluteFill}
-              >
-                <View style={styles.settingsOverlay}>
-                  <LinearGradient
-                    colors={theme === "dark" ? ["#000017", "#000074"] : ["#FFFFFF", "#F5F5F5"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.settingsCard}
-                  >
-                    <View style={styles.headerRow}>
-                      <View style={styles.headerSpacer} />
-                      <Text style={[styles.settingsTitle, { color: colors.text }]}>Settings</Text>
-                      <Pressable onPress={() => setSettingsVisible(false)} style={styles.closeButton}>
-                        <Text style={[styles.closeIcon, { color: colors.accent }]}>×</Text>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                      <span style={{
+                        fontSize: 16,
+                        fontWeight: "700",
+                        color: colors.text,
+                        fontFamily: "Geist-Regular, system-ui"
+                      }}>{userName}</span>
+                      <Pressable onPress={() => router.push("/profile")}>
+                        <span style={{
+                          fontSize: 14,
+                          textDecoration: "underline",
+                          marginTop: 4,
+                          color: colors.accent,
+                          cursor: 'pointer',
+                          fontFamily: "Geist-Regular, system-ui"
+                        }}>Edit Profile</span>
                       </Pressable>
-                    </View>
+                    </div>
+                  </div>
 
-                    <View style={styles.profileSection}>
-                      <Image
-                        source={avatar ? { uri: avatar } : require("../../assets/images/profile.jpg")}
-                        style={styles.profileImage}
-                      />
-                      <View style={styles.profileTextContainer}>
-                        <Text style={[styles.profileName, { color: colors.text }]}>{userName}</Text>
-                        <Pressable onPress={() => router.push("/profile")}>
-                          <Text style={[styles.profileLink, { color: colors.accent }]}>Edit Profile</Text>
-                        </Pressable>
-                      </View>
-                    </View>
+                  {/* Options */}
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 12,
+                    marginBottom: 6,
+                  }}>
+                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound</span>
+                    <Switch
+                      value={soundEnabled}
+                      onValueChange={setSoundEnabled}
+                      circleSize={18}
+                      barHeight={22}
+                      backgroundActive={colors.accent}
+                      backgroundInactive="#ccc"
+                      circleActiveColor="#fff"
+                      circleInActiveColor="#fff"
+                      switchWidthMultiplier={2.5}
+                      renderActiveText={false}
+                      renderInActiveText={false}
+                    />
+                  </div>
 
-                    {/* ✅ Options */}
-                    <View style={styles.optionRow}>
-                      <Text style={[styles.optionLabel, { color: colors.text }]}>Sound</Text>
-                      <Switch
-                        value={soundEnabled}
-                        onValueChange={setSoundEnabled}
-                        circleSize={18}
-                        barHeight={22}
-                        backgroundActive={colors.accent}
-                        backgroundInactive="#ccc"
-                        circleActiveColor="#fff"
-                        circleInActiveColor="#fff"
-                        switchWidthMultiplier={2.5}
-                        renderActiveText={false}
-                        renderInActiveText={false}
-                      />
-                    </View>
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 12,
+                    marginBottom: 6,
+                  }}>
+                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Vibration</span>
+                    <Switch
+                      value={vibrationEnabled}
+                      onValueChange={setVibrationEnabled}
+                      circleSize={18}
+                      barHeight={22}
+                      backgroundActive={colors.accent}
+                      backgroundInactive="#ccc"
+                      circleActiveColor="#fff"
+                      circleInActiveColor="#fff"
+                      switchWidthMultiplier={2.5}
+                      renderActiveText={false}
+                      renderInActiveText={false}
+                    />
+                  </div>
 
-                    <View style={styles.optionRow}>
-                      <Text style={[styles.optionLabel, { color: colors.text }]}>Vibration</Text>
-                      <Switch
-                        value={vibrationEnabled}
-                        onValueChange={setVibrationEnabled}
-                        circleSize={18}
-                        barHeight={22}
-                        backgroundActive={colors.accent}
-                        backgroundInactive="#ccc"
-                        circleActiveColor="#fff"
-                        circleInActiveColor="#fff"
-                        switchWidthMultiplier={2.5}
-                        renderActiveText={false}
-                        renderInActiveText={false}
-                      />
-                    </View>
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 12,
+                    marginBottom: 6,
+                  }}>
+                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Dark Mode</span>
+                    <Switch
+                      value={theme === "dark"}
+                      onValueChange={toggleTheme}
+                      circleSize={18}
+                      barHeight={22}
+                      backgroundActive={colors.accent}
+                      backgroundInactive="#E5E5E5"
+                      circleActiveColor="#fff"
+                      circleInActiveColor="#fff"
+                      switchWidthMultiplier={2.5}
+                      renderActiveText={false}
+                      renderInActiveText={false}
+                    />
+                  </div>
 
-                    <View style={styles.optionRow}>
-                      <Text style={[styles.optionLabel, { color: colors.text }]}>Dark Mode</Text>
-                      <Switch
-                        value={theme === "dark"}
-                        onValueChange={toggleTheme}
-                        circleSize={18}
-                        barHeight={22}
-                        backgroundActive={colors.accent}
-                        backgroundInactive="#E5E5E5"
-                        circleActiveColor="#fff"
-                        circleInActiveColor="#fff"
-                        switchWidthMultiplier={2.5}
-                        renderActiveText={false}
-                        renderInActiveText={false}
-                      />
-                    </View>
-
-                    {/* ✅ Links */}
-                    <Pressable style={styles.linkRow}>
-                      <Text style={[styles.linkText, { color: colors.text }]}>Privacy Policy</Text>
-                      <Text style={[styles.arrow, { color: colors.accent }]}>›</Text>
-                    </Pressable>
-                    <Pressable style={styles.linkRow}>
-                      <Text style={[styles.linkText, { color: colors.text }]}>Terms & Conditions</Text>
-                      <Text style={[styles.arrow, { color: colors.accent }]}>›</Text>
-                    </Pressable>
-                  </LinearGradient>
-                </View>
-              </BlurView>
-            </View>
-          )}
-
-          {/* Pause Overlay */}
-          {pause && (
-            <View style={StyleSheet.absoluteFill}>
-              <BlurView
-                intensity={20}
-                tint="dark"
-                experimentalBlurMethod="dimezisBlurView"
-                style={StyleSheet.absoluteFill}
-              />
-              <View style={styles.pauseOverlay}>
-                <View style={[styles.pauseCard, { backgroundColor: colors.card }]}>
-                  <Text style={[styles.pauseTitle, { color: colors.text }]}>Game Paused</Text>
-                  <Pressable onPress={() => setPause(false)} style={styles.resumeButton}>
-                    <Text style={styles.resumeButtonText}>Resume</Text>
+                  {/* Links */}
+                  <Pressable style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 14,
+                    marginBottom: 6,
+                    cursor: 'pointer'
+                  }}>
+                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Privacy Policy</span>
+                    <span style={{ fontSize: 22, fontWeight: "600", color: colors.accent, fontFamily: "Geist-Regular, system-ui" }}>›</span>
                   </Pressable>
-                </View>
-              </View>
-            </View>
-          )}
-        </LinearGradient>
-      </View>
-    </SafeAreaView>
+                  <Pressable style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 14,
+                    marginBottom: 6,
+                    cursor: 'pointer'
+                  }}>
+                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "system-ui" }}>Terms & Conditions</span>
+                    <span style={{ fontSize: 22, fontWeight: "600", color: colors.accent, fontFamily: "system-ui" }}>›</span>
+                  </Pressable>
+                </div>
+              </div>
+            </BlurView>
+          </div>
+        )}
+
+        {/* Pause Overlay */}
+        {pause && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10000,
+          }}>
+            <BlurView
+              intensity={20}
+              tint="dark"
+              experimentalBlurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            />
+            <div style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
+              <div style={{
+                padding: 60,
+                borderRadius: 16,
+                display: "flex",
+                flexDirection: 'column',
+                alignItems: "center",
+                boxShadow: "0px 8px 8px rgba(0, 0, 0, 0.1)",
+                backgroundColor: colors.card,
+              }}>
+                <span style={{
+                  fontSize: 32,
+                  fontWeight: "bold",
+                  marginBottom: 12,
+                  color: colors.text,
+                  fontFamily: "system-ui"
+                }}>Game Paused</span>
+                <Pressable onPress={() => setPause(false)} style={{
+                  backgroundColor: "#0060FF",
+                  paddingVertical: 15,
+                  paddingHorizontal: 30,
+                  borderRadius: 12,
+                  cursor: 'pointer'
+                }}>
+                  <span style={{ color: "#fff", fontWeight: "700", fontSize: 16, fontFamily: "system-ui" }}>Resume</span>
+                </Pressable>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: -1,
-    justifyContent: "space-between",
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "900",
-    marginBottom: 10,
-    textAlign: "center",
-    marginTop: 15,
-  },
-  timerContainer: {},
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-  },
-  scoreBox: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderRadius: 16,
-    width: 120,
-    height: 60,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  sideLabel: { fontSize: 16 },
-  sideValue: { marginLeft: 16, fontSize: 28, fontWeight: "600" },
-
-  mainLayout: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    flex: 1,
-    marginVertical: 10,
-  },
-
-  sideColumn: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  colorBlockWrapper: {
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  colorBlockContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-  },
-  colorBlock: {
-    borderRadius: 32,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  gradientBlock: {
-    flex: 1,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  blockText: { color: "#fff", fontWeight: "700" },
-
-  board: {
-    borderRadius: 16,
-    padding: 6,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  row: { flexDirection: "row" },
-  cell: {
-    borderWidth: 1,
-    borderColor: "#CCDAE466",
-    borderRadius: 6,
-    margin: 3,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  letterText: { fontWeight: "700" },
-  bulldogImage: {
-    resizeMode: "contain",
-  },
-
-  controlsRow: {
-    position: "relative",
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 18,
-    paddingVertical: 20,
-  },
-  controlBtn: {
-    width: 35,
-    height: 35,
-    borderRadius: 22.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  settingsOverlay: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 30 },
-  settingsCard: {
-    width: "100%",
-    maxWidth: 340,
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-    maxHeight: 500,
-  },
-  headerRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginBottom: 10 },
-  headerSpacer: { flex: 1 },
-  closeButton: { flex: 1, alignItems: "flex-end" },
-  settingsTitle: { fontSize: 22, fontWeight: "900", fontFamily: "Geist-Regular", marginTop: -10 },
-  closeIcon: { fontSize: 28, fontWeight: "700", fontFamily: "Geist-Regular" },
-  profileSection: { flexDirection: "row", alignItems: "center", marginBottom: 20 },
-  profileImage: { width: 60, height: 60, borderRadius: 25, marginRight: 15 },
-  profileTextContainer: { flex: 1 },
-  profileName: { fontSize: 16, fontWeight: "700" },
-  profileLink: { fontSize: 14, textDecorationLine: "underline", marginTop: 10 },
-  optionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 10 },
-  optionLabel: { fontSize: 16 },
-  linkRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 14,
-    marginVertical: 6,
-  },
-  linkText: { fontSize: 16 },
-  arrow: { fontSize: 22, fontWeight: "600" },
-  pauseOverlay: { flex: 1, alignItems: "center", justifyContent: "center" },
-  pauseCard: {
-    padding: 60,
-    borderRadius: 16,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  pauseTitle: { fontSize: 32, fontWeight: "bold", marginBottom: 12 },
-  resumeButton: { backgroundColor: "#0060FF", paddingHorizontal: 30, paddingVertical: 15, borderRadius: 12 },
-  resumeButtonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-})
