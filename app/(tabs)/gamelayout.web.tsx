@@ -213,6 +213,14 @@ export default function GameLayoutWeb() {
   // Drag State
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null)
   const [draggedColor, setDraggedColor] = useState<number | null>(null)
+  const [activeHint, setActiveHint] = useState<{ row: number; col: number; colorIndex: number } | null>(null)
+
+  // Feedback State
+  const [feedback, setFeedback] = useState<{ text: string, color: string, id: number } | null>(null)
+
+  // Timer State
+  const [secondsElapsed, setSecondsElapsed] = useState(0)
+  const [isTimerRunning, setIsTimerRunning] = useState(false)
 
   // Game Logic State
   const gridSize = 11
@@ -312,9 +320,28 @@ export default function GameLayoutWeb() {
     }
   }, [width, height])
 
+  useEffect(() => {
+    let interval: any
+    if (isTimerRunning && !pause) {
+      interval = setInterval(() => {
+        setSecondsElapsed((prev) => {
+          const next = prev + 1
+          const mins = Math.floor(next / 60).toString().padStart(2, "0")
+          const secs = (next % 60).toString().padStart(2, "0")
+          setTime(`${mins}:${secs}`)
+          return next
+        })
+      }, 1000)
+    }
+    return () => clearInterval(interval)
+  }, [isTimerRunning, pause])
+
   const handleDragStart = (colorIndex: number) => {
     playPickupSound()
     setDraggedColor(colorIndex)
+    if (!isTimerRunning) {
+      setIsTimerRunning(true)
+    }
   }
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, row: number, col: number) => {
@@ -394,7 +421,7 @@ export default function GameLayoutWeb() {
     return true
   }
 
-  const checkAndProcessPalindromes = (row: number, col: number, colorIdx: number, currentGrid: (number | null)[][]) => {
+  const checkAndProcessPalindromes = (row: number, col: number, colorIdx: number, currentGrid: (number | null)[][], dryRun = false, minLength = 3) => {
     let scoreFound = 0
 
     const checkLine = (lineIsRow: boolean) => {
@@ -426,12 +453,12 @@ export default function GameLayoutWeb() {
       while (end < gridSize - 1 && line[end + 1].color !== -1) end++
 
       const segment = line.slice(start, end + 1)
-      if (segment.length >= 3) {
+      if (segment.length >= minLength) {
         const colors = segment.map((s) => s.color)
         const isPal = colors.join(",") === [...colors].reverse().join(",")
 
         if (isPal) {
-          let segmentScore = segment.length * 10
+          let segmentScore = segment.length
           let hasBulldog = false
           segment.forEach((b) => {
             if (bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)) {
@@ -439,8 +466,27 @@ export default function GameLayoutWeb() {
             }
           })
 
-          if (hasBulldog) segmentScore += 50
+          if (hasBulldog) segmentScore += 10
           scoreFound += segmentScore
+
+          // Trigger Feedback
+          if (!dryRun) {
+            let feedbackText = "GOOD!"
+            let feedbackColor = "#4ADE80" // green-400
+            if (segment.length === 4) {
+              feedbackText = "GREAT!"
+              feedbackColor = "#60A5FA" // blue-400
+            } else if (segment.length === 5) {
+              feedbackText = "AMAZING!"
+              feedbackColor = "#A78BFA" // purple-400
+            } else if (segment.length >= 6) {
+              feedbackText = "LEGENDARY!"
+              feedbackColor = "#F472B6" // pink-400
+            }
+
+            setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() })
+            setTimeout(() => setFeedback(null), 2000)
+          }
         }
       }
     }
@@ -449,6 +495,49 @@ export default function GameLayoutWeb() {
     checkLine(false)
 
     return scoreFound
+  }
+
+  const findHint = () => {
+    if (hints <= 0) return
+
+    const tryFindHint = (minLength: number) => {
+      for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+          if (gridState[r][c] === null) {
+            // Try each available color
+            for (let colorIdx = 0; colorIdx < colorGradients.length; colorIdx++) {
+              if (blockCounts[colorIdx] > 0) {
+                // Simulate
+                const tempGrid = gridState.map((row) => [...row])
+                tempGrid[r][c] = colorIdx
+                const score = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength)
+
+                // For hints, we accept score > 0 (palindrome) OR just meeting minLength condition if we are in fallback
+                // checkAndProcessPalindromes returns score only if palindrome.
+                // If minLength=2, "Red, Red" is a palindrome. So score will be > 0.
+                if (score > 0) {
+                  // Found a hint!
+                  setHints((prev) => prev - 1)
+                  setActiveHint({ row: r, col: c, colorIndex: colorIdx })
+                  setTimeout(() => setActiveHint(null), 3000)
+                  return true
+                }
+              }
+            }
+          }
+        }
+      }
+      return false
+    }
+
+    // Pass 1: Look for Palindromes (length >= 3)
+    if (tryFindHint(3)) return
+
+    // Pass 2: Look for Pairs (length >= 2, build-up)
+    if (tryFindHint(2)) return
+
+    // No hint found
+    playErrorSound()
   }
 
   const containerStyle: React.CSSProperties = {
@@ -487,6 +576,23 @@ export default function GameLayoutWeb() {
           fontFamily: "system-ui, -apple-system, sans-serif", // Approximate RN font
           margin: "15px 0 10px 0",
         }}>PALINDROME</h1>
+
+        <style>{`
+          @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+          @keyframes floatUp {
+            0% { transform: translateY(0px); opacity: 1; }
+            100% { transform: translateY(-50px); opacity: 0; }
+          }
+          @keyframes pulse {
+            0% { opacity: 0.3; transform: scale(0.95); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+            100% { opacity: 0.3; transform: scale(0.95); }
+          }
+        `}</style>
 
         <div style={{
           height: 1,
@@ -545,20 +651,24 @@ export default function GameLayoutWeb() {
             </Svg>
           </div>
 
-          <div style={{
-            display: "flex",
-            flexDirection: "row",
-            borderWidth: 1,
-            borderStyle: "solid",
-            borderRadius: 16,
-            width: 120,
-            height: 60,
-            justifyContent: "center",
-            alignItems: "center",
-            boxShadow: "0px 3px 3px rgba(0, 0, 0, 0.1)",
-            backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
-            borderColor: colors.border,
-          }}>
+          <div
+            onClick={findHint}
+            style={{
+              cursor: hints > 0 ? "pointer" : "not-allowed",
+              opacity: hints > 0 ? 1 : 0.6,
+              display: "flex",
+              flexDirection: "row",
+              borderWidth: 1,
+              borderStyle: "solid",
+              borderRadius: 16,
+              width: 120,
+              height: 60,
+              justifyContent: "center",
+              alignItems: "center",
+              boxShadow: "0px 3px 3px rgba(0, 0, 0, 0.1)",
+              backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
+              borderColor: colors.border,
+            }}>
             <span style={{ fontSize: 16, color: colors.secondaryText, fontFamily: "system-ui" }}>Hints</span>
             <span style={{ marginLeft: 16, fontSize: 28, fontWeight: "600", color: "#C35DD9", fontFamily: "system-ui" }}>{hints}</span>
           </div>
@@ -654,13 +764,24 @@ export default function GameLayoutWeb() {
                       alignItems: "center",
                       backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
                       transition: "all 0.1s ease",
+                      position: "relative",
                     }
 
-                    if (isHovered) {
+                    const isHint = activeHint?.row === row && activeHint?.col === col
+                    // Prioritize hint style or merge/override
+                    if (isHovered || isHint) {
                       cellStyle.backgroundColor = theme === "dark" ? "rgba(100, 200, 255, 0.4)" : "rgba(100, 200, 255, 0.3)"
                       cellStyle.borderColor = theme === "dark" ? "rgba(100, 200, 255, 0.8)" : "rgba(50, 150, 255, 0.6)"
                       cellStyle.borderWidth = 2
                       cellStyle.boxShadow = "0 0 4px #4A9EFF"
+                    }
+
+                    if (isHint) {
+                      // Add specific hint overrides (Gold/Yellow theme for hint distinction, or keep blue?)
+                      // User asked for "generated a hint ... stating that either a hover effect is generated"
+                      // So reusing the hover effect (Blue) is good, but let's add the Gold border to signify it's a HINT not just hover.
+                      cellStyle.borderColor = "#FFD700"
+                      cellStyle.boxShadow = "0 0 15px rgba(255, 215, 0, 0.8)"
                     }
 
                     return (
@@ -683,6 +804,21 @@ export default function GameLayoutWeb() {
                           />
                         ) : (
                           <>
+                            {isHint && activeHint && (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: 0,
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  background: `linear-gradient(to right bottom, ${colorGradients[activeHint.colorIndex][0]}, ${colorGradients[activeHint.colorIndex][1]})`,
+                                  borderRadius: 4,
+                                  animation: "pulse 1.5s infinite",
+                                  zIndex: 0,
+                                }}
+                              />
+                            )}
                             {isBulldog && (
                               <img
                                 src="/bulldog.png"
@@ -715,6 +851,34 @@ export default function GameLayoutWeb() {
               ))}
             </div>
           </div>
+
+          {/* Feedback Overlay */}
+          {feedback && (
+            <div
+              key={feedback.id}
+              style={{
+                position: "absolute",
+                top: "30%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                zIndex: 9999,
+                pointerEvents: 'none',
+                animation: "popIn 0.5s ease-out forwards, floatUp 1.5s ease-in 1s forwards"
+              }}
+            >
+              <h2 style={{
+                fontSize: 48,
+                fontWeight: "900",
+                color: feedback.color,
+                textShadow: "0px 4px 10px rgba(0,0,0,0.3)",
+                margin: 0,
+                fontFamily: "Geist-Regular, system-ui",
+                whiteSpace: "nowrap"
+              }}>
+                {feedback.text}
+              </h2>
+            </div>
+          )}
 
           {/* Right Color Blocks */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
@@ -763,7 +927,10 @@ export default function GameLayoutWeb() {
           padding: "20px 0",
           bottom: layoutConfig.controlsBottom,
         }}>
-          <Pressable>
+          <Pressable onPress={() => {
+            if (pause) setPause(false)
+            if (!isTimerRunning) setIsTimerRunning(true)
+          }}>
             <div style={{
               width: 35,
               height: 35,
@@ -927,7 +1094,7 @@ export default function GameLayoutWeb() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginTop: 12,
+                    marginTop: 14,
                     marginBottom: 6,
                   }}>
                     <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound</span>
@@ -951,7 +1118,7 @@ export default function GameLayoutWeb() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginTop: 12,
+                    marginTop: 14,
                     marginBottom: 6,
                   }}>
                     <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Vibration</span>
@@ -975,7 +1142,7 @@ export default function GameLayoutWeb() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginTop: 12,
+                    marginTop: 14,
                     marginBottom: 6,
                   }}>
                     <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Dark Mode</span>

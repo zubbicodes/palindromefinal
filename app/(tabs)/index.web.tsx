@@ -13,7 +13,7 @@ export default function LoginWeb() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { colors, theme } = useTheme();
-  
+
 
 
   // Update width on resize
@@ -37,7 +37,7 @@ export default function LoginWeb() {
   const handleLogin = async () => {
     // Reset error
     setError('');
-    
+
     // Validate inputs
     if (!email || !password) {
       setError('Please enter both email and password');
@@ -48,7 +48,7 @@ export default function LoginWeb() {
 
     try {
       const result = await firebaseService.signIn(email, password);
-      
+
       if (result.success && result.user) {
         // Login successful - navigate to game layout
         // Use replace instead of push to prevent back navigation issues
@@ -76,10 +76,10 @@ export default function LoginWeb() {
 
     setLoading(true);
     setError('');
-    
+
     try {
       const result = await firebaseService.resetPassword(email);
-      
+
       if (result.success) {
         alert('Password reset email sent! Check your inbox.');
         setError('');
@@ -393,55 +393,6 @@ export default function LoginWeb() {
               <div style={{ width: '70px', height: '1px', background: colors.border }} />
               <span style={{ color: colors.primary, fontWeight: 600, fontSize: '14px' }}>or</span>
               <div style={{ width: '70px', height: '1px', background: colors.border }} />
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: '12px',
-                marginBottom: '24px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <button
-                disabled={loading}
-                style={{
-                  flex: 1,
-                  borderRadius: '50px',
-                  border: `1px solid ${colors.border}`,
-                  padding: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  background: theme === 'dark' ? 'rgba(25,25,91,1)' : '#FFFFFF',
-                  color: colors.text,
-                  opacity: loading ? 0.5 : 1,
-                }}
-              >
-                <img src="/images/google.png" alt="Google" style={{ width: '18px', marginRight: '8px' }} />
-                Sign in with Google
-              </button>
-              <button
-                disabled={loading}
-                style={{
-                  flex: 1,
-                  borderRadius: '50px',
-                  border: `1px solid ${colors.border}`,
-                  padding: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  backgroundColor: theme === 'dark' ? 'rgba(25, 25, 91, 0.7)' : '#FFFFFF',
-                  color: colors.text,
-                  opacity: loading ? 0.5 : 1,
-                }}
-              >
-                <img src="/images/apple.png" alt="Apple" style={{ width: '18px', marginRight: '8px' }} />
-                Sign in with Apple
-              </button>
             </div>
 
             {/* Footer */}
