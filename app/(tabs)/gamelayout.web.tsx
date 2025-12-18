@@ -269,6 +269,30 @@ export default function GameLayoutWeb() {
   useEffect(() => {
     spawnBulldogs()
 
+    // Pre-place 3 random colors on horizontal 'I', 'N', 'D' (coordinates (5,3), (5,4), (5,5))
+    const indPositions = [
+      { row: 5, col: 3 },
+      { row: 5, col: 4 },
+      { row: 5, col: 5 },
+    ]
+    const initialColors = indPositions.map(() => Math.floor(Math.random() * colorGradients.length))
+
+    setGridState(prev => {
+      const newGrid = prev.map(r => [...r])
+      indPositions.forEach((pos, idx) => {
+        newGrid[pos.row][pos.col] = initialColors[idx]
+      })
+      return newGrid
+    })
+
+    setBlockCounts(prev => {
+      const next = [...prev]
+      initialColors.forEach(colorIdx => {
+        next[colorIdx] = Math.max(0, next[colorIdx] - 1)
+      })
+      return next
+    })
+
     const loadUserData = async () => {
       const user = firebaseService.getCurrentUser()
 
@@ -793,57 +817,68 @@ export default function GameLayoutWeb() {
                         onDrop={(e) => handleDrop(e, row, col)}
                         style={cellStyle}
                       >
-                        {cellColorIndex !== null ? (
+                        {cellColorIndex !== null && (
                           <div
                             style={{
                               width: "100%",
                               height: "100%",
                               borderRadius: 4,
                               background: `linear-gradient(to right bottom, ${colorGradients[cellColorIndex][0]}, ${colorGradients[cellColorIndex][1]})`,
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              zIndex: 0,
                             }}
                           />
-                        ) : (
-                          <>
-                            {isHint && activeHint && (
-                              <div
-                                style={{
-                                  position: "absolute",
-                                  top: 0,
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  background: `linear-gradient(to right bottom, ${colorGradients[activeHint.colorIndex][0]}, ${colorGradients[activeHint.colorIndex][1]})`,
-                                  borderRadius: 4,
-                                  animation: "pulse 1.5s infinite",
-                                  zIndex: 0,
-                                }}
-                              />
-                            )}
-                            {isBulldog && (
-                              <img
-                                src="/bulldog.png"
-                                style={{
-                                  width: layoutConfig.cellSize - 14,
-                                  height: layoutConfig.cellSize - 14,
-                                  objectFit: "contain",
-                                }}
-                                alt="bulldog"
-                              />
-                            )}
-                            {letter && (
-                              <span
-                                style={{
-                                  color: colors.text,
-                                  fontSize: layoutConfig.cellSize > 40 ? 16 : 14,
-                                  fontWeight: "700",
-                                  fontFamily: "system-ui",
-                                }}
-                              >
-                                {letter}
-                              </span>
-                            )}
-                          </>
                         )}
+
+                        {isHint && activeHint && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              background: `linear-gradient(to right bottom, ${colorGradients[activeHint.colorIndex][0]}, ${colorGradients[activeHint.colorIndex][1]})`,
+                              borderRadius: 4,
+                              animation: "pulse 1.5s infinite",
+                              zIndex: 1,
+                            }}
+                          />
+                        )}
+
+                        <div style={{
+                          zIndex: 2,
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          pointerEvents: "none",
+                        }}>
+                          {isBulldog && (
+                            <img
+                              src="/bulldog.png"
+                              style={{
+                                width: layoutConfig.cellSize - 14,
+                                height: layoutConfig.cellSize - 14,
+                                objectFit: "contain",
+                              }}
+                              alt="bulldog"
+                            />
+                          )}
+                          {letter && (
+                            <span
+                              style={{
+                                color: colors.text,
+                                fontSize: layoutConfig.cellSize > 40 ? 16 : 14,
+                                fontWeight: "700",
+                                fontFamily: "system-ui",
+                              }}
+                            >
+                              {letter}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
