@@ -37,25 +37,25 @@ const getLayoutConfig = () => {
     }
   } else if (width >= 1440) {
     return {
-      statusGap: 160,
+      statusGap: 165,
       mainLayoutGap: 50,
       boardSize: 520,
       cellSize: 40,
-      colorBlockWrapper: { width: 110, height: 500 },
+      colorBlockWrapper: { width: 85, height: 490 },
       colorBlock: { width: 85, height: 83 },
       controlsBottom: -5,
       statusMargin: { top: 30, bottom: 30 },
     }
   } else if (width >= 1366) {
     return {
-      statusGap: 120,
-      mainLayoutGap: 30,
+      statusGap: 140,
+      mainLayoutGap: 40,
       boardSize: 500,
       cellSize: 38,
-      colorBlockWrapper: { width: 100, height: 450 },
+      colorBlockWrapper: { width: 75, height: 440 },
       colorBlock: { width: 75, height: 73 },
-      controlsBottom: 0,
-      statusMargin: { top: 25, bottom: 25 },
+      controlsBottom: 10,
+      statusMargin: { top: 15, bottom: 15 },
     }
   } else {
     return {
