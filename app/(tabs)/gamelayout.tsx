@@ -45,15 +45,18 @@ const DraggableBlock = ({
   onPickup: () => void;
   onDragUpdate: (row: number | null, col: number | null) => void;
 }) => {
-  const pan = useRef(new Animated.ValueXY()).current;
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const [isDragging, setIsDragging] = useState(false);
+
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => blockCount > 0,
       onPanResponderGrant: () => {
+        setIsDragging(true);
         onPickup();
       },
       onPanResponderMove: (e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
-        Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false })(e, gestureState);
+        pan.setValue({ x: gestureState.dx, y: gestureState.dy });
 
         if (boardLayout) {
           const { x, y, width, height } = boardLayout;
@@ -75,15 +78,19 @@ const DraggableBlock = ({
         }
       },
       onPanResponderRelease: (e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+        setIsDragging(false);
         if (boardLayout) {
           const { x, y, width, height } = boardLayout;
           const cellSize = width / gridSize;
           const dropX = gestureState.moveX;
           const dropY = gestureState.moveY;
 
+          console.log(`Drop attempt at: [${dropX}, ${dropY}], Board bounds: [${x}, ${y}, ${width}, ${height}]`);
+
           if (dropX >= x && dropX <= x + width && dropY >= y && dropY <= y + height) {
             const col = Math.floor((dropX - x) / cellSize);
             const row = Math.floor((dropY - y) / cellSize);
+            console.log(`Calculated cell: row ${row}, col ${col}`);
             if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
               onDrop(row, col, index);
             }
@@ -92,26 +99,54 @@ const DraggableBlock = ({
         onDragUpdate(null, null);
         Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
       },
+      onPanResponderTerminate: () => {
+        setIsDragging(false);
+        onDragUpdate(null, null);
+        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+      }
     })
   ).current;
 
   return (
-    <Animated.View
-      style={[
-        styles.colorBlock,
-        { transform: pan.getTranslateTransform(), opacity: blockCount > 0 ? 1 : 0.5 }
-      ]}
-      {...panResponder.panHandlers}
-    >
-      <LinearGradient
-        colors={gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradientColorBlock}
+    <View style={styles.colorBlockWrapper}>
+      {/* Background stack - stays behind */}
+      <View style={[styles.colorBlock, { opacity: blockCount > 0 ? 1 : 0.5 }]}>
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientColorBlock}
+        >
+          <Text style={styles.blockText}>{blockCount}</Text>
+        </LinearGradient>
+      </View>
+
+      {/* Floating draggable block */}
+      <Animated.View
+        style={[
+          styles.colorBlock,
+          {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            transform: pan.getTranslateTransform(),
+            zIndex: isDragging ? 1000 : 1,
+            elevation: isDragging ? 10 : 0,
+          }
+        ]}
+        {...panResponder.panHandlers}
       >
-        <Text style={styles.blockText}>{blockCount}</Text>
-      </LinearGradient>
-    </Animated.View>
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientColorBlock}
+        >
+          {/* Hide number when dragging for "picking one" look */}
+          {!isDragging && <Text style={styles.blockText}>{blockCount}</Text>}
+        </LinearGradient>
+      </Animated.View>
+    </View>
   );
 };
 
@@ -859,7 +894,8 @@ const styles = StyleSheet.create({
   bulldogImage: { width: 20, height: 20, position: 'absolute', top: 4, left: 4 },
   colorBlocksContainer: { position: 'absolute', top: 630, width: 320, height: 70, backgroundColor: '#E4EBF0', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
   colorBlocksRow: { flexDirection: 'row', justifyContent: 'space-between', width: 300 },
-  colorBlock: { width: 50, height: 50, borderRadius: 8, marginHorizontal: 4 },
+  colorBlock: { width: 50, height: 50, borderRadius: 8 },
+  colorBlockWrapper: { width: 50, height: 50, marginHorizontal: 4 },
   gradientColorBlock: { flex: 1, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   blockText: { color: '#fff', fontSize: 20, fontWeight: '500' },
   controlsRow: { position: 'absolute', top: 720, width: 240, flexDirection: 'row', justifyContent: 'space-around' },
