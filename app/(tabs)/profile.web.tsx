@@ -234,8 +234,6 @@ export default function ProfileScreenWeb() {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Logout */}
         {/* Logout */}
         <TouchableOpacity
           style={[styles.logoutButton, { backgroundColor: colors.primary }]}

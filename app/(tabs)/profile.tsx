@@ -1,5 +1,7 @@
 import { useThemeContext } from '@/context/ThemeContext';
+import firebaseService from '@/firebaseService';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import React from 'react';
 import {
   Dimensions,
@@ -167,25 +169,34 @@ export default function ProfileScreen() {
 
             {/* ✅ Gradient Button */}
             <TouchableOpacity
-  style={[
-    styles.saveButton,
-    { backgroundColor: 'rgba(0, 123, 255, 0.85)' }, // ✅ single color with opacity
-  ]}
->
-  <Text style={styles.saveButtonText}>Save</Text>
-</TouchableOpacity>
+              style={[
+                styles.saveButton,
+                { backgroundColor: 'rgba(0, 123, 255, 0.85)' }, // ✅ single color with opacity
+              ]}
+            >
+              <Text style={styles.saveButtonText}>Save</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* ✅ Gradient Logout Button */}
         <TouchableOpacity
-  style={[
-    styles.logoutButton,
-    { backgroundColor: 'rgba(0, 123, 255, 0.85)' }, // ✅ single color with opacity
-  ]}
->
-  <Text style={styles.logoutText}>Logout</Text>
-</TouchableOpacity>
+          style={[
+            styles.logoutButton,
+            { backgroundColor: 'rgba(0, 123, 255, 0.85)' }, // ✅ single color with opacity
+          ]}
+          onPress={async () => {
+            try {
+              await firebaseService.signOut();
+              router.replace('/');
+            } catch (error) {
+              console.error('Logout failed:', error);
+              alert('Failed to logout. Please try again.');
+            }
+          }}
+        >
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
 
       </ScrollView>
     </LinearGradient>

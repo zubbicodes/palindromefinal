@@ -20,6 +20,7 @@ import GameLayoutWeb from './gamelayout.web';
 
 // ✅ Import theme context
 import { useThemeContext } from '@/context/ThemeContext';
+import firebaseService from '@/firebaseService';
 
 export default function GameLayout() {
   if (Platform.OS === 'web') {
@@ -41,6 +42,7 @@ export default function GameLayout() {
 
   // ✅ Local state sync with context
   const [darkModeEnabled, setDarkModeEnabled] = useState(theme === 'dark');
+  const [userName, setUserName] = useState('User');
 
   const handlePlay = () => setScore(prev => prev + 1);
 
@@ -69,7 +71,19 @@ export default function GameLayout() {
     setBulldogPositions(newPositions);
   };
 
-  useEffect(() => spawnBulldogs(), []);
+  useEffect(() => {
+    spawnBulldogs();
+
+    // Fetch user profile
+    const user = firebaseService.getCurrentUser();
+    if (user) {
+      if (user.displayName) {
+        setUserName(user.displayName);
+      } else if (user.email) {
+        setUserName(user.email.split('@')[0]);
+      }
+    }
+  }, []);
 
   const gridSize = 11;
   const center = Math.floor(gridSize / 2);
@@ -343,7 +357,7 @@ export default function GameLayout() {
                         { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
                       ]}
                     >
-                      Lorem Ipsum
+                      {userName}
                     </Text>
                     <Pressable
                       onPress={() => {

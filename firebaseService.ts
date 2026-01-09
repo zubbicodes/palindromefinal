@@ -12,14 +12,6 @@ import {
   signOut,
   updateProfile
 } from 'firebase/auth';
-import {
-  Firestore,
-  doc,
-  getDoc,
-  getFirestore,
-  setDoc,
-  updateDoc
-} from 'firebase/firestore';
 import { FirebaseStorage, getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 
 // Define types for better TypeScript support
@@ -55,7 +47,6 @@ class FirebaseService {
   // Firebase services
   public app: FirebaseApp;
   public auth: Auth;
-  public db: Firestore;
   public storage: FirebaseStorage;
 
   private constructor() {
@@ -75,7 +66,6 @@ class FirebaseService {
     // Initialize Firebase
     this.app = initializeApp(firebaseConfig);
     this.auth = getAuth(this.app);
-    this.db = getFirestore(this.app);
     this.storage = getStorage(this.app);
 
     console.log('FirebaseService initialized successfully');
@@ -151,14 +141,6 @@ class FirebaseService {
         console.warn('[FirebaseService] Email verification failed (non-critical):', e);
       }
 
-      // Create user document in Firestore
-      await this.createUserDocument(userCredential.user.uid, {
-        displayName,
-        email,
-        createdAt: new Date(),
-        lastLogin: new Date()
-      });
-
       return {
         success: true,
         user: userCredential.user
@@ -188,11 +170,6 @@ class FirebaseService {
         // You can choose to sign out or allow access
         console.warn('Email not verified');
       }
-
-      // Update last login in Firestore
-      await this.updateUserDocument(userCredential.user.uid, {
-        lastLogin: new Date()
-      });
 
       return {
         success: true,
@@ -258,10 +235,6 @@ class FirebaseService {
 
     try {
       await updateProfile(user, updates);
-
-      // Also update in Firestore
-      await this.updateUserDocument(user.uid, updates);
-
       return { success: true, user };
     } catch (error: any) {
       return {
@@ -270,8 +243,6 @@ class FirebaseService {
       };
     }
   }
-
-  // ==================== FIRESTORE METHODS ====================
 
   /**
    * Helper to race a promise against a timeout
@@ -292,94 +263,6 @@ class FirebaseService {
     } catch (error) {
       clearTimeout(timeoutHandle!);
       throw error;
-    }
-  }
-
-  /**
-   * Create user document in Firestore
-   */
-  private async createUserDocument(userId: string, userData: UserProfile): Promise<void> {
-    console.log(`[FirebaseService] Starting createUserDocument for ${userId}...`);
-    try {
-      const userRef = doc(this.db, 'users', userId);
-
-      // Clean data - remove undefined values
-      const cleanData: Record<string, any> = {
-        uid: userId,
-        updatedAt: new Date()
-      };
-
-      // Only add properties that are not undefined
-      if (userData.displayName !== undefined && userData.displayName !== '') {
-        cleanData.displayName = userData.displayName;
-      }
-      if (userData.email !== undefined) {
-        cleanData.email = userData.email;
-      }
-      if (userData.createdAt !== undefined) {
-        cleanData.createdAt = userData.createdAt;
-      }
-      if (userData.lastLogin !== undefined) {
-        cleanData.lastLogin = userData.lastLogin;
-      }
-
-      console.log('[FirebaseService] Data prepared, calling setDoc...');
-
-      // Use timeout to prevent hanging
-      await this.withTimeout(
-        setDoc(userRef, cleanData),
-        5000,
-        'Firestore: createUserDocument'
-      );
-
-      console.log('✅ [FirebaseService] Firestore document created successfully');
-    } catch (error: any) {
-      // CRITICAL: We catch all errors here so the auth flow doesn't fail
-      // just because Firestore is having issues/hanging
-      console.error('❌ [FirebaseService] Error creating user document:', error);
-      console.warn('[FirebaseService] Continuing auth flow despite Firestore error');
-    }
-  }
-
-  /**
-   * Update user document in Firestore
-   */
-  private async updateUserDocument(userId: string, updates: Partial<UserProfile>): Promise<void> {
-    console.log(`[FirebaseService] Starting updateUserDocument for ${userId}...`);
-    try {
-      const userRef = doc(this.db, 'users', userId);
-
-      await this.withTimeout(
-        updateDoc(userRef, {
-          ...updates,
-          updatedAt: new Date()
-        }),
-        5000,
-        'Firestore: updateUserDocument'
-      );
-
-      console.log('✅ [FirebaseService] User document updated successfully');
-    } catch (error: any) {
-      console.error('❌ [FirebaseService] Error updating user document:', error);
-      console.warn('[FirebaseService] Continuing auth flow despite Firestore error');
-    }
-  }
-
-  /**
-   * Get user document from Firestore
-   */
-  async getUserDocument(userId: string): Promise<UserProfile | null> {
-    try {
-      const userRef = doc(this.db, 'users', userId);
-      const userSnap = await getDoc(userRef);
-
-      if (userSnap.exists()) {
-        return userSnap.data() as UserProfile;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error getting user document:', error);
-      return null;
     }
   }
 
@@ -428,7 +311,7 @@ class FirebaseService {
    * Check if Firebase is initialized
    */
   isInitialized(): boolean {
-    return !!this.app && !!this.auth && !!this.db;
+    return !!this.app && !!this.auth;
   }
 
   /**
