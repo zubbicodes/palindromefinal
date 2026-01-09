@@ -8,12 +8,10 @@
     "scheme": "palindrome",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gammagames.palindrome"
     },
-
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/bulldog.png",
@@ -22,22 +20,20 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.gammagames.palindrome"
+      "package": "com.gammagames.palindrome",
+      "googleServicesFile": "./google-services.json"
     },
-
     "web": {
       "output": "static",
       "favicon": "./assets/images/bulldog.png",
       "backgroundColor": "#000D3F",
       "themeColor": "#0060FF"
     },
-
     "splash": {
       "image": "./assets/images/bg.png",
       "resizeMode": "contain",
       "backgroundColor": "#000D3F"
     },
-
     "plugins": [
       "expo-router",
       "expo-font",
@@ -53,12 +49,12 @@
         }
       ]
     ],
-
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-
-    "assetBundlePatterns": ["**/*"]
+    "assetBundlePatterns": [
+      "**/*"
+    ]
   }
 }

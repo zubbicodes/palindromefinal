@@ -4,6 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,6 +14,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import firebaseService from '../../firebaseService';
+import { getFriendlyErrorMessage } from '../../utils/authErrors';
 import LoginWeb from './index.web';
 
 export default function LoginScreen() {
@@ -19,10 +23,57 @@ export default function LoginScreen() {
   const { theme } = useThemeContext();
   const isDark = theme === 'dark';
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   if (Platform.OS === 'web') {
     return <LoginWeb />;
   }
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await firebaseService.signIn(email, password);
+      if (result.success) {
+        router.replace('/gamelayout');
+      } else {
+        const message = result.error ? getFriendlyErrorMessage(result.error) : 'Login failed';
+        Alert.alert('Login Failed', message);
+      }
+    } catch (error: any) {
+      const message = getFriendlyErrorMessage(error.code || error.message);
+      Alert.alert('Error', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert('Reset Password', 'Please enter your email address first.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await firebaseService.resetPassword(email);
+      if (result.success) {
+        Alert.alert('Success', 'Password reset email sent! Check your inbox.');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to send reset email');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <LinearGradient
@@ -64,8 +115,8 @@ export default function LoginScreen() {
                   styles.floatingLabel,
                   {
                     backgroundColor: isDark
-                      ? 'rgba(255,255,255,0.08)'
-                      : 'rgba(255,255,255,0.6)',
+                      ? 'rgba(0,0,23,1)'
+                      : '#FFF',
                     color: isDark ? '#FFF' : '#000',
                   },
                 ]}
@@ -86,6 +137,10 @@ export default function LoginScreen() {
                 placeholder="e.g. wilson09@gmail.com"
                 placeholderTextColor={isDark ? '#CCC' : '#555'}
                 keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+                editable={!loading}
               />
             </View>
           </View>
@@ -98,8 +153,8 @@ export default function LoginScreen() {
                   styles.floatingLabel,
                   {
                     backgroundColor: isDark
-                      ? 'rgba(255,255,255,0.08)'
-                      : 'rgba(255,255,255,0.6)',
+                      ? 'rgba(0,0,23,1)'
+                      : '#FFF',
                     color: isDark ? '#FFF' : '#000',
                   },
                 ]}
@@ -125,10 +180,14 @@ export default function LoginScreen() {
                   placeholder="********"
                   placeholderTextColor={isDark ? '#CCC' : '#555'}
                   secureTextEntry={!passwordVisible}
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   onPress={() => setPasswordVisible(!passwordVisible)}
                   style={styles.iconButton}
+                  disabled={loading}
                 >
                   <Ionicons
                     name={passwordVisible ? 'eye-outline' : 'eye-off-outline'}
@@ -141,7 +200,11 @@ export default function LoginScreen() {
           </View>
 
           {/* Forgot Password */}
-          <TouchableOpacity style={styles.forgotWrapper}>
+          <TouchableOpacity
+            style={styles.forgotWrapper}
+            onPress={handleForgotPassword}
+            disabled={loading}
+          >
             <Text
               style={[
                 styles.forgotPassword,
@@ -157,10 +220,16 @@ export default function LoginScreen() {
             style={[
               styles.loginButton,
               { backgroundColor: isDark ? '#375FFF' : '#007BFF' },
+              loading && { opacity: 0.7 }
             ]}
-            onPress={() => router.push('/gamelayout')}
+            onPress={handleLogin}
+            disabled={loading}
           >
-            <Text style={styles.loginButtonText}>Log In</Text>
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.loginButtonText}>Log In</Text>
+            )}
           </TouchableOpacity>
 
           {/* Footer */}

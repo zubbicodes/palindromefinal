@@ -1,8 +1,11 @@
 import { useThemeContext } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,22 +14,62 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import firebaseService from '../../firebaseService';
+import { getFriendlyErrorMessage } from '../../utils/authErrors';
 import SignUpWeb from './signup.web';
 
 export default function SignupScreen() {
+  const router = useRouter();
   const { theme } = useThemeContext();
+  const isDark = theme === 'dark';
 
   if (Platform.OS === 'web') {
     return <SignUpWeb />;
   }
 
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [agree, setAgree] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleSignup = async () => {
+    if (!fullName || !email || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (!agree) {
+      Alert.alert('Error', 'Please agree to the terms and conditions');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await firebaseService.signUp(email, password, fullName);
+      if (result.success) {
+        Alert.alert(
+          'Account Created',
+          'Your account has been created successfully. Please verify your email.',
+          [{ text: 'OK', onPress: () => router.replace('/') }]
+        );
+      } else {
+        const message = result.error ? getFriendlyErrorMessage(result.error) : 'Signup failed';
+        Alert.alert('Signup Failed', message);
+      }
+    } catch (error: any) {
+      const message = getFriendlyErrorMessage(error.code || error.message);
+      Alert.alert('Error', message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <LinearGradient
       colors={
-        theme === 'dark'
+        isDark
           ? ['#000017', '#000074'] // 🌙 Dark theme gradient
           : ['#FFFFFF', '#FFFFFF'] // ☀️ Light theme gradient
       }
@@ -41,7 +84,7 @@ export default function SignupScreen() {
           <Text
             style={[
               styles.title,
-              { color: theme === 'dark' ? '#FFF' : '#000' },
+              { color: isDark ? '#FFF' : '#000' },
             ]}
           >
             Create your account
@@ -49,7 +92,7 @@ export default function SignupScreen() {
           <Text
             style={[
               styles.subtitle,
-              { color: theme === 'dark' ? '#CCC' : '#49463F' },
+              { color: isDark ? '#CCC' : '#49463F' },
             ]}
           >
             Enter the Palindrome Realm
@@ -62,8 +105,8 @@ export default function SignupScreen() {
                 style={[
                   styles.floatingLabel,
                   {
-                    color: theme === 'dark' ? '#FFF' : '#000',
-                    backgroundColor: theme === 'dark' ? '#00002A' : '#FFF',
+                    color: isDark ? '#FFF' : '#000',
+                    backgroundColor: isDark ? '#00001D' : '#FFF',
                   },
                 ]}
               >
@@ -74,19 +117,22 @@ export default function SignupScreen() {
                   styles.input,
                   {
                     backgroundColor:
-                      theme === 'dark'
-                        ? 'rgba(0,0,50,0.4)'
+                      isDark
+                        ? 'rgba(255,255,255,0.08)'
                         : 'rgba(255,255,255,0.6)',
                     borderColor:
-                      theme === 'dark'
+                      isDark
                         ? 'rgba(255,255,255,0.2)'
                         : 'rgba(0,0,0,0.1)',
-                    color: theme === 'dark' ? '#FFF' : '#000',
+                    color: isDark ? '#FFF' : '#000',
                   },
                 ]}
                 placeholder="e.g. Jenny Wilson"
-                placeholderTextColor={theme === 'dark' ? '#AAA' : '#B0B0B0'}
+                placeholderTextColor={isDark ? '#AAA' : '#B0B0B0'}
                 keyboardType="default"
+                value={fullName}
+                onChangeText={setFullName}
+                editable={!loading}
               />
             </View>
           </View>
@@ -98,8 +144,8 @@ export default function SignupScreen() {
                 style={[
                   styles.floatingLabel,
                   {
-                    color: theme === 'dark' ? '#FFF' : '#000',
-                    backgroundColor: theme === 'dark' ? '#00002A' : '#FFF',
+                    color: isDark ? '#FFF' : '#000',
+                    backgroundColor: isDark ? '#00001D' : '#FFF',
                   },
                 ]}
               >
@@ -110,19 +156,23 @@ export default function SignupScreen() {
                   styles.input,
                   {
                     backgroundColor:
-                      theme === 'dark'
-                        ? 'rgba(0,0,50,0.4)'
+                      isDark
+                        ? 'rgba(255,255,255,0.08)'
                         : 'rgba(255,255,255,0.6)',
                     borderColor:
-                      theme === 'dark'
+                      isDark
                         ? 'rgba(255,255,255,0.2)'
                         : 'rgba(0,0,0,0.1)',
-                    color: theme === 'dark' ? '#FFF' : '#000',
+                    color: isDark ? '#FFF' : '#000',
                   },
                 ]}
                 placeholder="e.g. wilson09@gmail.com"
-                placeholderTextColor={theme === 'dark' ? '#AAA' : '#B0B0B0'}
+                placeholderTextColor={isDark ? '#AAA' : '#B0B0B0'}
                 keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+                editable={!loading}
               />
             </View>
           </View>
@@ -134,8 +184,8 @@ export default function SignupScreen() {
                 style={[
                   styles.floatingLabel,
                   {
-                    color: theme === 'dark' ? '#FFF' : '#000',
-                    backgroundColor: theme === 'dark' ? '#00002A' : '#FFF',
+                    color: isDark ? '#FFF' : '#000',
+                    backgroundColor: isDark ? '#00001D' : '#FFF',
                   },
                 ]}
               >
@@ -146,11 +196,11 @@ export default function SignupScreen() {
                   styles.passwordContainer,
                   {
                     backgroundColor:
-                      theme === 'dark'
-                        ? 'rgba(0,0,50,0.4)'
+                      isDark
+                        ? 'rgba(255,255,255,0.08)'
                         : 'rgba(255,255,255,0.6)',
                     borderColor:
-                      theme === 'dark'
+                      isDark
                         ? 'rgba(255,255,255,0.2)'
                         : 'rgba(0,0,0,0.1)',
                   },
@@ -159,20 +209,24 @@ export default function SignupScreen() {
                 <TextInput
                   style={[
                     styles.passwordInput,
-                    { color: theme === 'dark' ? '#FFF' : '#000' },
+                    { color: isDark ? '#FFF' : '#000' },
                   ]}
                   placeholder="********"
-                  placeholderTextColor={theme === 'dark' ? '#AAA' : '#B0B0B0'}
+                  placeholderTextColor={isDark ? '#AAA' : '#B0B0B0'}
                   secureTextEntry={!passwordVisible}
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   onPress={() => setPasswordVisible(!passwordVisible)}
                   style={styles.iconButton}
+                  disabled={loading}
                 >
                   <Ionicons
                     name={passwordVisible ? 'eye-outline' : 'eye-off-outline'}
                     size={20}
-                    color={theme === 'dark' ? '#DDD' : '#999'}
+                    color={isDark ? '#DDD' : '#999'}
                   />
                 </TouchableOpacity>
               </View>
@@ -184,15 +238,16 @@ export default function SignupScreen() {
             onPress={() => setAgree(!agree)}
             activeOpacity={0.8}
             style={styles.checkboxRow}
+            disabled={loading}
           >
             <View
               style={[
                 styles.checkboxBox,
                 {
                   backgroundColor:
-                    theme === 'dark' ? '#00002A' : '#FFF',
+                    isDark ? '#00001D' : '#FFF',
                   borderColor:
-                    theme === 'dark' ? '#999' : '#B0B0B0',
+                    isDark ? '#999' : '#B0B0B0',
                 },
                 agree && {
                   backgroundColor: '#007BFF',
@@ -206,7 +261,7 @@ export default function SignupScreen() {
             <Text
               style={[
                 styles.checkboxText,
-                { color: theme === 'dark' ? '#DDD' : '#333' },
+                { color: isDark ? '#DDD' : '#333' },
               ]}
             >
               I've read and agree to the{' '}
@@ -228,11 +283,17 @@ export default function SignupScreen() {
           <TouchableOpacity
             style={[
               styles.loginButton,
-              { backgroundColor: agree ? '#007BFF' : '#A0C8FF' },
+              { backgroundColor: (agree && !loading) ? '#007BFF' : '#A0C8FF' },
+              loading && { opacity: 0.7 }
             ]}
-            disabled={!agree}
+            onPress={handleSignup}
+            disabled={!agree || loading}
           >
-            <Text style={styles.loginButtonText}>Sign Up</Text>
+            {loading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.loginButtonText}>Sign Up</Text>
+            )}
           </TouchableOpacity>
 
           {/* Footer */}
@@ -240,15 +301,16 @@ export default function SignupScreen() {
             <Text
               style={[
                 styles.footerText,
-                { color: theme === 'dark' ? '#CCC' : '#2A2A2A' },
+                { color: isDark ? '#CCC' : '#2A2A2A' },
               ]}
             >
               Already have an account?{' '}
               <Text
                 style={[
                   styles.footerBold,
-                  { color: theme === 'dark' ? '#66A3FF' : '#007BFF' },
+                  { color: isDark ? '#66A3FF' : '#007BFF' },
                 ]}
+                onPress={() => router.replace('/')}
               >
                 Log In
               </Text>
