@@ -5,13 +5,15 @@ import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  GestureResponderEvent,
   Image,
   PanResponder,
+  PanResponderGestureState,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
@@ -21,39 +23,154 @@ import GameLayoutWeb from './gamelayout.web';
 // ✅ Import theme context
 import { useThemeContext } from '@/context/ThemeContext';
 import firebaseService from '@/firebaseService';
+import { useSound } from '@/hooks/use-sound';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const DraggableBlock = ({
+  index,
+  gradient,
+  blockCount,
+  boardLayout,
+  gridSize,
+  onDrop,
+  onPickup,
+  onDragUpdate
+}: {
+  index: number;
+  gradient: readonly [string, string];
+  blockCount: number;
+  boardLayout: { x: number; y: number; width: number; height: number } | null;
+  gridSize: number;
+  onDrop: (row: number, col: number, colorIndex: number) => void;
+  onPickup: () => void;
+  onDragUpdate: (row: number | null, col: number | null) => void;
+}) => {
+  const pan = useRef(new Animated.ValueXY()).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        onPickup();
+      },
+      onPanResponderMove: (e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+        Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false })(e, gestureState);
+
+        if (boardLayout) {
+          const { x, y, width, height } = boardLayout;
+          const cellSize = width / gridSize;
+          const touchX = gestureState.moveX;
+          const touchY = gestureState.moveY;
+
+          if (touchX >= x && touchX <= x + width && touchY >= y && touchY <= y + height) {
+            const col = Math.floor((touchX - x) / cellSize);
+            const row = Math.floor((touchY - y) / cellSize);
+            if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+              onDragUpdate(row, col);
+            } else {
+              onDragUpdate(null, null);
+            }
+          } else {
+            onDragUpdate(null, null);
+          }
+        }
+      },
+      onPanResponderRelease: (e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+        if (boardLayout) {
+          const { x, y, width, height } = boardLayout;
+          const cellSize = width / gridSize;
+          const dropX = gestureState.moveX;
+          const dropY = gestureState.moveY;
+
+          if (dropX >= x && dropX <= x + width && dropY >= y && dropY <= y + height) {
+            const col = Math.floor((dropX - x) / cellSize);
+            const row = Math.floor((dropY - y) / cellSize);
+            if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+              onDrop(row, col, index);
+            }
+          }
+        }
+        onDragUpdate(null, null);
+        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View
+      style={[
+        styles.colorBlock,
+        { transform: pan.getTranslateTransform(), opacity: blockCount > 0 ? 1 : 0.5 }
+      ]}
+      {...panResponder.panHandlers}
+    >
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientColorBlock}
+      >
+        <Text style={styles.blockText}>{blockCount}</Text>
+      </LinearGradient>
+    </Animated.View>
+  );
+};
+
 export default function GameLayout() {
-  if (Platform.OS === 'web') {
-    return <GameLayoutWeb />;
-  }
 
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme } = useThemeContext();
+  const { playPickupSound, playDropSound, playErrorSound } = useSound();
 
   const [score, setScore] = useState(0);
   const [hints, setHints] = useState(2);
   const [time, setTime] = useState('00:00');
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([]);
-  const [remainingBlocks, setRemainingBlocks] = useState(5);
+  const [pause, setPause] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
-  const [pause, setPause] = useState(false);
+
+  const colorsList = [
+    ['#C40111', '#F01D2E'],
+    ['#757F35', '#99984D'],
+    ['#1177FE', '#48B7FF'],
+    ['#111111', '#3C3C3C'],
+    ['#E7CC01', '#E7E437'],
+  ] as const;
 
   // ✅ Local state sync with context
   const [darkModeEnabled, setDarkModeEnabled] = useState(theme === 'dark');
   const [userName, setUserName] = useState('User');
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
+  // Game Logic State
+  const gridSize = 11;
+  const [gridState, setGridState] = useState<(number | null)[][]>(
+    Array.from({ length: gridSize }, () => Array(gridSize).fill(null))
+  );
+  const [blockCounts, setBlockCounts] = useState<number[]>([16, 16, 16, 16, 16]);
+  const [activeHint, setActiveHint] = useState<{ row: number; col: number; colorIndex: number } | null>(null);
+  const [feedback, setFeedback] = useState<{ text: string, color: string, id: number } | null>(null);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [secondsElapsed, setSecondsElapsed] = useState(0);
+  const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null);
+  const [draggedColor, setDraggedColor] = useState<number | null>(null);
+
+  const [boardLayout, setBoardLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const boardRef = useRef<View | null>(null);
+
+  const center = Math.floor(gridSize / 2);
+  const word = 'PALINDROME';
+  const halfWord = Math.floor(word.length / 2);
+
+  if (Platform.OS === 'web') {
+    return <GameLayoutWeb />;
+  }
+
   const handlePlay = () => setScore(prev => prev + 1);
 
   const spawnBulldogs = () => {
     const totalBulldogs = 5;
-    const gridSize = 11;
-    const center = Math.floor(gridSize / 2);
-    const word = 'PALINDROME';
-    const halfWord = Math.floor(word.length / 2);
     const blockedPositions = new Set<string>();
 
     for (let i = 0; i < word.length; i++) {
@@ -75,7 +192,48 @@ export default function GameLayout() {
 
   useEffect(() => {
     spawnBulldogs();
+
+    // Pre-place 3 random colors matching web logic
+    const indPositions = [
+      { row: 5, col: 3 },
+      { row: 5, col: 4 },
+      { row: 5, col: 5 },
+    ];
+    const initialColors = indPositions.map(() => Math.floor(Math.random() * 5));
+
+    setGridState(prev => {
+      const newGrid = prev.map(r => [...r]);
+      indPositions.forEach((pos, idx) => {
+        newGrid[pos.row][pos.col] = initialColors[idx];
+      });
+      return newGrid;
+    });
+
+    setBlockCounts(prev => {
+      const next = [...prev];
+      initialColors.forEach(colorIdx => {
+        next[colorIdx] = Math.max(0, next[colorIdx] - 1);
+      });
+      return next;
+    });
   }, []);
+
+  // Timer useEffect
+  useEffect(() => {
+    let interval: any;
+    if (isTimerRunning && !pause) {
+      interval = setInterval(() => {
+        setSecondsElapsed((prev) => {
+          const next = prev + 1;
+          const mins = Math.floor(next / 60).toString().padStart(2, "0");
+          const secs = (next % 60).toString().padStart(2, "0");
+          setTime(`${mins}:${secs}`);
+          return next;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, pause]);
 
   // Fetch/Refresh user profile
   useEffect(() => {
@@ -102,14 +260,132 @@ export default function GameLayout() {
     if (settingsVisible) {
       fetchUserData();
     }
-    // Also fetch on mount
     fetchUserData();
   }, [settingsVisible]);
 
-  const gridSize = 11;
-  const center = Math.floor(gridSize / 2);
-  const word = 'PALINDROME';
-  const halfWord = Math.floor(word.length / 2);
+  const checkAndProcessPalindromes = (row: number, col: number, colorIdx: number, currentGrid: (number | null)[][], dryRun = false, minLength = 3) => {
+    let scoreFound = 0;
+
+    const checkLine = (lineIsRow: boolean) => {
+      const line: { color: number; r: number; c: number }[] = [];
+      if (lineIsRow) {
+        for (let c = 0; c < gridSize; c++) {
+          line.push({ color: currentGrid[row][c] ?? -1, r: row, c: c });
+        }
+      } else {
+        for (let r = 0; r < gridSize; r++) {
+          line.push({ color: currentGrid[r][col] ?? -1, r: r, c: col });
+        }
+      }
+
+      const targetIndex = lineIsRow ? col : row;
+      let start = targetIndex;
+      let end = targetIndex;
+
+      while (start > 0 && line[start - 1].color !== -1) start--;
+      while (end < gridSize - 1 && line[end + 1].color !== -1) end++;
+
+      const segment = line.slice(start, end + 1);
+      if (segment.length >= minLength) {
+        const colorsArr = segment.map((s) => s.color);
+        const isPal = colorsArr.join(",") === [...colorsArr].reverse().join(",");
+
+        if (isPal) {
+          let segmentScore = segment.length;
+          let hasBulldog = false;
+          segment.forEach((b) => {
+            if (bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)) {
+              hasBulldog = true;
+            }
+          });
+
+          if (hasBulldog) segmentScore += 10;
+          scoreFound += segmentScore;
+
+          if (!dryRun) {
+            let feedbackText = "GOOD!";
+            let feedbackColor = "#4ADE80";
+            if (segment.length === 4) {
+              feedbackText = "GREAT!";
+              feedbackColor = "#60A5FA";
+            } else if (segment.length === 5) {
+              feedbackText = "AMAZING!";
+              feedbackColor = "#A78BFA";
+            } else if (segment.length >= 6) {
+              feedbackText = "LEGENDARY!";
+              feedbackColor = "#F472B6";
+            }
+
+            setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
+            setTimeout(() => setFeedback(null), 2000);
+          }
+        }
+      }
+    };
+
+    checkLine(true);
+    checkLine(false);
+    return scoreFound;
+  };
+
+  const findHint = () => {
+    if (hints <= 0) return;
+    const colorGradientsCount = 5;
+
+    const tryFindHint = (minLength: number) => {
+      for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+          if (gridState[r][c] === null) {
+            for (let colorIdx = 0; colorIdx < colorGradientsCount; colorIdx++) {
+              if (blockCounts[colorIdx] > 0) {
+                const tempGrid = gridState.map((rowArr) => [...rowArr]);
+                tempGrid[r][c] = colorIdx;
+                const sc = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength);
+                if (sc > 0) {
+                  setHints((prev) => prev - 1);
+                  setActiveHint({ row: r, col: c, colorIndex: colorIdx });
+                  setTimeout(() => setActiveHint(null), 3000);
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+      return false;
+    };
+
+    if (tryFindHint(3)) return;
+    if (tryFindHint(2)) return;
+    playErrorSound();
+  };
+
+  const handleDrop = (row: number, col: number, colorIndex: number) => {
+    setDragOverCell(null);
+    setDraggedColor(null);
+
+    if (gridState[row][col] !== null) {
+      playErrorSound();
+      return;
+    }
+
+    const newGrid = gridState.map((r) => [...r]);
+    newGrid[row][col] = colorIndex;
+    setGridState(newGrid);
+
+    setBlockCounts((prev) => {
+      const next = [...prev];
+      next[colorIndex] = Math.max(0, next[colorIndex] - 1);
+      return next;
+    });
+
+    playDropSound();
+    const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid);
+    if (scoreFound > 0) {
+      setScore(prev => prev + scoreFound);
+    }
+  };
+
 
   const grid = Array.from({ length: gridSize }, (_, row) => (
     <View key={row} style={styles.row}>
@@ -133,6 +409,19 @@ export default function GameLayout() {
                   theme === 'dark' ? 'rgba(25,25,91,0.7)' : '#FFFFFF',
                 borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#CCDAE466',
               },
+              (activeHint?.row === row && activeHint?.col === col) && {
+                borderColor: '#FFD700',
+                borderWidth: 2,
+                shadowColor: '#FFD700',
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.8,
+                shadowRadius: 10,
+              },
+              (dragOverCell?.row === row && dragOverCell?.col === col) && {
+                backgroundColor: theme === 'dark' ? 'rgba(100, 200, 255, 0.4)' : 'rgba(100, 200, 255, 0.3)',
+                borderColor: '#4A9EFF',
+                borderWidth: 2,
+              }
             ]}
             onPress={() => {
               if (isBulldog) {
@@ -141,6 +430,18 @@ export default function GameLayout() {
               } else handlePlay();
             }}
           >
+            {gridState[row][col] !== null && (
+              <LinearGradient
+                colors={colorsList[gridState[row][col]!]}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+            {activeHint?.row === row && activeHint?.col === col && (
+              <LinearGradient
+                colors={colorsList[activeHint.colorIndex]}
+                style={[StyleSheet.absoluteFill, { opacity: 0.6 }]}
+              />
+            )}
             {isBulldog && (
               <Image
                 source={require('../../assets/images/bulldog.png')}
@@ -165,46 +466,34 @@ export default function GameLayout() {
     </View>
   ));
 
-  const colors = [
-    ['#C40111', '#F01D2E'],
-    ['#757F35', '#99984D'],
-    ['#1177FE', '#48B7FF'],
-    ['#111111', '#3C3C3C'],
-    ['#E7CC01', '#E7E437'],
-  ] as const;
 
-  const blocks = colors.map((gradient, index) => {
-    const pan = useRef(new Animated.ValueXY()).current;
-    const panResponder = useRef(
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
-          useNativeDriver: false,
-        }),
-        onPanResponderRelease: () => {
-          Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
-          setRemainingBlocks(prev => Math.max(prev - 1, 0));
-        },
-      })
-    ).current;
-
-    return (
-      <Animated.View
-        key={index}
-        style={[styles.colorBlock, { transform: pan.getTranslateTransform() }]}
-        {...panResponder.panHandlers}
-      >
-        <LinearGradient
-          colors={gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradientColorBlock}
-        >
-          <Text style={styles.blockText}>16</Text>
-        </LinearGradient>
-      </Animated.View>
-    );
-  });
+  const blocks = colorsList.map((gradient, index) => (
+    <DraggableBlock
+      key={index}
+      index={index}
+      gradient={gradient}
+      blockCount={blockCounts[index]}
+      boardLayout={boardLayout}
+      gridSize={gridSize}
+      onDrop={handleDrop}
+      onPickup={() => {
+        playPickupSound();
+        setDraggedColor(index);
+        if (!isTimerRunning) setIsTimerRunning(true);
+      }}
+      onDragUpdate={(row: number | null, col: number | null) => {
+        if (row !== null && col !== null) {
+          if (gridState[row][col] === null) {
+            setDragOverCell({ row, col });
+          } else {
+            setDragOverCell(null);
+          }
+        } else {
+          setDragOverCell(null);
+        }
+      }}
+    />
+  ));
 
   return (
     <SafeAreaView style={styles.container}>
@@ -253,17 +542,19 @@ export default function GameLayout() {
           },
         ]}
       >
-        <Text style={[styles.rectangleLabel, { color: theme === 'dark' ? '#FFFFFF' : '#4C575F' }]}>
-          Hints
-        </Text>
-        <Text
-          style={[
-            styles.rectangleValue,
-            { color: '#C35DD9' },
-          ]}
-        >
-          {hints}
-        </Text>
+        <Pressable onPress={findHint} style={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
+          <Text style={[styles.rectangleLabel, { color: theme === 'dark' ? '#FFFFFF' : '#4C575F' }]}>
+            Hints
+          </Text>
+          <Text
+            style={[
+              styles.rectangleValue,
+              { color: '#C35DD9' },
+            ]}
+          >
+            {hints}
+          </Text>
+        </Pressable>
       </View>
 
       <View style={styles.timerContainer}>
@@ -288,6 +579,12 @@ export default function GameLayout() {
       </View>
 
       <View
+        ref={boardRef}
+        onLayout={() => {
+          boardRef.current?.measureInWindow((x, y, width, height) => {
+            setBoardLayout({ x, y, width, height });
+          });
+        }}
         style={[
           styles.board,
           { backgroundColor: theme === 'dark' ? 'rgba(25,25,91,0.7)' : '#E4EBF0' },
@@ -304,6 +601,18 @@ export default function GameLayout() {
       >
         <View style={styles.colorBlocksRow}>{blocks}</View>
       </View>
+
+      {/* Feedback Overlay */}
+      {feedback && (
+        <View
+          pointerEvents="none"
+          style={styles.feedbackContainer}
+        >
+          <Text style={[styles.feedbackText, { color: feedback.color }]}>
+            {feedback.text}
+          </Text>
+        </View>
+      )}
 
       <View style={styles.controlsRow}>
         <Pressable onPress={() => console.log('Play')}>
@@ -624,4 +933,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist-Regular',
   },
 
+  feedbackContainer: {
+    position: 'absolute',
+    top: '35%',
+    alignSelf: 'center',
+    zIndex: 9999,
+  },
+  feedbackText: {
+    fontSize: 40,
+    fontWeight: '900',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 10,
+  },
 });
