@@ -27,7 +27,7 @@ export default function GameLayout() {
   }
 
   // ✅ Get theme and toggle function from context
-  const { theme, toggleTheme} = useThemeContext();
+  const { theme, toggleTheme } = useThemeContext();
 
   const [score, setScore] = useState(0);
   const [hints, setHints] = useState(2);
@@ -173,14 +173,14 @@ export default function GameLayout() {
 
   return (
     <SafeAreaView style={styles.container}>
-<LinearGradient
-  colors={
-    theme === 'dark'
-      ? ['rgba(0, 0, 23, 1)', 'rgba(0, 0, 116, 1)'] // dark mode colors
-      : ['#FFFFFF', '#FFFFFF'] // light mode colors
-  }
-  style={styles.background}
-/>
+      <LinearGradient
+        colors={
+          theme === 'dark'
+            ? ['rgba(0, 0, 23, 1)', 'rgba(0, 0, 116, 1)'] // dark mode colors
+            : ['#FFFFFF', '#FFFFFF'] // light mode colors
+        }
+        style={styles.background}
+      />
       <Text style={[styles.title, { color: theme === 'dark' ? '#FFFFFF' : '#0060FF' }]}>
         PALINDROME
       </Text>
@@ -306,14 +306,14 @@ export default function GameLayout() {
             style={StyleSheet.absoluteFill}
           >
             <View style={styles.settingsOverlay}>
-                 <LinearGradient
-          colors={
-            theme === 'dark'
-              ? ['rgba(0, 0, 23, 1)', 'rgba(0, 0, 116, 1)'] // Dark gradient
-              : ['#FFFFFF', '#FFFFFF'] // Light theme pure white
-          }
-          style={[styles.settingsCard, { padding: 20, borderRadius: 20 }]}
-        >
+              <LinearGradient
+                colors={
+                  theme === 'dark'
+                    ? ['rgba(0, 0, 23, 1)', 'rgba(0, 0, 116, 1)'] // Dark gradient
+                    : ['#FFFFFF', '#FFFFFF'] // Light theme pure white
+                }
+                style={[styles.settingsCard, { padding: 20, borderRadius: 20 }]}
+              >
                 {/* Header */}
                 <View style={styles.headerRow}>
                   <View style={styles.headerSpacer} />
@@ -465,9 +465,9 @@ export default function GameLayout() {
                   </Text>
                   <Ionicons name="chevron-forward" size={20} color="#0060FF" />
                 </Pressable>
-                </LinearGradient>
-              </View>
-            
+              </LinearGradient>
+            </View>
+
           </BlurView>
         </View>
       )}
@@ -497,28 +497,28 @@ export default function GameLayout() {
 
 
 const styles = StyleSheet.create({
- container: { flex: 1, alignItems: 'center' },
- background: {
-  ...StyleSheet.absoluteFillObject,
-},
+  container: { flex: 1, alignItems: 'center' },
+  background: {
+    ...StyleSheet.absoluteFillObject,
+  },
   title: { position: 'absolute', top: 70, fontFamily: 'Geist-Bold', fontSize: 26, color: '#0060FF' },
-  rectangleLeft: { position: 'absolute', top: 170, left: '50%', marginLeft: -134 / 2 - 124.5, width: 104, height: 64, backgroundColor: 'rgba(229,236,241,0.5)', borderWidth: 1, borderColor: '#C7D5DF', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  rectangleRight: { position: 'absolute', top: 170, left: '50%', marginLeft: 137.5 - 104 / 2, width: 104, height: 64, backgroundColor: 'rgba(229,236,241,0.5)', borderWidth: 1, borderColor: '#C7D5DF', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  rectangleLeft: { position: 'absolute', top: 140, left: '55%', marginLeft: -134 / 2 - 124.5, width: 104, height: 64, backgroundColor: 'rgba(229,236,241,0.5)', borderWidth: 1, borderColor: '#C7D5DF', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  rectangleRight: { position: 'absolute', top: 140, left: '45%', marginLeft: 137.5 - 104 / 2, width: 104, height: 64, backgroundColor: 'rgba(229,236,241,0.5)', borderWidth: 1, borderColor: '#C7D5DF', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   rectangleLabel: { fontSize: 14, color: '#4C575F' },
   rectangleValue: { fontSize: 24, fontWeight: '900', color: '#0060FF' },
-  timerContainer: { position: 'absolute', top: 185, alignSelf: 'center' },
-  board: { position: 'relative', top: 222, width: 384, height: 390, backgroundColor: '#E4EBF0', borderRadius: 16, padding: 6, alignItems: 'center' },
+  timerContainer: { position: 'absolute', top: 160, alignSelf: 'center' },
+  board: { position: 'relative', top: 200, width: 350, height: 376, backgroundColor: '#E4EBF0', borderRadius: 16, padding: 6, alignItems: 'center' },
   row: { flexDirection: 'row' },
-  cell: { width: 31, height: 31, borderWidth: 1, borderColor: '#CCDAE466', backgroundColor: '#FFFFFF', margin: 1.5, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
+  cell: { width: 27, height: 30, borderWidth: 1, borderColor: '#CCDAE466', backgroundColor: '#FFFFFF', margin: 1.5, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
   letterText: { fontFamily: 'Geist-Bold', color: '#000', fontSize: 14 },
   innerShadow: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 6 },
   bulldogImage: { width: 20, height: 20, position: 'absolute', top: 4, left: 4 },
-  colorBlocksContainer: { position: 'absolute', top: 665, width: 320, height: 70, backgroundColor: '#E4EBF0', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  colorBlocksContainer: { position: 'absolute', top: 630, width: 320, height: 70, backgroundColor: '#E4EBF0', borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
   colorBlocksRow: { flexDirection: 'row', justifyContent: 'space-between', width: 300 },
   colorBlock: { width: 50, height: 50, borderRadius: 8, marginHorizontal: 4 },
   gradientColorBlock: { flex: 1, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   blockText: { color: '#fff', fontSize: 20, fontWeight: '500' },
-  controlsRow: { position: 'absolute', bottom: 50, width: 240, flexDirection: 'row', justifyContent: 'space-around' },
+  controlsRow: { position: 'absolute', top: 720, width: 240, flexDirection: 'row', justifyContent: 'space-around' },
   gradientButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 
   // ⚙️ Settings Styles
@@ -526,13 +526,13 @@ const styles = StyleSheet.create({
   settingsCard: { width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, height: '53.65%' },
   headerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   headerSpacer: {
-  flex: 1,
-},
+    flex: 1,
+  },
 
-closeButton: {
-  flex: 1,
-  alignItems: 'flex-end',
-},
+  closeButton: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
 
   settingsTitle: { fontSize: 24, fontWeight: '900', fontFamily: 'Geist-Regular', color: '#000', marginTop: -10 },
   closeIcon: { fontSize: 32, color: '#007AFF', marginTop: -10 },
@@ -540,53 +540,53 @@ closeButton: {
   profileImage: { width: 70, height: 70, borderRadius: 35, marginBottom: 10, marginRight: 12 },
   profileName: { fontWeight: '500', fontSize: 18, color: '#000', fontFamily: 'Geist-Bold', marginBottom: 4 },
   profileLink: { color: '#007AFF', fontSize: 14, fontWeight: '400' },
-  profileTextContainer: { flexDirection: 'column', justifyContent: 'center'},
+  profileTextContainer: { flexDirection: 'column', justifyContent: 'center' },
   optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   optionLabel: { fontSize: 16, color: '#000', fontWeight: '500' },
   linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   linkText: { color: '#000', fontSize: 16, fontWeight: '500' },
- pauseOverlay: {
-  flex: 1,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
+  pauseOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-pauseCard: {
-  width: '70%',                // reduce length
-  maxWidth: 320,               // optional, for desktop/web scaling
-  backgroundColor: '#FFFFFF',
-  borderRadius: 20,
-  paddingVertical: 30,
-  paddingHorizontal: 20,
-  alignItems: 'center',
-  shadowColor: '#000',
-  shadowOpacity: 0.3,
-  shadowRadius: 8,
-  elevation: 5,                // Android shadow
-},
+  pauseCard: {
+    width: '70%',                // reduce length
+    maxWidth: 320,               // optional, for desktop/web scaling
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,                // Android shadow
+  },
 
-pauseTitle: {
-  fontSize: 22,
-  fontWeight: '500',
-  color: '#000000ff',
-  fontFamily: 'Geist-Bold',
-  textAlign: 'center',
-  marginBottom: 20,
-},
+  pauseTitle: {
+    fontSize: 22,
+    fontWeight: '500',
+    color: '#000000ff',
+    fontFamily: 'Geist-Bold',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
 
-resumeButton: {
-  backgroundColor: '#0060FF',
-  borderRadius: 8,
-  paddingVertical: 12,
-  paddingHorizontal: 24,
-  alignItems: 'center',
-},
+  resumeButton: {
+    backgroundColor: '#0060FF',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
 
-resumeButtonText: {
-  color: '#fff',
-  fontSize: 16,
-  fontWeight: '500',
-  fontFamily: 'Geist-Regular',
-},
+  resumeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'Geist-Regular',
+  },
 
 });

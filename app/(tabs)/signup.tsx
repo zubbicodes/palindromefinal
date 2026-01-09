@@ -28,7 +28,7 @@ export default function SignupScreen() {
       colors={
         theme === 'dark'
           ? ['#000017', '#000074'] // 🌙 Dark theme gradient
-          : ['#E6F0FF', '#FFFFFF'] // ☀️ Light theme gradient
+          : ['#FFFFFF', '#FFFFFF'] // ☀️ Light theme gradient
       }
       style={{ flex: 1 }}
     >
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
 
   // --- Footer ---
   footer: {
-    marginTop: 320,
+    marginTop: 280,
     alignItems: 'center',
   },
   footerText: {

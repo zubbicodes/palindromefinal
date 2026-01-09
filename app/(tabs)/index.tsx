@@ -4,14 +4,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Image,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import LoginWeb from './index.web';
 
@@ -63,10 +62,12 @@ export default function LoginScreen() {
               <Text
                 style={[
                   styles.floatingLabel,
-                  { backgroundColor: isDark
+                  {
+                    backgroundColor: isDark
                       ? 'rgba(255,255,255,0.08)'
                       : 'rgba(255,255,255,0.6)',
-                    color: isDark ? '#FFF' : '#000',},
+                    color: isDark ? '#FFF' : '#000',
+                  },
                 ]}
               >
                 Email address
@@ -95,10 +96,12 @@ export default function LoginScreen() {
               <Text
                 style={[
                   styles.floatingLabel,
-                  { backgroundColor: isDark
+                  {
+                    backgroundColor: isDark
                       ? 'rgba(255,255,255,0.08)'
                       : 'rgba(255,255,255,0.6)',
-                    color: isDark ? '#FFF' : '#000', },
+                    color: isDark ? '#FFF' : '#000',
+                  },
                 ]}
               >
                 Password
@@ -158,84 +161,6 @@ export default function LoginScreen() {
             onPress={() => router.push('/gamelayout')}
           >
             <Text style={styles.loginButtonText}>Log In</Text>
-          </TouchableOpacity>
-
-          {/* Divider */}
-          <View style={styles.dividerWrapper}>
-            <View
-              style={[
-                styles.line,
-                { backgroundColor: isDark ? '#444' : '#E0E0E0' },
-              ]}
-            />
-            <Text
-              style={[
-                styles.orText,
-                { color: isDark ? '#FFF' : '#007BFF' },
-              ]}
-            >
-              or
-            </Text>
-            <View
-              style={[
-                styles.line,
-                { backgroundColor: isDark ? '#444' : '#E0E0E0' },
-              ]}
-            />
-          </View>
-
-          {/* Google Login */}
-          <TouchableOpacity
-            style={[
-              styles.socialButton,
-              {
-                borderColor: isDark ? '#2A2D50' : '#EFE8E8',
-                backgroundColor: isDark
-                  ? 'rgba(255,255,255,0.08)'
-                  : 'rgba(255,255,255,0.6)',
-              },
-            ]}
-          >
-            <Image
-              source={require('../../assets/images/google.png')}
-              style={styles.socialIcon}
-              resizeMode="contain"
-            />
-            <Text
-              style={[
-                styles.socialText,
-                { color: isDark ? '#FFF' : '#000' },
-              ]}
-            >
-              Sign in with Google
-            </Text>
-          </TouchableOpacity>
-
-          {/* Apple Login */}
-          <TouchableOpacity
-            style={[
-              styles.socialButton,
-              {
-                borderColor: isDark ? '#2A2D50' : '#EFE8E8',
-                backgroundColor: isDark
-                  ? 'rgba(255,255,255,0.08)'
-                  : 'rgba(255,255,255,0.6)',
-              },
-            ]}
-          >
-            <Image
-              source={require('../../assets/images/apple.png')}
-              style={styles.socialIcon}
-              resizeMode="contain"
-            />
-            <Text
-              style={[
-                styles.socialText,
-                { color: isDark ? '#FFF' : '#000' },
-              ]}
-            >
-              Sign in with Apple
-            </Text>
           </TouchableOpacity>
 
           {/* Footer */}
@@ -341,40 +266,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist-Bold',
     fontSize: 16,
   },
-  dividerWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-  },
-  line: {
-    width: 100,
-    height: 1,
-  },
-  orText: {
-    marginHorizontal: 10,
-    fontFamily: 'Geist-Bold',
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 80,
-    paddingVertical: 12,
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  socialIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 10,
-  },
-  socialText: {
-    fontFamily: 'Geist-Regular',
-    fontSize: 16,
-  },
   footer: {
-    marginTop: 170,
+    marginTop: 340,
     alignItems: 'center',
   },
   footerText: {
