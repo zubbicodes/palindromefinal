@@ -1,8 +1,9 @@
 import { useThemeContext } from '@/context/ThemeContext';
-import firebaseService from '@/firebaseService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   Image,
@@ -14,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import firebaseService from '../../firebaseService';
 import ProfileWeb from './profile.web';
 
 const { width } = Dimensions.get('window');
@@ -21,6 +23,62 @@ const { width } = Dimensions.get('window');
 export default function ProfileScreen() {
   const { theme } = useThemeContext();
   const isDark = theme === 'dark';
+
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const loadAvatar = async () => {
+      const user = firebaseService.getCurrentUser();
+      if (user) {
+        try {
+          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.uid}`);
+          if (storedAvatar) {
+            setAvatar(storedAvatar);
+          }
+        } catch (error) {
+          console.error('Error loading avatar:', error);
+        }
+      }
+    };
+    loadAvatar();
+  }, []);
+
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0].base64) {
+        const base64Img = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        saveAvatarLocally(base64Img);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      alert('Failed to pick image');
+    }
+  };
+
+  const saveAvatarLocally = async (base64Image: string) => {
+    const user = firebaseService.getCurrentUser();
+    if (!user) return;
+
+    setUploading(true);
+    try {
+      await AsyncStorage.setItem(`user_avatar_${user.uid}`, base64Image);
+      setAvatar(base64Image);
+    } catch (error) {
+      console.error('Error saving image locally:', error);
+      alert('Failed to save image.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (Platform.OS === 'web') {
     return <ProfileWeb />;
@@ -60,10 +118,17 @@ export default function ProfileScreen() {
         </View>
 
         {/* Profile Image */}
-        <Image
-          source={require('../../assets/images/profile.jpg')}
-          style={styles.profileImage}
-        />
+        <TouchableOpacity onPress={pickImage} disabled={uploading}>
+          <Image
+            source={avatar ? { uri: avatar } : require('../../assets/images/profile.jpg')}
+            style={styles.profileImage}
+          />
+          {uploading && (
+            <View style={[styles.profileImage, styles.uploadingOverlay]}>
+              <Text style={{ color: '#FFF' }}>...</Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
         {/* Form */}
         <View style={styles.form}>
@@ -242,6 +307,14 @@ const styles = StyleSheet.create({
     borderRadius: 47,
     marginTop: -70,
     marginBottom: 20,
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   form: {
     width: '85%',

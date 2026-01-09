@@ -292,7 +292,10 @@ export default function GameLayoutWeb() {
       })
       return next
     })
+  }, [])
 
+  // Fetch/Refresh user profile
+  useEffect(() => {
     const loadUserData = async () => {
       const user = firebaseService.getCurrentUser()
 
@@ -318,8 +321,11 @@ export default function GameLayoutWeb() {
       }
     }
 
+    if (settingsVisible) {
+      loadUserData()
+    }
+    // Also fetch on mount
     loadUserData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsVisible])
 
   useEffect(() => {

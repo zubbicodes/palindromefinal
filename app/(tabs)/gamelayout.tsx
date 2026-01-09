@@ -21,6 +21,7 @@ import GameLayoutWeb from './gamelayout.web';
 // ✅ Import theme context
 import { useThemeContext } from '@/context/ThemeContext';
 import firebaseService from '@/firebaseService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function GameLayout() {
   if (Platform.OS === 'web') {
@@ -43,6 +44,7 @@ export default function GameLayout() {
   // ✅ Local state sync with context
   const [darkModeEnabled, setDarkModeEnabled] = useState(theme === 'dark');
   const [userName, setUserName] = useState('User');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const handlePlay = () => setScore(prev => prev + 1);
 
@@ -73,17 +75,36 @@ export default function GameLayout() {
 
   useEffect(() => {
     spawnBulldogs();
-
-    // Fetch user profile
-    const user = firebaseService.getCurrentUser();
-    if (user) {
-      if (user.displayName) {
-        setUserName(user.displayName);
-      } else if (user.email) {
-        setUserName(user.email.split('@')[0]);
-      }
-    }
   }, []);
+
+  // Fetch/Refresh user profile
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const user = firebaseService.getCurrentUser();
+      if (user) {
+        if (user.displayName) {
+          setUserName(user.displayName);
+        } else if (user.email) {
+          setUserName(user.email.split('@')[0]);
+        }
+
+        try {
+          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.uid}`);
+          if (storedAvatar) {
+            setProfileImage(storedAvatar);
+          }
+        } catch (error) {
+          console.error('Error loading avatar in GameLayout:', error);
+        }
+      }
+    };
+
+    if (settingsVisible) {
+      fetchUserData();
+    }
+    // Also fetch on mount
+    fetchUserData();
+  }, [settingsVisible]);
 
   const gridSize = 11;
   const center = Math.floor(gridSize / 2);
@@ -347,7 +368,7 @@ export default function GameLayout() {
                 {/* Profile */}
                 <View style={styles.profileSection}>
                   <Image
-                    source={require('../../assets/images/profile.jpg')}
+                    source={profileImage ? { uri: profileImage } : require('../../assets/images/profile.jpg')}
                     style={styles.profileImage}
                   />
                   <View style={styles.profileTextContainer}>
