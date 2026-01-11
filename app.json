@@ -20,8 +20,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.gammagames.palindrome",
-      "googleServicesFile": "./google-services.json"
+      "package": "com.gammagames.palindrome"
     },
     "web": {
       "output": "static",

@@ -1,9 +1,9 @@
+import { authService } from '@/authService'; // Adjust path as needed
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router'; // Added for navigation
 import React, { useEffect, useState } from 'react';
-import { firebaseService } from '../../firebaseService'; // Adjust path as needed
 
 export default function SignUpWeb() {
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -58,14 +58,14 @@ const handleSignUp = async () => {
   try {
     // Race between signup and timeout
     const result = await Promise.race([
-      firebaseService.signUp(email, password, name),
+      authService.signUp(email, password, name),
       timeoutPromise
     ]) as any; // Type assertion since we know it's AuthResult
 
     console.log('📦 signUp result:', result);
     
     if (result.success && result.user) {
-      console.log('✅ Firebase signup successful!');
+      console.log('✅ Supabase signup successful!');
       
       // Show success and navigate
       alert('Account created successfully! Please check your email for verification.');
@@ -94,6 +94,21 @@ const handleSignUp = async () => {
     setLoading(false);
   }
 };
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const result = await authService.signInWithGoogle();
+      if (!result.success) {
+        setError(result.error || 'Google sign-in failed');
+        setLoading(false);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Google sign-in failed');
+      setLoading(false);
+    }
+  };
 
   const placeholderStyles = `
     input::placeholder {
@@ -484,6 +499,45 @@ const handleSignUp = async () => {
                 }}
               >
                 {loading ? 'Creating Account...' : 'Sign Up'}
+              </button>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '18px 0',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ width: '70px', height: '1px', background: colors.border }} />
+                <span style={{ color: colors.primary, fontWeight: 600, fontSize: '14px' }}>or</span>
+                <div style={{ width: '70px', height: '1px', background: colors.border }} />
+              </div>
+
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '50px',
+                  backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+                  color: colors.text,
+                  border: `1px solid ${colors.border}`,
+                  fontWeight: 600,
+                  fontSize: '15px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                }}
+              >
+                <img src="/images/google.png" alt="Google" style={{ width: 18, height: 18 }} />
+                Continue with Google
               </button>
             </div>
           </div>

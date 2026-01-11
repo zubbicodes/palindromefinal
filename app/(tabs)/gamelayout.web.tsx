@@ -16,9 +16,9 @@ import {
 // However, sticking to RN-SVG is usually fine on web if setup correctly. The user snippet used Svg, let's stick to it or standard svg if safer.
 // User snippet had Svg imports, let's keep them if they work, but standard SVG is safer for "pure web".
 // Actually user snippet imports Svg from react-native-svg. I will try to use it, or fallback to standard svg if I can match styles.
+import { authService } from "@/authService"
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from "react-native-svg"
 import { Switch } from "react-native-switch"
-import { firebaseService } from "../../firebaseService"
 
 const { width } = Dimensions.get("window")
 
@@ -297,21 +297,16 @@ export default function GameLayoutWeb() {
   // Fetch/Refresh user profile
   useEffect(() => {
     const loadUserData = async () => {
-      const user = firebaseService.getCurrentUser()
+      const user = await authService.getCurrentUser()
 
       if (user) {
-        if (user.displayName) {
-          setUserName(user.displayName)
-        } else if (user.email) {
-          setUserName(user.email.split("@")[0])
-        }
+        if (user.displayName) setUserName(user.displayName)
+        else if (user.email) setUserName(user.email.split("@")[0])
 
         try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.uid}`)
+          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`)
           if (storedAvatar) {
             setAvatar(storedAvatar)
-          } else if (user.photoURL) {
-            setAvatar(user.photoURL)
           }
         } catch (error) {
           console.error("Error loading avatar", error)

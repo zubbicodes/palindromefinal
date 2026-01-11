@@ -21,8 +21,8 @@ import { Switch } from 'react-native-switch';
 import GameLayoutWeb from './gamelayout.web';
 
 // ✅ Import theme context
+import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
-import { firebaseService } from '@/firebaseService';
 import { useSound } from '@/hooks/use-sound';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -335,16 +335,13 @@ function GameLayoutNative() {
   // Fetch/Refresh user profile
   useEffect(() => {
     const fetchUserData = async () => {
-      const user = firebaseService.getCurrentUser();
+      const user = await authService.getCurrentUser();
       if (user) {
-        if (user.displayName) {
-          setUserName(user.displayName);
-        } else if (user.email) {
-          setUserName(user.email.split('@')[0]);
-        }
+        if (user.displayName) setUserName(user.displayName);
+        else if (user.email) setUserName(user.email.split('@')[0]);
 
         try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.uid}`);
+          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`);
           if (storedAvatar) {
             setProfileImage(storedAvatar);
           }

@@ -1,25 +1,34 @@
 // hooks/useAuth.ts
-import { User } from 'firebase/auth';
 import { useEffect, useState } from 'react';
-import firebaseService from '../firebaseService';
+import { authService, type AuthUser } from '@/authService';
+import { getSupabaseClient } from '@/supabase';
 
 export const useAuth = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check initial auth state
-    const currentUser = firebaseService.auth.currentUser;
-    setUser(currentUser);
-    setLoading(false);
+    let isMounted = true;
+    const supabase = getSupabaseClient();
 
-    // Listen for auth state changes
-    const unsubscribe = firebaseService.auth.onAuthStateChanged((authUser) => {
-      setUser(authUser);
+    void (async () => {
+      const current = await authService.getCurrentUser();
+      if (!isMounted) return;
+      setUser(current);
+      setLoading(false);
+    })();
+
+    const { data } = supabase.auth.onAuthStateChange(async () => {
+      const current = await authService.getCurrentUser();
+      if (!isMounted) return;
+      setUser(current);
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      isMounted = false;
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   return { user, loading };

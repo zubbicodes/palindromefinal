@@ -10,7 +10,15 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Configure environment
+
+   Copy `.env.example` to `.env` and set:
+
+   - `EXPO_PUBLIC_SUPABASE_URL`
+   - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+   - (fallback supported) `EXPO_PUBLIC_SUPABASE_KEY`
+
+3. Start the app
 
    ```bash
    npx expo start

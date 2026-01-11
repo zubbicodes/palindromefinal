@@ -1,3 +1,4 @@
+import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,6 +7,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,7 +16,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { firebaseService } from '../../firebaseService';
 import { getFriendlyErrorMessage } from '../../utils/authErrors';
 import SignUpWeb from './signup.web';
 
@@ -43,7 +44,7 @@ function SignupNativeScreen() {
 
     setLoading(true);
     try {
-      const result = await firebaseService.signUp(email, password, fullName);
+      const result = await authService.signUp(email, password, fullName);
       if (result.success) {
         Alert.alert(
           'Account Created',
@@ -57,6 +58,22 @@ function SignupNativeScreen() {
     } catch (error: any) {
       const message = getFriendlyErrorMessage(error.code || error.message);
       Alert.alert('Error', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      const result = await authService.signInWithGoogle();
+      if (result.success) {
+        router.replace('/gamelayout');
+      } else {
+        Alert.alert('Signup Failed', result.error || 'Google sign-in failed');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Google sign-in failed');
     } finally {
       setLoading(false);
     }
@@ -292,6 +309,30 @@ function SignupNativeScreen() {
             )}
           </TouchableOpacity>
 
+          <View style={styles.dividerRow}>
+            <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' }]} />
+            <Text style={[styles.dividerText, { color: isDark ? '#AAB3FF' : '#007BFF' }]}>or</Text>
+            <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' }]} />
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.googleButton,
+              {
+                borderColor: isDark ? 'rgba(255,255,255,0.25)' : '#E5E7EB',
+                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+              },
+              loading && { opacity: 0.7 },
+            ]}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+          >
+            <Image source={require('../../assets/images/google.png')} style={styles.googleIcon} />
+            <Text style={[styles.googleText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
+              Continue with Google
+            </Text>
+          </TouchableOpacity>
+
           {/* Footer */}
           <View style={styles.footer}>
             <Text
@@ -423,10 +464,43 @@ const styles = StyleSheet.create({
     fontFamily: 'Geist-Bold',
     fontSize: 16,
   },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 18,
+  },
+  dividerLine: {
+    height: 1,
+    width: 70,
+  },
+  dividerText: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 14,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 80,
+    paddingVertical: 12,
+    marginBottom: 18,
+  },
+  googleIcon: {
+    width: 18,
+    height: 18,
+  },
+  googleText: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 15,
+  },
 
   // --- Footer ---
   footer: {
-    marginTop: 280,
+    marginTop: 200,
     alignItems: 'center',
   },
   footerText: {

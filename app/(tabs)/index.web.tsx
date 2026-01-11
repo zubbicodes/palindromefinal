@@ -1,8 +1,8 @@
+import { authService } from '@/authService';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { firebaseService } from '../../firebaseService';
 import { getFriendlyErrorMessage } from '../../utils/authErrors';
 
 export default function LoginWeb() {
@@ -47,7 +47,7 @@ export default function LoginWeb() {
     setLoading(true);
 
     try {
-      const result = await firebaseService.signIn(email, password);
+      const result = await authService.signIn(email, password);
 
       if (result.success && result.user) {
         // Login successful - navigate to game layout
@@ -78,7 +78,7 @@ export default function LoginWeb() {
     setError('');
 
     try {
-      const result = await firebaseService.resetPassword(email);
+      const result = await authService.resetPassword(email);
 
       if (result.success) {
         alert('Password reset email sent! Check your inbox.');
@@ -90,6 +90,21 @@ export default function LoginWeb() {
       console.error('Reset password error:', err);
       setError(err.message || 'Failed to send reset email');
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const result = await authService.signInWithGoogle();
+      if (!result.success) {
+        setError(result.error || 'Google sign-in failed');
+        setLoading(false);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Google sign-in failed');
       setLoading(false);
     }
   };
@@ -394,6 +409,31 @@ export default function LoginWeb() {
               <span style={{ color: colors.primary, fontWeight: 600, fontSize: '14px' }}>or</span>
               <div style={{ width: '70px', height: '1px', background: colors.border }} />
             </div>
+
+            <button
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '50px',
+                backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+                color: colors.text,
+                border: `1px solid ${colors.border}`,
+                fontWeight: 600,
+                fontSize: '15px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                marginBottom: '20px',
+              }}
+            >
+              <img src="/images/google.png" alt="Google" style={{ width: 18, height: 18 }} />
+              Continue with Google
+            </button>
 
             {/* Footer */}
             <div style={{ textAlign: 'center', fontSize: '14px', color: colors.text }}>
