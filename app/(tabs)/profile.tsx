@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import firebaseService from '../../firebaseService';
+import { firebaseService } from '../../firebaseService';
 import ProfileWeb from './profile.web';
 
 const { width } = Dimensions.get('window');

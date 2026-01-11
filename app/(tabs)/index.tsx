@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import firebaseService from '../../firebaseService';
+import { firebaseService } from '../../firebaseService';
 import { getFriendlyErrorMessage } from '../../utils/authErrors';
 import LoginWeb from './index.web';
 

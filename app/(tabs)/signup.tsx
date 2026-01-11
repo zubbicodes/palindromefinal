@@ -14,18 +14,14 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import firebaseService from '../../firebaseService';
+import { firebaseService } from '../../firebaseService';
 import { getFriendlyErrorMessage } from '../../utils/authErrors';
 import SignUpWeb from './signup.web';
 
-export default function SignupScreen() {
+function SignupNativeScreen() {
   const router = useRouter();
   const { theme } = useThemeContext();
   const isDark = theme === 'dark';
-
-  if (Platform.OS === 'web') {
-    return <SignUpWeb />;
-  }
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -264,7 +260,7 @@ export default function SignupScreen() {
                 { color: isDark ? '#DDD' : '#333' },
               ]}
             >
-              I've read and agree to the{' '}
+              {"I've read and agree to the "}
               <Text
                 style={[styles.linkText, { textDecorationLine: 'underline' }]}
               >
@@ -320,6 +316,11 @@ export default function SignupScreen() {
       </ScrollView>
     </LinearGradient>
   );
+}
+
+export default function SignupScreen() {
+  if (Platform.OS === 'web') return <SignUpWeb />;
+  return <SignupNativeScreen />;
 }
 
 const styles = StyleSheet.create({

@@ -38,7 +38,14 @@ export default function SplashScreen({ onReady }) {
           onLoad={() => handleImageLoad('logo')}
         />
 
-        <Text style={styles.title}>PALINDROME</Text>
+        <Text
+          style={styles.title}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          PALINDROME®
+        </Text>
         <Text style={styles.subtitle}>BY GAMMA GAMES</Text>
       </View>
     </View>
@@ -79,6 +86,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 4,
     marginBottom: verticalScale(8),
+    width: width * 0.95,
     fontFamily: Platform.select({
       ios: 'Geist-Bold',
       android: 'Geist-Bold',

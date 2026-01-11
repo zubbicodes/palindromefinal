@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router'; // Added for navigation
 import React, { useEffect, useState } from 'react';
-import firebaseService from '../../firebaseService'; // Adjust path as needed
+import { firebaseService } from '../../firebaseService'; // Adjust path as needed
 
 export default function SignUpWeb() {
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -168,7 +168,7 @@ const handleSignUp = async () => {
             letterSpacing: '0.5px',
           }}
         >
-          PALINDROME
+          PALINDROME®
         </span>
       </LinearGradient>
 

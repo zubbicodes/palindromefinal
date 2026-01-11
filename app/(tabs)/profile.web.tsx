@@ -5,16 +5,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
 import {
-  Dimensions,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import firebaseService from '../../firebaseService';
+import { firebaseService } from '../../firebaseService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -107,7 +107,7 @@ export default function ProfileScreenWeb() {
         {/* App Name */}
         <View style={[styles.topHeader, { borderBottomColor: colors.border }]}>
           <Text style={[styles.appName, { color: colors.primary }]}>
-            PALINDROME
+            PALINDROME®
           </Text>
         </View>
 

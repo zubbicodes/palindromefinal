@@ -2,7 +2,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import firebaseService from '../../firebaseService';
+import { firebaseService } from '../../firebaseService';
 import { getFriendlyErrorMessage } from '../../utils/authErrors';
 
 export default function LoginWeb() {
@@ -135,7 +135,7 @@ export default function LoginWeb() {
             backdropFilter: 'blur(10px)',
           }}
         >
-          PALINDROME
+          PALINDROME®
         </div>
 
         {/* Error Message (Only shown if there's an error) */}
