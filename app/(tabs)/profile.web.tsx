@@ -1,18 +1,19 @@
 import { authService } from '@/authService';
 import { useTheme } from '@/context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
 import {
-    Dimensions,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -38,15 +39,27 @@ export default function ProfileScreenWeb() {
 
   React.useEffect(() => {
     const loadProfile = async () => {
-      const user = await authService.getCurrentUser();
+      // Use getSessionUser for faster initial load (avoids network roundtrip)
+      const user = await authService.getSessionUser();
       if (user) {
         setEmail(user.email || '');
+        
+        // Try to load from cache first
+        const cached = await authService.getCachedProfile(user.id);
+        if (cached) {
+          setFullName(cached.full_name || '');
+          setPhone(cached.phone || '');
+          if (cached.email) setEmail(cached.email);
+          setAvatar(cached.avatar_url);
+        }
+
+        // Fetch fresh profile data
         const profile = await authService.getProfile(user.id);
         if (profile) {
           setFullName(profile.full_name || '');
           setPhone(profile.phone || '');
           if (profile.email) setEmail(profile.email);
-          if (profile.avatar_url) setAvatar(profile.avatar_url);
+          setAvatar(profile.avatar_url);
         }
       }
     };
@@ -140,6 +153,21 @@ export default function ProfileScreenWeb() {
         end={{ x: 1, y: 1 }}
         style={styles.container}
       >
+        {/* Back Button */}
+        <TouchableOpacity 
+          style={styles.webBackButton} 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/gamelayout');
+            }
+          }}
+        >
+           <Ionicons name="arrow-back" size={24} color={colors.primary} />
+           <Text style={[styles.backButtonText, { color: colors.primary }]}>Back</Text>
+        </TouchableOpacity>
+
         {/* App Name */}
         <View style={[styles.topHeader, { borderBottomColor: colors.border }]}>
           <Text style={[styles.appName, { color: colors.primary }]}>
@@ -315,6 +343,22 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     paddingVertical: 40,
     paddingHorizontal: 20,
+    position: 'relative', // Ensure absolute children are relative to this
+  },
+  webBackButton: {
+    position: 'absolute',
+    top: 40,
+    left: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 10,
+    cursor: 'pointer',
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Geist-Bold',
   },
   topHeader: {
     paddingVertical: -1,
