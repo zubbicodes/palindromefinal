@@ -98,7 +98,11 @@ class AuthService {
       const supabase = getSupabaseClient();
 
       if (Platform.OS === 'web') {
-        const redirectTo = `${window.location.origin}/auth/callback`;
+        const origin = typeof window !== 'undefined' && window.location.origin 
+          ? window.location.origin 
+          : 'https://palindrome.web-testlink.com';
+        
+        const redirectTo = `${origin}/auth/callback`;
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: { redirectTo },
@@ -109,7 +113,10 @@ class AuthService {
         return { success: true };
       }
 
+      // For native mobile apps
       const redirectTo = Linking.createURL('auth/callback');
+      // console.log('Native redirect URL:', redirectTo); // Debugging
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo, skipBrowserRedirect: true },
