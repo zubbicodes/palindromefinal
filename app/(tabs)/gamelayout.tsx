@@ -334,27 +334,25 @@ function GameLayoutNative() {
 
   // Fetch/Refresh user profile
   useEffect(() => {
-    const fetchUserData = async () => {
-      const user = await authService.getCurrentUser();
-      if (user) {
-        if (user.displayName) setUserName(user.displayName);
-        else if (user.email) setUserName(user.email.split('@')[0]);
-
-        try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`);
-          if (storedAvatar) {
-            setProfileImage(storedAvatar);
+    const fetchProfile = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        if (user) {
+          const profile = await authService.getProfile(user.id);
+          if (profile) {
+            setUserName(profile.full_name || user.email?.split('@')[0] || 'User');
+            setProfileImage(profile.avatar_url);
           }
-        } catch (error) {
-          console.error('Error loading avatar in GameLayout:', error);
         }
+      } catch (error) {
+        console.error('Error fetching profile in game settings:', error);
       }
     };
 
     if (settingsVisible) {
-      fetchUserData();
+      fetchProfile();
     }
-    fetchUserData();
+    fetchProfile();
   }, [settingsVisible]);
 
   const checkAndProcessPalindromes = (row: number, col: number, colorIdx: number, currentGrid: (number | null)[][], dryRun = false, minLength = 3) => {

@@ -74,6 +74,9 @@ export default function RootLayout() {
   if (showSplash) {
     return (
       <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
+        {Platform.OS === 'web'
+          ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
+          : null}
         <SplashScreen onReady={undefined} />
       </Animated.View>
     );

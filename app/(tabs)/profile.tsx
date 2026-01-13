@@ -1,6 +1,5 @@
 import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -26,22 +25,30 @@ export default function ProfileScreen() {
 
   const [avatar, setAvatar] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
 
   useEffect(() => {
-    const loadAvatar = async () => {
+    const loadProfile = async () => {
       const user = await authService.getCurrentUser();
       if (user) {
-        try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`);
-          if (storedAvatar) {
-            setAvatar(storedAvatar);
-          }
-        } catch (error) {
-          console.error('Error loading avatar:', error);
+        // Set email from auth user as fallback
+        setEmail(user.email || '');
+        
+        // Fetch profile data
+        const profile = await authService.getProfile(user.id);
+        if (profile) {
+          setFullName(profile.full_name || '');
+          setPhone(profile.phone || '');
+          if (profile.email) setEmail(profile.email);
+          if (profile.avatar_url) setAvatar(profile.avatar_url);
         }
       }
     };
-    loadAvatar();
+    loadProfile();
   }, []);
 
   const pickImage = async () => {
@@ -51,12 +58,11 @@ export default function ProfileScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
-        base64: true,
+        base64: false, // We use URI for upload
       });
 
-      if (!result.canceled && result.assets[0].base64) {
-        const base64Img = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        saveAvatarLocally(base64Img);
+      if (!result.canceled && result.assets[0].uri) {
+        await uploadAvatar(result.assets[0].uri);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -64,19 +70,52 @@ export default function ProfileScreen() {
     }
   };
 
-  const saveAvatarLocally = async (base64Image: string) => {
+  const uploadAvatar = async (uri: string) => {
     const user = await authService.getCurrentUser();
     if (!user) return;
 
     setUploading(true);
     try {
-      await AsyncStorage.setItem(`user_avatar_${user.id}`, base64Image);
-      setAvatar(base64Image);
+      const result = await authService.uploadAvatar(user.id, { uri, type: 'image/jpeg' });
+      if (result.success && result.publicUrl) {
+        setAvatar(result.publicUrl);
+        // Update profile with new avatar URL
+        await authService.updateProfile(user.id, { avatar_url: result.publicUrl });
+      } else {
+        alert(result.error || 'Failed to upload image');
+      }
     } catch (error) {
-      console.error('Error saving image locally:', error);
-      alert('Failed to save image.');
+      console.error('Error uploading image:', error);
+      alert('Failed to upload image.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const user = await authService.getCurrentUser();
+    if (!user) return;
+
+    setLoading(true);
+    try {
+      const updates = {
+        full_name: fullName,
+        email: email,
+        phone: phone,
+        updated_at: new Date(),
+      };
+
+      const result = await authService.updateProfile(user.id, updates);
+      if (result.success) {
+        alert('Profile updated successfully!');
+      } else {
+        alert(result.error || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('Failed to update profile');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -157,6 +196,8 @@ export default function ProfileScreen() {
                 ]}
                 placeholder="e.g. Jenny Wilson"
                 placeholderTextColor={isDark ? '#CCC' : '#777'}
+                value={fullName}
+                onChangeText={setFullName}
               />
             </View>
           </View>
@@ -186,6 +227,10 @@ export default function ProfileScreen() {
                 ]}
                 placeholder="e.g. wilson09@gmail.com"
                 placeholderTextColor={isDark ? '#CCC' : '#777'}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
             </View>
           </View>
@@ -215,6 +260,9 @@ export default function ProfileScreen() {
                 ]}
                 placeholder="e.g. 0 123 456 7890"
                 placeholderTextColor={isDark ? '#CCC' : '#777'}
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
               />
             </View>
           </View>
@@ -238,8 +286,10 @@ export default function ProfileScreen() {
                 styles.saveButton,
                 { backgroundColor: 'rgba(0, 123, 255, 0.85)' }, // ✅ single color with opacity
               ]}
+              onPress={handleSave}
+              disabled={loading}
             >
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Text style={styles.saveButtonText}>{loading ? 'Saving...' : 'Save'}</Text>
             </TouchableOpacity>
           </View>
         </View>
