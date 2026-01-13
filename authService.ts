@@ -1,8 +1,8 @@
 import { getSupabaseClient } from '@/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
-
 export interface AuthUser {
   id: string;
   email: string | null;
@@ -195,6 +195,36 @@ class AuthService {
     }
   }
 
+  // Faster method that uses local session without server verification
+  async getSessionUser(): Promise<AuthUser | null> {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.auth.getSession();
+      if (error || !data.session?.user) return null;
+      return toAuthUser(data.session.user);
+    } catch {
+      return null;
+    }
+  }
+
+  async getCachedProfile(userId: string) {
+    try {
+      const json = await AsyncStorage.getItem(`profile_cache_${userId}`);
+      return json ? JSON.parse(json) : null;
+    } catch (e) {
+      console.error('Error reading profile cache:', e);
+      return null;
+    }
+  }
+
+  async saveProfileToCache(userId: string, profile: any) {
+    try {
+      await AsyncStorage.setItem(`profile_cache_${userId}`, JSON.stringify(profile));
+    } catch (e) {
+      console.error('Error saving profile cache:', e);
+    }
+  }
+
   async getProfile(userId: string) {
     try {
       const supabase = getSupabaseClient();
@@ -208,6 +238,12 @@ class AuthService {
         console.error('Error fetching profile:', error);
         return null;
       }
+      
+      // Update cache
+      if (data) {
+        this.saveProfileToCache(userId, data);
+      }
+      
       return data;
     } catch (e) {
       console.error('Error in getProfile:', e);
@@ -226,6 +262,18 @@ class AuthService {
       if (error) {
         throw error;
       }
+      
+      // Update cache optimistically or re-fetch
+      // For simplicity and correctness, let's patch the existing cache
+      const cached = await this.getCachedProfile(userId);
+      if (cached) {
+        const newProfile = { ...cached, ...updates };
+        await this.saveProfileToCache(userId, newProfile);
+      } else {
+        // If no cache, try to fetch fresh
+        await this.getProfile(userId);
+      }
+
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to update profile' };

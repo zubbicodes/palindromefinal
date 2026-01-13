@@ -214,8 +214,16 @@ export default function GameLayoutWeb() {
     // Fetch user profile data from Supabase
     const fetchProfile = async () => {
       try {
-        const user = await authService.getCurrentUser();
+        const user = await authService.getSessionUser();
         if (user) {
+          // Try to load from cache first
+          const cached = await authService.getCachedProfile(user.id);
+          if (cached) {
+            setUserName(cached.full_name || user.email?.split('@')[0] || 'User');
+            setAvatar(cached.avatar_url);
+          }
+
+          // Fetch fresh profile data
           const profile = await authService.getProfile(user.id);
           if (profile) {
             setUserName(profile.full_name || user.email?.split('@')[0] || 'User');
@@ -230,6 +238,8 @@ export default function GameLayoutWeb() {
     if (settingsVisible) {
       fetchProfile();
     }
+    // Initial fetch on mount as well
+    fetchProfile();
   }, [settingsVisible]);
 
   // Drag State

@@ -4,16 +4,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  GestureResponderEvent,
-  Image,
-  PanResponder,
-  PanResponderGestureState,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View
+    Animated,
+    GestureResponderEvent,
+    Image,
+    PanResponder,
+    PanResponderGestureState,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
@@ -24,7 +24,6 @@ import GameLayoutWeb from './gamelayout.web';
 import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
 import { useSound } from '@/hooks/use-sound';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const COLOR_GRADIENTS = [
   ['#C40111', '#F01D2E'],
@@ -336,8 +335,16 @@ function GameLayoutNative() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const user = await authService.getCurrentUser();
+        const user = await authService.getSessionUser();
         if (user) {
+          // Try to load from cache first
+          const cached = await authService.getCachedProfile(user.id);
+          if (cached) {
+            setUserName(cached.full_name || user.email?.split('@')[0] || 'User');
+            setProfileImage(cached.avatar_url);
+          }
+
+          // Fetch fresh profile data
           const profile = await authService.getProfile(user.id);
           if (profile) {
             setUserName(profile.full_name || user.email?.split('@')[0] || 'User');
@@ -352,6 +359,7 @@ function GameLayoutNative() {
     if (settingsVisible) {
       fetchProfile();
     }
+    // Initial fetch on mount as well
     fetchProfile();
   }, [settingsVisible]);
 
