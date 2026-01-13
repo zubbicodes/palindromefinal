@@ -1,6 +1,5 @@
 import { authService } from '@/authService';
 import { useTheme } from '@/context/ThemeContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -31,22 +30,27 @@ export default function ProfileScreenWeb() {
 
   const [avatar, setAvatar] = React.useState<string | null>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+
+  const [fullName, setFullName] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [phone, setPhone] = React.useState('');
 
   React.useEffect(() => {
-    const loadAvatar = async () => {
+    const loadProfile = async () => {
       const user = await authService.getCurrentUser();
       if (user) {
-        try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`);
-          if (storedAvatar) {
-            setAvatar(storedAvatar);
-          }
-        } catch (error) {
-          console.error('Error loading avatar:', error);
+        setEmail(user.email || '');
+        const profile = await authService.getProfile(user.id);
+        if (profile) {
+          setFullName(profile.full_name || '');
+          setPhone(profile.phone || '');
+          if (profile.email) setEmail(profile.email);
+          if (profile.avatar_url) setAvatar(profile.avatar_url);
         }
       }
     };
-    loadAvatar();
+    loadProfile();
   }, []);
 
   const pickImage = async () => {
@@ -56,13 +60,20 @@ export default function ProfileScreenWeb() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
-        base64: true, // Request base64
+        base64: true, // Request base64 for Web if needed, but we can try to use URI
       });
 
-      if (!result.canceled && result.assets[0].base64) {
-        // Construct data URI
-        const base64Img = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        saveAvatarLocally(base64Img);
+      if (!result.canceled && result.assets[0].uri) {
+        // For web, URI might be a blob: or data: URL. 
+        // If it's base64 (data:), we can pass it directly.
+        // ImagePicker on web often returns base64 if requested, or a blob URI.
+        
+        let uriToUpload = result.assets[0].uri;
+        if (result.assets[0].base64) {
+           uriToUpload = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        }
+        
+        await uploadAvatar(uriToUpload);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -70,23 +81,51 @@ export default function ProfileScreenWeb() {
     }
   };
 
-  const saveAvatarLocally = async (base64Image: string) => {
+  const uploadAvatar = async (uri: string) => {
     const user = await authService.getCurrentUser();
     if (!user) return;
 
     setUploading(true);
     try {
-      // Save to local storage with user-specific key
-      await AsyncStorage.setItem(`user_avatar_${user.id}`, base64Image);
-      setAvatar(base64Image);
-
-      // We do NOT update the firebase profile photoURL anymore
-      // as we are strictly using local storage as requested.
+      const result = await authService.uploadAvatar(user.id, uri);
+      if (result.success && result.publicUrl) {
+        setAvatar(result.publicUrl);
+        await authService.updateProfile(user.id, { avatar_url: result.publicUrl });
+      } else {
+        alert(result.error || 'Failed to upload image');
+      }
     } catch (error) {
-      console.error('Error saving image locally:', error);
-      alert('Failed to save image.');
+      console.error('Error uploading image:', error);
+      alert('Failed to upload image.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const user = await authService.getCurrentUser();
+    if (!user) return;
+
+    setLoading(true);
+    try {
+      const updates = {
+        full_name: fullName,
+        email: email,
+        phone: phone,
+        updated_at: new Date(),
+      };
+
+      const result = await authService.updateProfile(user.id, updates);
+      if (result.success) {
+        alert('Profile updated successfully!');
+      } else {
+        alert(result.error || 'Failed to update profile');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('Failed to update profile');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -140,6 +179,8 @@ export default function ProfileScreenWeb() {
                   ]}
                   placeholder="e.g. Jenny Wilson"
                   placeholderTextColor={colors.secondaryText}
+                  value={fullName}
+                  onChangeText={setFullName}
                 />
               </View>
             </View>
@@ -186,6 +227,8 @@ export default function ProfileScreenWeb() {
                   placeholder="e.g. wilson09@gmail.com"
                   placeholderTextColor={colors.secondaryText}
                   keyboardType="email-address"
+                  value={email}
+                  onChangeText={setEmail}
                 />
               </View>
             </View>
@@ -212,6 +255,8 @@ export default function ProfileScreenWeb() {
                   placeholder="0 123 456 7890"
                   placeholderTextColor={colors.secondaryText}
                   keyboardType="phone-pad"
+                  value={phone}
+                  onChangeText={setPhone}
                 />
               </View>
             </View>
@@ -226,8 +271,10 @@ export default function ProfileScreenWeb() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.saveButton, { backgroundColor: colors.primary }]}
+              onPress={handleSave}
+              disabled={loading}
             >
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Text style={styles.saveButtonText}>{loading ? 'Saving...' : 'Save'}</Text>
             </TouchableOpacity>
           </View>
         </View>

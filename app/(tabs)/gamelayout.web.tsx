@@ -207,8 +207,30 @@ export default function GameLayoutWeb() {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [vibrationEnabled, setVibrationEnabled] = useState(true)
   const [pause, setPause] = useState(false)
-  const [userName, setUserName] = useState("")
   const [avatar, setAvatar] = useState<string | null>(null)
+  const [userName, setUserName] = useState("John Doe")
+
+  useEffect(() => {
+    // Fetch user profile data from Supabase
+    const fetchProfile = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        if (user) {
+          const profile = await authService.getProfile(user.id);
+          if (profile) {
+            setUserName(profile.full_name || user.email?.split('@')[0] || 'User');
+            setAvatar(profile.avatar_url);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching profile in game settings:', error);
+      }
+    };
+    
+    if (settingsVisible) {
+      fetchProfile();
+    }
+  }, [settingsVisible]);
 
   // Drag State
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null)

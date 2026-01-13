@@ -194,6 +194,102 @@ class AuthService {
       return null;
     }
   }
+
+  async getProfile(userId: string) {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      console.error('Error in getProfile:', e);
+      return null;
+    }
+  }
+
+  async updateProfile(userId: string, updates: any) {
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId);
+
+      if (error) {
+        throw error;
+      }
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to update profile' };
+    }
+  }
+
+  async uploadAvatar(userId: string, file: { uri: string; type: string; name?: string } | string) {
+    try {
+      const supabase = getSupabaseClient();
+      const filePath = `${userId}/${new Date().getTime()}.jpg`;
+
+      // Handle base64 string (web or data uri)
+      if (typeof file === 'string' && file.startsWith('data:')) {
+        const base64Data = file.split(',')[1];
+        const { error } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, decode(base64Data), {
+            contentType: 'image/jpeg',
+            upsert: true,
+          });
+
+        if (error) throw error;
+      } else if (typeof file === 'object' && 'uri' in file) {
+         // React Native file upload
+        const response = await fetch(file.uri);
+        const arrayBuffer = await response.arrayBuffer();
+        
+        const { error } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, arrayBuffer, {
+            contentType: file.type || 'image/jpeg',
+            upsert: true,
+          });
+          
+        if (error) throw error;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      return { success: true, publicUrl };
+    } catch (e: any) {
+      console.error('Upload avatar error:', e);
+      return { success: false, error: e?.message || 'Failed to upload avatar' };
+    }
+  }
 }
+
+// Helper to decode base64 on native/web universally if needed
+// For this simple case, relying on supabase-js handling or Buffer might be needed depending on environment
+// But supabase-js upload accepts ArrayBuffer/Blob/File. 
+// For Web: base64 -> Blob is easy.
+// For Native: fetch(uri) -> blob() is standard in Expo.
+
+// Minimal polyfill for decode if not present (mostly for web base64 handling if fetch doesn't work for data-uri)
+function decode(base64: string) {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+}
+
 
 export const authService = new AuthService();
