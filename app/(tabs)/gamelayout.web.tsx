@@ -6,21 +6,21 @@ import { Ionicons } from "@expo/vector-icons"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { BlurView } from "expo-blur"
 import { useRouter } from "expo-router"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
-  Dimensions,
-  Pressable, // Keeps Pressable for unified event handling or allows simple onClick
-  StyleSheet,
+    Dimensions,
+    Pressable, // Keeps Pressable for unified event handling or allows simple onClick
+    StyleSheet,
 } from "react-native"
 // react-native-svg works on web, usually maps to <svg>, but we can also use native <svg> if RN-SVG gives trouble. 
 // However, sticking to RN-SVG is usually fine on web if setup correctly. The user snippet used Svg, let's stick to it or standard svg if safer.
 // User snippet had Svg imports, let's keep them if they work, but standard SVG is safer for "pure web".
 // Actually user snippet imports Svg from react-native-svg. I will try to use it, or fallback to standard svg if I can match styles.
+import { authService } from "@/authService"
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from "react-native-svg"
 import { Switch } from "react-native-switch"
-import firebaseService from "../../firebaseService"
 
-const { width, height } = Dimensions.get("window")
+const { width } = Dimensions.get("window")
 
 // Responsive layout configuration based on screen size
 const getLayoutConfig = () => {
@@ -212,14 +212,14 @@ export default function GameLayoutWeb() {
 
   // Drag State
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null)
-  const [draggedColor, setDraggedColor] = useState<number | null>(null)
+  const [, setDraggedColor] = useState<number | null>(null)
   const [activeHint, setActiveHint] = useState<{ row: number; col: number; colorIndex: number } | null>(null)
 
   // Feedback State
   const [feedback, setFeedback] = useState<{ text: string, color: string, id: number } | null>(null)
 
   // Timer State
-  const [secondsElapsed, setSecondsElapsed] = useState(0)
+  const [, setSecondsElapsed] = useState(0)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
 
   // Game Logic State
@@ -230,7 +230,7 @@ export default function GameLayoutWeb() {
   const [blockCounts, setBlockCounts] = useState<number[]>([16, 16, 16, 16, 16])
 
   const boardRef = useRef<HTMLDivElement>(null)
-  const [boardLayout, setBoardLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const [, setBoardLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
 
   const center = Math.floor(gridSize / 2)
   const word = "PALINDROME"
@@ -246,7 +246,7 @@ export default function GameLayoutWeb() {
     ["#E7CC01", "#E7E437"],
   ] as const
 
-  const spawnBulldogs = () => {
+  const spawnBulldogs = useCallback(() => {
     const totalBulldogs = 5
     const blockedPositions = new Set<string>()
     for (let i = 0; i < word.length; i++) {
@@ -264,7 +264,7 @@ export default function GameLayoutWeb() {
       }
     }
     setBulldogPositions(newPositions)
-  }
+  }, [center, gridSize, halfWord, word])
 
   useEffect(() => {
     spawnBulldogs()
@@ -275,7 +275,7 @@ export default function GameLayoutWeb() {
       { row: 5, col: 4 },
       { row: 5, col: 5 },
     ]
-    const initialColors = indPositions.map(() => Math.floor(Math.random() * colorGradients.length))
+    const initialColors = indPositions.map(() => Math.floor(Math.random() * 5))
 
     setGridState(prev => {
       const newGrid = prev.map(r => [...r])
@@ -292,26 +292,21 @@ export default function GameLayoutWeb() {
       })
       return next
     })
-  }, [])
+  }, [spawnBulldogs])
 
   // Fetch/Refresh user profile
   useEffect(() => {
     const loadUserData = async () => {
-      const user = firebaseService.getCurrentUser()
+      const user = await authService.getCurrentUser()
 
       if (user) {
-        if (user.displayName) {
-          setUserName(user.displayName)
-        } else if (user.email) {
-          setUserName(user.email.split("@")[0])
-        }
+        if (user.displayName) setUserName(user.displayName)
+        else if (user.email) setUserName(user.email.split("@")[0])
 
         try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.uid}`)
+          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`)
           if (storedAvatar) {
             setAvatar(storedAvatar)
-          } else if (user.photoURL) {
-            setAvatar(user.photoURL)
           }
         } catch (error) {
           console.error("Error loading avatar", error)
@@ -348,7 +343,7 @@ export default function GameLayoutWeb() {
       clearTimeout(timer)
       window.removeEventListener('resize', measureBoard)
     }
-  }, [width, height])
+  }, [])
 
   useEffect(() => {
     let interval: any
@@ -605,7 +600,7 @@ export default function GameLayoutWeb() {
           color: colors.accent,
           fontFamily: "system-ui, -apple-system, sans-serif", // Approximate RN font
           margin: "15px 0 10px 0",
-        }}>PALINDROME</h1>
+        }}>PALINDROME®</h1>
 
         <style>{`
           @keyframes popIn {

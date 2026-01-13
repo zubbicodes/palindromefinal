@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   GestureResponderEvent,
@@ -21,16 +21,27 @@ import { Switch } from 'react-native-switch';
 import GameLayoutWeb from './gamelayout.web';
 
 // ✅ Import theme context
+import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
-import firebaseService from '@/firebaseService';
 import { useSound } from '@/hooks/use-sound';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const COLOR_GRADIENTS = [
+  ['#C40111', '#F01D2E'],
+  ['#757F35', '#99984D'],
+  ['#1177FE', '#48B7FF'],
+  ['#111111', '#3C3C3C'],
+  ['#E7CC01', '#E7E437'],
+] as const;
+
+type BoardLayout = { x: number; y: number; width: number; height: number };
 
 const DraggableBlock = ({
   index,
   gradient,
   blockCount,
   boardLayout,
+  measureBoardLayout,
   gridSize,
   onDrop,
   onPickup,
@@ -39,7 +50,8 @@ const DraggableBlock = ({
   index: number;
   gradient: readonly [string, string];
   blockCount: number;
-  boardLayout: { x: number; y: number; width: number; height: number } | null;
+  boardLayout: BoardLayout | null;
+  measureBoardLayout: () => Promise<BoardLayout | null>;
   gridSize: number;
   onDrop: (row: number, col: number, colorIndex: number) => void;
   onPickup: () => void;
@@ -48,60 +60,97 @@ const DraggableBlock = ({
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const [isDragging, setIsDragging] = useState(false);
 
+  const latest = useRef({
+    boardLayout,
+    blockCount,
+    gridSize,
+    measureBoardLayout,
+    onDragUpdate,
+    onDrop,
+    onPickup,
+  });
+
+  useEffect(() => {
+    latest.current = {
+      boardLayout,
+      blockCount,
+      gridSize,
+      measureBoardLayout,
+      onDragUpdate,
+      onDrop,
+      onPickup,
+    };
+  }, [boardLayout, blockCount, gridSize, measureBoardLayout, onDragUpdate, onDrop, onPickup]);
+
+  const getCellFromPoint = (touchX: number, touchY: number, layout: BoardLayout) => {
+    const boardPadding = 6;
+    const cellMargin = 1.5;
+    const cellWidth = 27;
+    const cellHeight = 30;
+    const stepX = cellWidth + cellMargin * 2;
+    const stepY = cellHeight + cellMargin * 2;
+
+    const innerWidth = Math.max(1, layout.width - boardPadding * 2);
+    const innerHeight = Math.max(1, layout.height - boardPadding * 2);
+    const gridPixelWidth = latest.current.gridSize * stepX;
+    const gridPixelHeight = latest.current.gridSize * stepY;
+
+    const extraX = Math.max(0, (innerWidth - gridPixelWidth) / 2);
+    const extraY = Math.max(0, innerHeight - gridPixelHeight) > 0.5 ? Math.max(0, (innerHeight - gridPixelHeight) / 2) : 0;
+
+    const originX = layout.x + boardPadding + extraX + cellMargin;
+    const originY = layout.y + boardPadding + extraY + cellMargin;
+
+    const localX = touchX - originX;
+    const localY = touchY - originY;
+    const col = Math.floor(localX / stepX);
+    const row = Math.floor(localY / stepY);
+
+    if (row < 0 || row >= latest.current.gridSize || col < 0 || col >= latest.current.gridSize) {
+      return { row: null, col: null };
+    }
+    return { row, col };
+  };
+
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => blockCount > 0,
+      onStartShouldSetPanResponder: () => latest.current.blockCount > 0,
       onPanResponderGrant: () => {
         setIsDragging(true);
-        onPickup();
+        latest.current.onPickup();
       },
       onPanResponderMove: (e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
         pan.setValue({ x: gestureState.dx, y: gestureState.dy });
 
-        if (boardLayout) {
-          const { x, y, width, height } = boardLayout;
-          const cellSize = width / gridSize;
-          const touchX = gestureState.moveX;
-          const touchY = gestureState.moveY;
+        const layout = latest.current.boardLayout;
+        if (!layout) return;
 
-          if (touchX >= x && touchX <= x + width && touchY >= y && touchY <= y + height) {
-            const col = Math.floor((touchX - x) / cellSize);
-            const row = Math.floor((touchY - y) / cellSize);
-            if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
-              onDragUpdate(row, col);
-            } else {
-              onDragUpdate(null, null);
-            }
-          } else {
-            onDragUpdate(null, null);
-          }
-        }
+        const touchX = (e.nativeEvent as any).pageX ?? gestureState.moveX;
+        const touchY = (e.nativeEvent as any).pageY ?? gestureState.moveY;
+        const { row, col } = getCellFromPoint(touchX, touchY, layout);
+        latest.current.onDragUpdate(row, col);
       },
       onPanResponderRelease: (e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
         setIsDragging(false);
-        if (boardLayout) {
-          const { x, y, width, height } = boardLayout;
-          const cellSize = width / gridSize;
-          const dropX = gestureState.moveX;
-          const dropY = gestureState.moveY;
+        const dropX = (e.nativeEvent as any).pageX ?? gestureState.moveX;
+        const dropY = (e.nativeEvent as any).pageY ?? gestureState.moveY;
 
-          console.log(`Drop attempt at: [${dropX}, ${dropY}], Board bounds: [${x}, ${y}, ${width}, ${height}]`);
-
-          if (dropX >= x && dropX <= x + width && dropY >= y && dropY <= y + height) {
-            const col = Math.floor((dropX - x) / cellSize);
-            const row = Math.floor((dropY - y) / cellSize);
-            console.log(`Calculated cell: row ${row}, col ${col}`);
-            if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
-              onDrop(row, col, index);
-            }
+        void (async () => {
+          const measuredLayout = await latest.current.measureBoardLayout();
+          const layoutToUse = measuredLayout ?? latest.current.boardLayout;
+          if (!layoutToUse) return;
+          const { row, col } = getCellFromPoint(dropX, dropY, layoutToUse);
+          if (row !== null && col !== null) {
+            latest.current.onDrop(row, col, index);
           }
-        }
-        onDragUpdate(null, null);
+        })();
+
+        latest.current.onDragUpdate(null, null);
         Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
       },
       onPanResponderTerminate: () => {
         setIsDragging(false);
-        onDragUpdate(null, null);
+        latest.current.onDragUpdate(null, null);
         Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
       }
     })
@@ -150,8 +199,7 @@ const DraggableBlock = ({
   );
 };
 
-export default function GameLayout() {
-
+function GameLayoutNative() {
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme } = useThemeContext();
   const { playPickupSound, playDropSound, playErrorSound } = useSound();
@@ -164,14 +212,6 @@ export default function GameLayout() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
-
-  const colorsList = [
-    ['#C40111', '#F01D2E'],
-    ['#757F35', '#99984D'],
-    ['#1177FE', '#48B7FF'],
-    ['#111111', '#3C3C3C'],
-    ['#E7CC01', '#E7E437'],
-  ] as const;
 
   // ✅ Local state sync with context
   const [darkModeEnabled, setDarkModeEnabled] = useState(theme === 'dark');
@@ -187,24 +227,46 @@ export default function GameLayout() {
   const [activeHint, setActiveHint] = useState<{ row: number; col: number; colorIndex: number } | null>(null);
   const [feedback, setFeedback] = useState<{ text: string, color: string, id: number } | null>(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [secondsElapsed, setSecondsElapsed] = useState(0);
+  const [, setSecondsElapsed] = useState(0);
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null);
-  const [draggedColor, setDraggedColor] = useState<number | null>(null);
+  const [, setDraggedColor] = useState<number | null>(null);
 
-  const [boardLayout, setBoardLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [boardLayout, setBoardLayout] = useState<BoardLayout | null>(null);
   const boardRef = useRef<View | null>(null);
+  const gridStateRef = useRef(gridState);
+  const blockCountsRef = useRef(blockCounts);
+  const hintsRef = useRef(hints);
+
+  useEffect(() => {
+    gridStateRef.current = gridState;
+  }, [gridState]);
+
+  useEffect(() => {
+    blockCountsRef.current = blockCounts;
+  }, [blockCounts]);
+
+  useEffect(() => {
+    hintsRef.current = hints;
+  }, [hints]);
+
+  const measureBoardLayout = useCallback((): Promise<BoardLayout | null> => {
+    return new Promise((resolve) => {
+      const node = boardRef.current as any;
+      if (!node?.measureInWindow) {
+        resolve(null);
+        return;
+      }
+      node.measureInWindow((x: number, y: number, width: number, height: number) => {
+        resolve({ x, y, width, height });
+      });
+    });
+  }, []);
 
   const center = Math.floor(gridSize / 2);
   const word = 'PALINDROME';
   const halfWord = Math.floor(word.length / 2);
 
-  if (Platform.OS === 'web') {
-    return <GameLayoutWeb />;
-  }
-
-  const handlePlay = () => setScore(prev => prev + 1);
-
-  const spawnBulldogs = () => {
+  const spawnBulldogs = useCallback(() => {
     const totalBulldogs = 5;
     const blockedPositions = new Set<string>();
 
@@ -223,7 +285,7 @@ export default function GameLayout() {
       }
     }
     setBulldogPositions(newPositions);
-  };
+  }, [center, gridSize, halfWord, word]);
 
   useEffect(() => {
     spawnBulldogs();
@@ -251,7 +313,7 @@ export default function GameLayout() {
       });
       return next;
     });
-  }, []);
+  }, [spawnBulldogs]);
 
   // Timer useEffect
   useEffect(() => {
@@ -273,16 +335,13 @@ export default function GameLayout() {
   // Fetch/Refresh user profile
   useEffect(() => {
     const fetchUserData = async () => {
-      const user = firebaseService.getCurrentUser();
+      const user = await authService.getCurrentUser();
       if (user) {
-        if (user.displayName) {
-          setUserName(user.displayName);
-        } else if (user.email) {
-          setUserName(user.email.split('@')[0]);
-        }
+        if (user.displayName) setUserName(user.displayName);
+        else if (user.email) setUserName(user.email.split('@')[0]);
 
         try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.uid}`);
+          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`);
           if (storedAvatar) {
             setProfileImage(storedAvatar);
           }
@@ -364,16 +423,16 @@ export default function GameLayout() {
   };
 
   const findHint = () => {
-    if (hints <= 0) return;
+    if (hintsRef.current <= 0) return;
     const colorGradientsCount = 5;
 
     const tryFindHint = (minLength: number) => {
       for (let r = 0; r < gridSize; r++) {
         for (let c = 0; c < gridSize; c++) {
-          if (gridState[r][c] === null) {
+          if (gridStateRef.current[r][c] === null) {
             for (let colorIdx = 0; colorIdx < colorGradientsCount; colorIdx++) {
-              if (blockCounts[colorIdx] > 0) {
-                const tempGrid = gridState.map((rowArr) => [...rowArr]);
+              if (blockCountsRef.current[colorIdx] > 0) {
+                const tempGrid = gridStateRef.current.map((rowArr) => [...rowArr]);
                 tempGrid[r][c] = colorIdx;
                 const sc = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength);
                 if (sc > 0) {
@@ -399,12 +458,17 @@ export default function GameLayout() {
     setDragOverCell(null);
     setDraggedColor(null);
 
-    if (gridState[row][col] !== null) {
+    if (gridStateRef.current[row][col] !== null) {
       playErrorSound();
       return;
     }
 
-    const newGrid = gridState.map((r) => [...r]);
+    if (blockCountsRef.current[colorIndex] <= 0) {
+      playErrorSound();
+      return;
+    }
+
+    const newGrid = gridStateRef.current.map((r) => [...r]);
     newGrid[row][col] = colorIndex;
     setGridState(newGrid);
 
@@ -416,9 +480,7 @@ export default function GameLayout() {
 
     playDropSound();
     const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid);
-    if (scoreFound > 0) {
-      setScore(prev => prev + scoreFound);
-    }
+    if (scoreFound > 0) setScore((prev) => prev + scoreFound);
   };
 
 
@@ -444,36 +506,39 @@ export default function GameLayout() {
                   theme === 'dark' ? 'rgba(25,25,91,0.7)' : '#FFFFFF',
                 borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#CCDAE466',
               },
+              (dragOverCell?.row === row && dragOverCell?.col === col) && {
+                backgroundColor: theme === 'dark' ? 'rgba(100, 200, 255, 0.4)' : 'rgba(100, 200, 255, 0.3)',
+                borderColor: '#4A9EFF',
+                borderWidth: 2,
+              }
+              ,
               (activeHint?.row === row && activeHint?.col === col) && {
+                backgroundColor: theme === 'dark' ? 'rgba(100, 200, 255, 0.4)' : 'rgba(100, 200, 255, 0.3)',
                 borderColor: '#FFD700',
                 borderWidth: 2,
                 shadowColor: '#FFD700',
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.8,
                 shadowRadius: 10,
+                elevation: 3,
               },
-              (dragOverCell?.row === row && dragOverCell?.col === col) && {
-                backgroundColor: theme === 'dark' ? 'rgba(100, 200, 255, 0.4)' : 'rgba(100, 200, 255, 0.3)',
-                borderColor: '#4A9EFF',
-                borderWidth: 2,
-              }
             ]}
             onPress={() => {
               if (isBulldog) {
                 setScore(prev => prev + 5);
                 spawnBulldogs();
-              } else handlePlay();
+              }
             }}
           >
             {gridState[row][col] !== null && (
               <LinearGradient
-                colors={colorsList[gridState[row][col]!]}
+                colors={COLOR_GRADIENTS[gridState[row][col]!]}
                 style={StyleSheet.absoluteFill}
               />
             )}
             {activeHint?.row === row && activeHint?.col === col && (
               <LinearGradient
-                colors={colorsList[activeHint.colorIndex]}
+                colors={COLOR_GRADIENTS[activeHint.colorIndex]}
                 style={[StyleSheet.absoluteFill, { opacity: 0.6 }]}
               />
             )}
@@ -502,13 +567,14 @@ export default function GameLayout() {
   ));
 
 
-  const blocks = colorsList.map((gradient, index) => (
+  const blocks = COLOR_GRADIENTS.map((gradient, index) => (
     <DraggableBlock
       key={index}
       index={index}
       gradient={gradient}
       blockCount={blockCounts[index]}
       boardLayout={boardLayout}
+      measureBoardLayout={measureBoardLayout}
       gridSize={gridSize}
       onDrop={handleDrop}
       onPickup={() => {
@@ -541,7 +607,7 @@ export default function GameLayout() {
         style={styles.background}
       />
       <Text style={[styles.title, { color: theme === 'dark' ? '#FFFFFF' : '#0060FF' }]}>
-        PALINDROME
+        PALINDROME®
       </Text>
 
       <View
@@ -567,7 +633,8 @@ export default function GameLayout() {
         </Text>
       </View>
 
-      <View
+      <Pressable
+        onPress={findHint}
         style={[
           styles.rectangleRight,
           {
@@ -577,20 +644,18 @@ export default function GameLayout() {
           },
         ]}
       >
-        <Pressable onPress={findHint} style={{ alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
-          <Text style={[styles.rectangleLabel, { color: theme === 'dark' ? '#FFFFFF' : '#4C575F' }]}>
-            Hints
-          </Text>
-          <Text
-            style={[
-              styles.rectangleValue,
-              { color: '#C35DD9' },
-            ]}
-          >
-            {hints}
-          </Text>
-        </Pressable>
-      </View>
+        <Text style={[styles.rectangleLabel, { color: theme === 'dark' ? '#FFFFFF' : '#4C575F' }]}>
+          Hints
+        </Text>
+        <Text
+          style={[
+            styles.rectangleValue,
+            { color: '#C35DD9' },
+          ]}
+        >
+          {hints}
+        </Text>
+      </Pressable>
 
       <View style={styles.timerContainer}>
         <Svg height="40" width="300">
@@ -615,13 +680,13 @@ export default function GameLayout() {
 
       <View
         ref={boardRef}
-        onLayout={() => {
-          boardRef.current?.measureInWindow((x, y, width, height) => {
-            setBoardLayout({ x, y, width, height });
-          });
-        }}
-        style={[
-          styles.board,
+      onLayout={() => {
+        boardRef.current?.measureInWindow((x, y, width, height) => {
+          setBoardLayout({ x, y, width, height });
+        });
+      }}
+      style={[
+        styles.board,
           { backgroundColor: theme === 'dark' ? 'rgba(25,25,91,0.7)' : '#E4EBF0' },
         ]}
       >
@@ -872,6 +937,11 @@ export default function GameLayout() {
       )}
     </SafeAreaView>
   );
+}
+
+export default function GameLayout() {
+  if (Platform.OS === 'web') return <GameLayoutWeb />;
+  return <GameLayoutNative />;
 }
 
 

@@ -6,6 +6,23 @@ import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import Animated, { FadeOut } from 'react-native-reanimated';
 
+const webFontCss = `
+@font-face {
+  font-family: 'Geist-Regular';
+  src: url('/Geist-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist-Bold';
+  src: url('/Geist-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+`;
+
 const SplashScreen = Platform.select({
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   web: require('../screens/loadscreen.web').default,
@@ -36,10 +53,14 @@ const lightGradient = ['#FFFFFF', '#E2E8F0'] as const;
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
-  const [fontsLoaded] = Font.useFonts({
-    'Geist-Regular': require('../assets/fonts/Geist-Regular.ttf'),
-    'Geist-Bold': require('../assets/fonts/Geist-Bold.ttf'),
-  });
+  const [fontsLoaded] = Font.useFonts(
+    Platform.OS === 'web'
+      ? {}
+      : {
+          'Geist-Regular': require('../assets/fonts/Geist-Regular.ttf'),
+          'Geist-Bold': require('../assets/fonts/Geist-Bold.ttf'),
+        }
+  );
 
   useEffect(() => {
     if (fontsLoaded) {
@@ -61,6 +82,9 @@ export default function RootLayout() {
   // ✅ Wrap your entire app in ThemeProvider
   return (
     <ThemeProvider>
+      {Platform.OS === 'web'
+        ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
+        : null}
       <AppContent />
     </ThemeProvider>
   );

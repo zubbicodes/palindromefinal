@@ -46,7 +46,7 @@ export default function SplashScreen({ onReady }) {
           alt="Palindrome Logo"
         />
 
-        <h1 style={styles.title}>PALINDROME</h1>
+        <h1 style={styles.title}>PALINDROME®</h1>
         <p style={styles.subtitle}>BY GAMMA GAMES</p>
       </div>
     </div>
@@ -124,12 +124,16 @@ const styles = {
     margin: 0,
     textAlign: 'center',
     color: '#0060FF',
-    fontSize: '48px',
+    fontSize: 'clamp(28px, 7vw, 48px)',
     fontWeight: '700',
     letterSpacing: '6px',
     marginBottom: '10px',
     fontFamily: 'Geist-Bold',
     textTransform: 'uppercase',
+    whiteSpace: 'nowrap',
+    maxWidth: '95vw',
+    overflow: 'hidden',
+    textOverflow: 'clip',
   },
 
   subtitle: {

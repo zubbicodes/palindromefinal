@@ -1,3 +1,4 @@
+import { authService } from '@/authService';
 import { useTheme } from '@/context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -5,16 +6,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
 import {
-  Dimensions,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import firebaseService from '../../firebaseService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -34,15 +34,12 @@ export default function ProfileScreenWeb() {
 
   React.useEffect(() => {
     const loadAvatar = async () => {
-      const user = firebaseService.getCurrentUser();
+      const user = await authService.getCurrentUser();
       if (user) {
         try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.uid}`);
+          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`);
           if (storedAvatar) {
             setAvatar(storedAvatar);
-          } else if (user.photoURL) {
-            // Fallback to firebase profile URL if local not found (migration)
-            setAvatar(user.photoURL);
           }
         } catch (error) {
           console.error('Error loading avatar:', error);
@@ -74,13 +71,13 @@ export default function ProfileScreenWeb() {
   };
 
   const saveAvatarLocally = async (base64Image: string) => {
-    const user = firebaseService.getCurrentUser();
+    const user = await authService.getCurrentUser();
     if (!user) return;
 
     setUploading(true);
     try {
       // Save to local storage with user-specific key
-      await AsyncStorage.setItem(`user_avatar_${user.uid}`, base64Image);
+      await AsyncStorage.setItem(`user_avatar_${user.id}`, base64Image);
       setAvatar(base64Image);
 
       // We do NOT update the firebase profile photoURL anymore
@@ -107,7 +104,7 @@ export default function ProfileScreenWeb() {
         {/* App Name */}
         <View style={[styles.topHeader, { borderBottomColor: colors.border }]}>
           <Text style={[styles.appName, { color: colors.primary }]}>
-            PALINDROME
+            PALINDROME®
           </Text>
         </View>
 
@@ -239,7 +236,7 @@ export default function ProfileScreenWeb() {
           style={[styles.logoutButton, { backgroundColor: colors.primary }]}
           onPress={async () => {
             try {
-              await firebaseService.signOut();
+              await authService.signOut();
               router.replace('/');
             } catch (error) {
               console.error('Logout failed:', error);

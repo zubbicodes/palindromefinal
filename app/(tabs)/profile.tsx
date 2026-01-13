@@ -1,3 +1,4 @@
+import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -5,17 +6,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  Dimensions,
-  Image,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    Image,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import firebaseService from '../../firebaseService';
 import ProfileWeb from './profile.web';
 
 const { width } = Dimensions.get('window');
@@ -29,10 +29,10 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     const loadAvatar = async () => {
-      const user = firebaseService.getCurrentUser();
+      const user = await authService.getCurrentUser();
       if (user) {
         try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.uid}`);
+          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`);
           if (storedAvatar) {
             setAvatar(storedAvatar);
           }
@@ -65,12 +65,12 @@ export default function ProfileScreen() {
   };
 
   const saveAvatarLocally = async (base64Image: string) => {
-    const user = firebaseService.getCurrentUser();
+    const user = await authService.getCurrentUser();
     if (!user) return;
 
     setUploading(true);
     try {
-      await AsyncStorage.setItem(`user_avatar_${user.uid}`, base64Image);
+      await AsyncStorage.setItem(`user_avatar_${user.id}`, base64Image);
       setAvatar(base64Image);
     } catch (error) {
       console.error('Error saving image locally:', error);
@@ -252,7 +252,7 @@ export default function ProfileScreen() {
           ]}
           onPress={async () => {
             try {
-              await firebaseService.signOut();
+              await authService.signOut();
               router.replace('/');
             } catch (error) {
               console.error('Logout failed:', error);
