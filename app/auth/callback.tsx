@@ -20,16 +20,34 @@ export default function AuthCallbackScreen() {
     }
 
     void (async () => {
-      const url =
-        typeof window !== 'undefined'
-          ? window.location.href
-          : `https://localhost/auth/callback?code=${encodeURIComponent(String(params.code || ''))}`;
+      let url = typeof window !== 'undefined' ? window.location.href : '';
 
-      const result = await authService.completeOAuthRedirect(url);
-      if (result.success) {
-        router.replace('/gamelayout');
+      if (!url) {
+        // Construct URL from params if we are on native and deep linked
+        const base = 'https://localhost/auth/callback';
+        const query = new URLSearchParams();
+        if (params.code) query.append('code', String(params.code));
+        if (params.access_token) query.append('access_token', String(params.access_token));
+        if (params.refresh_token) query.append('refresh_token', String(params.refresh_token));
+        if (params.error) query.append('error', String(params.error));
+        if (params.error_description) query.append('error_description', String(params.error_description));
+        
+        // Only construct if we have relevant params
+        if (query.toString()) {
+           url = `${base}?${query.toString()}`;
+        }
+      }
+
+      if (url) {
+        const result = await authService.completeOAuthRedirect(url);
+        if (result.success) {
+          router.replace('/gamelayout');
+        } else {
+          setError(result.error || 'Failed to complete sign in');
+        }
       } else {
-        setError(result.error || 'Failed to complete sign in');
+         // If no URL and no params, we might just be waiting or loaded incorrectly
+         // But we shouldn't error immediately if it's just mounting
       }
     })();
   }, [params.code, params.error, params.error_description]);
