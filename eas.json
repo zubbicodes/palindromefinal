@@ -8,6 +8,10 @@
       "distribution": "internal"
     },
     "preview": {
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://agjktsybmlmikxuvodkc.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnamt0c3libWxtaWt4dXZvZGtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNDQ3OTgsImV4cCI6MjA4MzYyMDc5OH0.vVrSSfmpYJyMLnjuQ0oGWbxlgGXNPqPL0l7Mvq5WLeo"
+      },
       "android": {
         "buildType": "apk"
       }
