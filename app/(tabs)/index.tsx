@@ -5,16 +5,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Image,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { getFriendlyErrorMessage } from '../../utils/authErrors';
 import LoginWeb from './index.web';
@@ -87,6 +87,22 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Google sign-in failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    try {
+      const result = await authService.signInWithApple();
+      if (result.success) {
+        router.replace('/gamelayout');
+      } else {
+        Alert.alert('Login Failed', result.error || 'Apple sign-in failed');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Apple sign-in failed');
     } finally {
       setLoading(false);
     }
@@ -282,6 +298,26 @@ export default function LoginScreen() {
             <Image source={require('../../assets/images/google.png')} style={styles.googleIcon} />
             <Text style={[styles.googleText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
               Continue with Google
+            </Text>
+          </TouchableOpacity>
+
+          {/* Apple Button */}
+          <TouchableOpacity
+            style={[
+              styles.googleButton,
+              {
+                borderColor: isDark ? 'rgba(255,255,255,0.25)' : '#E5E7EB',
+                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+                marginTop: 12,
+              },
+              loading && { opacity: 0.7 },
+            ]}
+            onPress={handleAppleSignIn}
+            disabled={loading}
+          >
+            <Ionicons name="logo-apple" size={24} color={isDark ? '#FFFFFF' : '#000000'} style={{ marginRight: 10 }} />
+            <Text style={[styles.googleText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
+              Continue with Apple
             </Text>
           </TouchableOpacity>
 

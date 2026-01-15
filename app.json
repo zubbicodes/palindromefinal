@@ -15,7 +15,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/bulldog.png",
-        "backgroundImage": "./assets/images/bg.png",
+        "backgroundImage": "./assets/images/bulldog.png",
         "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
@@ -29,7 +29,7 @@
       "themeColor": "#0060FF"
     },
     "splash": {
-      "image": "./assets/images/bg.png",
+      "image": "./assets/images/bulldog.png",
       "resizeMode": "contain",
       "backgroundColor": "#000D3F"
     },
@@ -39,21 +39,41 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/bg.png",
+          "image": "./assets/images/bulldog.png",
           "resizeMode": "contain",
           "backgroundColor": "#000D3F",
           "dark": {
             "backgroundColor": "#000D3F"
           }
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": true,
+            "packagingOptions": {
+              "pickFirst": [
+                "lib/**/libc++_shared.so"
+              ]
+            },
+            "kotlinVersion": "2.1.20",
+            "extraMavenRepos": []
+          }
+        }
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "assetBundlePatterns": [
       "**/*"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "18ac16ae-ca64-43ff-a7ac-beaa9dd69c6a"
+      }
+    }
   }
 }

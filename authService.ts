@@ -114,8 +114,8 @@ class AuthService {
       }
 
       // For native mobile apps
-      const redirectTo = Linking.createURL('auth/callback');
-      // console.log('Native redirect URL:', redirectTo); // Debugging
+      const redirectTo = Linking.createURL('/auth/callback');
+      console.log('OAuth Redirect URL:', redirectTo); // Debugging
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -131,6 +131,58 @@ class AuthService {
       return await this.completeOAuthRedirect(result.url);
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to sign in with Google' };
+    }
+  }
+
+  async signInWithApple(): Promise<AuthResult> {
+    try {
+      const supabase = getSupabaseClient();
+
+      if (Platform.OS === 'web') {
+        const origin = typeof window !== 'undefined' && window.location.origin 
+          ? window.location.origin 
+          : 'https://palindrome.web-testlink.com';
+        
+        const redirectTo = `${origin}/auth/callback`;
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: { 
+            redirectTo,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+            scopes: 'name email'
+          },
+        });
+
+        if (error) return { success: false, error: error.message, code: (error as any).code };
+        if (data?.url) window.location.assign(data.url);
+        return { success: true };
+      }
+
+      // For native mobile apps
+      const redirectTo = Linking.createURL('/auth/callback');
+      console.log('OAuth Redirect URL (Apple):', redirectTo);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: { 
+          redirectTo, 
+          skipBrowserRedirect: true,
+          scopes: 'name email'
+        },
+      });
+
+      if (error) return { success: false, error: error.message, code: (error as any).code };
+      if (!data?.url) return { success: false, error: 'Missing OAuth URL' };
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type !== 'success' || !result.url) return { success: false, error: 'Sign in canceled' };
+
+      return await this.completeOAuthRedirect(result.url);
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to sign in with Apple' };
     }
   }
 

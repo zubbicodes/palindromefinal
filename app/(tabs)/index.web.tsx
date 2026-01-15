@@ -109,6 +109,21 @@ export default function LoginWeb() {
     }
   };
 
+  const handleAppleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const result = await authService.signInWithApple();
+      if (!result.success) {
+        setError(result.error || 'Apple sign-in failed');
+        setLoading(false);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Apple sign-in failed');
+      setLoading(false);
+    }
+  };
+
   // Handle enter key press
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !loading) {
@@ -433,6 +448,32 @@ export default function LoginWeb() {
             >
               <img src="/images/google.png" alt="Google" style={{ width: 18, height: 18 }} />
               Continue with Google
+            </button>
+
+            {/* Apple Button */}
+            <button
+              onClick={handleAppleSignIn}
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '50px',
+                backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+                color: colors.text,
+                border: `1px solid ${colors.border}`,
+                fontWeight: 600,
+                fontSize: '15px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                marginBottom: '20px',
+              }}
+            >
+              <Ionicons name="logo-apple" size={20} color={theme === 'dark' ? '#FFFFFF' : '#000000'} />
+              Continue with Apple
             </button>
 
             {/* Footer */}
