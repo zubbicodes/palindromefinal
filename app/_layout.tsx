@@ -1,7 +1,8 @@
 import { ThemeProvider, useThemeContext } from '@/context/ThemeContext';
+import { useAuth } from '@/hooks/useAuth';
 import * as Font from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import Animated, { FadeOut } from 'react-native-reanimated';
@@ -53,6 +54,10 @@ const lightGradient = ['#FFFFFF', '#E2E8F0'] as const;
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
+  const { user, loading: authLoading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
   const [fontsLoaded] = Font.useFonts(
     Platform.OS === 'web'
       ? {}
@@ -63,13 +68,37 @@ export default function RootLayout() {
   );
 
   useEffect(() => {
-    if (fontsLoaded) {
-      const timer = setTimeout(() => setShowSplash(false), 5000);
+    if (authLoading) return;
+
+    const inAuthGroup = segments[0] === '(tabs)';
+
+    if (!user && inAuthGroup) {
+      // Redirect to the sign-in page.
+      router.replace('/');
+    } else if (user && segments[0] !== '(tabs)') {
+      // Redirect to the home page.
+      router.replace('/(tabs)/gamelayout');
+    }
+  }, [user, segments, authLoading]);
+
+  useEffect(() => {
+    if (fontsLoaded && !authLoading) {
+      const timer = setTimeout(() => setShowSplash(false), 2000);
       return () => clearTimeout(timer);
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, authLoading]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded || authLoading) {
+    // Keep splash screen visible while fonts or auth are loading
+    return (
+      <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
+        {Platform.OS === 'web'
+          ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
+          : null}
+        <SplashScreen onReady={undefined} />
+      </Animated.View>
+    );
+  }
 
   if (showSplash) {
     return (
