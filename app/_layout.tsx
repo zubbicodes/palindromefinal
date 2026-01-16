@@ -88,25 +88,15 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, authLoading]);
 
-  if (!fontsLoaded || authLoading) {
-    // Keep splash screen visible while fonts or auth are loading
-    return (
-      <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
-        {Platform.OS === 'web'
-          ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
-          : null}
-        <SplashScreen onReady={undefined} />
-      </Animated.View>
-    );
-  }
+  const shouldShowSplash = !fontsLoaded || authLoading || showSplash;
 
-  if (showSplash) {
+  if (shouldShowSplash) {
     return (
       <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
         {Platform.OS === 'web'
           ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
           : null}
-        <SplashScreen onReady={undefined} />
+        <SplashScreen onReady={() => {}} />
       </Animated.View>
     );
   }

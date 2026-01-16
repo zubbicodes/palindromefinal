@@ -309,29 +309,32 @@ function SignupNativeScreen() {
             )}
           </TouchableOpacity>
 
-          <View style={styles.dividerRow}>
-            <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' }]} />
-            <Text style={[styles.dividerText, { color: isDark ? '#AAB3FF' : '#007BFF' }]}>or</Text>
-            <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' }]} />
-          </View>
+          {/*
+            Social signup divider and Google button temporarily disabled.
+            <View style={styles.dividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' }]} />
+              <Text style={[styles.dividerText, { color: isDark ? '#AAB3FF' : '#007BFF' }]}>or</Text>
+              <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' }]} />
+            </View>
 
-          <TouchableOpacity
-            style={[
-              styles.googleButton,
-              {
-                borderColor: isDark ? 'rgba(255,255,255,0.25)' : '#E5E7EB',
-                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
-              },
-              loading && { opacity: 0.7 },
-            ]}
-            onPress={handleGoogleSignIn}
-            disabled={loading}
-          >
-            <Image source={require('../../assets/images/google.png')} style={styles.googleIcon} />
-            <Text style={[styles.googleText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
-              Continue with Google
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.googleButton,
+                {
+                  borderColor: isDark ? 'rgba(255,255,255,0.25)' : '#E5E7EB',
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+                },
+                loading && { opacity: 0.7 },
+              ]}
+              onPress={handleGoogleSignIn}
+              disabled={loading}
+            >
+              <Image source={require('../../assets/images/google.png')} style={styles.googleIcon} />
+              <Text style={[styles.googleText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
+                Continue with Google
+              </Text>
+            </TouchableOpacity>
+          */}
 
           {/* Footer */}
           <View style={styles.footer}>
