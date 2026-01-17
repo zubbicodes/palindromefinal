@@ -70,13 +70,13 @@ export default function RootLayout() {
   useEffect(() => {
     if (authLoading) return;
 
-    const inAuthGroup = segments[0] === '(tabs)';
+    const inTabsGroup = segments[0] === '(tabs)';
+    const routeName = segments[1] ?? 'index';
+    const isPublicRoute = inTabsGroup && (routeName === 'index' || routeName === 'signup');
 
-    if (!user && inAuthGroup) {
-      // Redirect to the sign-in page.
+    if (!user && inTabsGroup && !isPublicRoute) {
       router.replace('/');
-    } else if (user && segments[0] !== '(tabs)') {
-      // Redirect to the home page.
+    } else if (user && (segments[0] !== '(tabs)' || isPublicRoute)) {
       router.replace('/(tabs)/gamelayout');
     }
   }, [user, segments, authLoading]);
