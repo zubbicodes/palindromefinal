@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Dimensions, Image, Platform, StyleSheet, Text, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -8,12 +8,14 @@ const verticalScale = size => (height / 812) * size;
 
 export default function SplashScreen({ onReady }) {
   const [imagesLoaded, setImagesLoaded] = useState({ bg: false, logo: false });
+  const readyCalledRef = useRef(false);
 
   const handleImageLoad = (imageKey) => {
     setImagesLoaded(prev => {
       const newState = { ...prev, [imageKey]: true };
-      if (newState.bg && newState.logo && onReady) {
-        onReady();
+      if (newState.bg && newState.logo && onReady && !readyCalledRef.current) {
+        readyCalledRef.current = true;
+        setTimeout(() => onReady(), 0);
       }
       return newState;
     });

@@ -196,6 +196,265 @@ const DraggableBlock = ({
   )
 }
 
+type GameTutorialMode = "modal" | "coach"
+
+type GameTutorialStep = {
+  title: string
+  description: string
+  targetId?: string
+  mode: GameTutorialMode
+  showBack?: boolean
+  showPrimary?: boolean
+  primaryLabel?: string
+}
+
+type GameTutorialPhase = "ui" | "placeFirst" | "makeScore" | "complete"
+
+const GAME_TUTORIAL_SEEN_KEY = "palindrome_game_tutorial_v1_seen"
+
+function safeGetGameTutorialSeen(): boolean {
+  try {
+    if (typeof window === "undefined") return true
+    return window.localStorage.getItem(GAME_TUTORIAL_SEEN_KEY) === "1"
+  } catch {
+    return true
+  }
+}
+
+function safeSetGameTutorialSeen(): void {
+  try {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(GAME_TUTORIAL_SEEN_KEY, "1")
+  } catch {
+    return
+  }
+}
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v))
+}
+
+function GameTutorialOverlay(props: {
+  open: boolean
+  step: GameTutorialStep | null
+  stepIndex: number
+  stepsCount: number
+  accentColor: string
+  onBack: () => void
+  onNext: () => void
+  onSkip: () => void
+  onDone: () => void
+}) {
+  const { open, step, stepIndex, stepsCount, accentColor, onBack, onNext, onSkip, onDone } = props
+  const [rect, setRect] = useState<DOMRect | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    const update = () => {
+      if (!step?.targetId) {
+        setRect(null)
+        return
+      }
+      const el = document.getElementById(step.targetId)
+      if (!el) {
+        setRect(null)
+        return
+      }
+      setRect(el.getBoundingClientRect())
+    }
+
+    const raf = requestAnimationFrame(() => {
+      if (step?.targetId) {
+        const el = document.getElementById(step.targetId)
+        el?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" })
+      }
+      update()
+      setTimeout(update, 240)
+    })
+
+    window.addEventListener("resize", update)
+    window.addEventListener("scroll", update, { passive: true })
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener("resize", update)
+      window.removeEventListener("scroll", update)
+    }
+  }, [open, step?.targetId])
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onSkip()
+      if (e.key === "ArrowRight" || e.key === "Enter") onNext()
+      if (e.key === "ArrowLeft") onBack()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [open, onBack, onNext, onSkip])
+
+  if (!open || !step) return null
+
+  const isLast = stepIndex >= stepsCount - 1
+  const viewportW = typeof window === "undefined" ? 1024 : window.innerWidth
+  const viewportH = typeof window === "undefined" ? 768 : window.innerHeight
+
+  const highlightPad = 10
+  const highlight = rect
+    ? {
+        left: rect.left - highlightPad,
+        top: rect.top - highlightPad,
+        width: rect.width + highlightPad * 2,
+        height: rect.height + highlightPad * 2,
+      }
+    : null
+
+  const tooltipW = Math.min(420, viewportW - 32)
+  const tooltipH = 190
+
+  const baseLeft = highlight ? highlight.left + highlight.width / 2 - tooltipW / 2 : viewportW / 2 - tooltipW / 2
+  const preferTop = highlight ? highlight.top > viewportH * 0.6 : false
+  const baseTop = highlight
+    ? preferTop
+      ? highlight.top - tooltipH - 18
+      : highlight.top + highlight.height + 18
+    : viewportH / 2 - tooltipH / 2
+
+  const tooltipLeft = clamp(baseLeft, 16, viewportW - tooltipW - 16)
+  const tooltipTop = clamp(baseTop, 16, viewportH - tooltipH - 16)
+
+  const blocksInteraction = step.mode === "modal"
+  const showBack = step.showBack ?? false
+  const showPrimary = step.showPrimary ?? true
+  const primaryLabel = step.primaryLabel ?? (isLast ? "Continue" : "Next")
+
+  return (
+    <div
+      role="dialog"
+      aria-modal={blocksInteraction}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 99999,
+        fontFamily: "Geist-Regular, system-ui",
+        pointerEvents: blocksInteraction ? "auto" : "none",
+      }}
+    >
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: blocksInteraction ? "rgba(0,0,0,0.58)" : "rgba(0,0,0,0.35)",
+          backdropFilter: "blur(2px)",
+          pointerEvents: blocksInteraction ? "auto" : "none",
+        }}
+      />
+
+      {highlight ? (
+        <div
+          style={{
+            position: "fixed",
+            left: highlight.left,
+            top: highlight.top,
+            width: highlight.width,
+            height: highlight.height,
+            borderRadius: 22,
+            boxShadow: `0 0 0 2px ${accentColor}, 0 16px 40px rgba(0,0,0,0.35)`,
+            background: "rgba(255,255,255,0.02)",
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
+
+      <div
+        style={{
+          position: "fixed",
+          left: tooltipLeft,
+          top: tooltipTop,
+          width: tooltipW,
+          maxWidth: "calc(100vw - 32px)",
+          background: "rgba(255,255,255,0.96)",
+          borderRadius: 18,
+          padding: 16,
+          boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
+          border: "1px solid rgba(0,0,0,0.10)",
+          color: "#111111",
+          pointerEvents: "auto",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ fontFamily: "Geist-Bold, system-ui", fontSize: 15, lineHeight: 1.2 }}>{step.title}</div>
+          {stepsCount > 0 ? (
+            <div style={{ fontSize: 12, color: "rgba(17,17,17,0.6)" }}>
+              {Math.min(stepIndex + 1, stepsCount)}/{stepsCount}
+            </div>
+          ) : null}
+        </div>
+
+        <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45, color: "rgba(17,17,17,0.78)" }}>
+          {step.description}
+        </div>
+
+        <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <button
+            onClick={onSkip}
+            style={{
+              border: "1px solid rgba(17,17,17,0.16)",
+              background: "transparent",
+              borderRadius: 12,
+              padding: "10px 12px",
+              cursor: "pointer",
+              fontFamily: "Geist-Regular, system-ui",
+              fontSize: 13,
+            }}
+          >
+            Skip
+          </button>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {showBack ? (
+              <button
+                onClick={onBack}
+                disabled={stepIndex <= 0}
+                style={{
+                  border: "1px solid rgba(17,17,17,0.16)",
+                  background: "transparent",
+                  opacity: stepIndex <= 0 ? 0.5 : 1,
+                  borderRadius: 12,
+                  padding: "10px 12px",
+                  cursor: stepIndex <= 0 ? "default" : "pointer",
+                  fontFamily: "Geist-Regular, system-ui",
+                  fontSize: 13,
+                }}
+              >
+                Back
+              </button>
+            ) : null}
+
+            {showPrimary ? (
+              <button
+                onClick={isLast ? onDone : onNext}
+                style={{
+                  border: `1px solid ${accentColor}`,
+                  background: accentColor,
+                  color: "#FFFFFF",
+                  borderRadius: 12,
+                  padding: "10px 14px",
+                  cursor: "pointer",
+                  fontFamily: "Geist-Bold, system-ui",
+                  fontSize: 13,
+                }}
+              >
+                {primaryLabel}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function GameLayoutWeb() {
   const router = useRouter()
   const { theme, colors, toggleTheme } = useThemeContext()
@@ -211,6 +470,9 @@ export default function GameLayoutWeb() {
   const [avatar, setAvatar] = useState<string | null>(null)
   const [userName, setUserName] = useState("John Doe")
   const [restartConfirmationVisible, setRestartConfirmationVisible] = useState(false)
+  const [tutorialOpen, setTutorialOpen] = useState(false)
+  const [tutorialPhase, setTutorialPhase] = useState<GameTutorialPhase>("ui")
+  const [tutorialUiIndex, setTutorialUiIndex] = useState(0)
 
   const triggerHaptic = useCallback((pattern: number | number[]) => {
     if (!hapticsEnabled) return
@@ -218,6 +480,101 @@ export default function GameLayoutWeb() {
     if (!("vibrate" in navigator)) return
     navigator.vibrate(pattern)
   }, [hapticsEnabled])
+
+  const uiSteps: GameTutorialStep[] = [
+    {
+      title: "Welcome to Palindrome",
+      description: "Quick tour of the screen, then we’ll practice one move together.",
+      mode: "modal",
+      showBack: true,
+    },
+    {
+      title: "Score",
+      description: "Your score increases when you create palindromes. Longer lines score higher.",
+      targetId: "tour-game-status-score",
+      mode: "modal",
+      showBack: true,
+    },
+    {
+      title: "Timer",
+      description: "The timer starts with your first move. Use it to track your pace.",
+      targetId: "tour-game-timer",
+      mode: "modal",
+      showBack: true,
+    },
+    {
+      title: "Hints",
+      description: "Use hints to highlight a strong move on the board when you get stuck.",
+      targetId: "tour-game-status-hints",
+      mode: "modal",
+      showBack: true,
+    },
+    {
+      title: "Blocks",
+      description: "Drag a colored block from here onto an empty cell.",
+      targetId: "tour-game-blocks",
+      mode: "modal",
+      showBack: true,
+    },
+    {
+      title: "Game Board",
+      description: "Place blocks to form palindromes in a row or column (3+ blocks).",
+      targetId: "tour-game-board",
+      mode: "modal",
+      showBack: true,
+    },
+    {
+      title: "Controls",
+      description: "Play resumes, Pause stops the timer, Settings manages preferences.",
+      targetId: "tour-game-btn-play",
+      mode: "modal",
+      showBack: true,
+      primaryLabel: "Start Tutorial",
+    },
+  ]
+
+  useEffect(() => {
+    if (safeGetGameTutorialSeen()) return
+    const t = setTimeout(() => {
+      setTutorialPhase("ui")
+      setTutorialUiIndex(0)
+      setTutorialOpen(true)
+    }, 450)
+    return () => clearTimeout(t)
+  }, [])
+
+  const skipTutorial = useCallback(() => {
+    safeSetGameTutorialSeen()
+    setTutorialOpen(false)
+  }, [])
+
+  const doneTutorial = useCallback(() => {
+    safeSetGameTutorialSeen()
+    setTutorialOpen(false)
+  }, [])
+
+  const backTutorial = useCallback(() => {
+    if (tutorialPhase !== "ui") return
+    setTutorialUiIndex((i) => Math.max(0, i - 1))
+  }, [tutorialPhase])
+
+  const nextTutorial = useCallback(() => {
+    if (tutorialPhase !== "ui") return
+    setTutorialUiIndex((i) => {
+      const next = i + 1
+      if (next >= uiSteps.length) {
+        setTutorialPhase("placeFirst")
+        return i
+      }
+      return next
+    })
+  }, [tutorialPhase, uiSteps.length])
+
+  const openTutorial = useCallback(() => {
+    setTutorialPhase("ui")
+    setTutorialUiIndex(0)
+    setTutorialOpen(true)
+  }, [])
 
   useEffect(() => {
     // Fetch user profile data from Supabase
@@ -502,6 +859,14 @@ export default function GameLayoutWeb() {
       setScore(prev => prev + scoreFound)
     }
 
+    if (tutorialOpen) {
+      if (tutorialPhase === "placeFirst") {
+        setTutorialPhase("makeScore")
+      } else if (tutorialPhase === "makeScore" && scoreFound > 0) {
+        setTutorialPhase("complete")
+      }
+    }
+
     return true
   }
 
@@ -643,6 +1008,40 @@ export default function GameLayoutWeb() {
     gap: 60,
   }
 
+  const tutorialStep: GameTutorialStep | null =
+    tutorialPhase === "ui"
+      ? uiSteps[tutorialUiIndex] ?? null
+      : tutorialPhase === "placeFirst"
+        ? {
+            title: "Your First Move",
+            description: "Drag any block onto an empty cell on the board.",
+            targetId: "tour-game-blocks",
+            mode: "coach",
+            showPrimary: false,
+            showBack: false,
+          }
+        : tutorialPhase === "makeScore"
+          ? {
+              title: "Make Your First Score",
+              description: "Keep placing blocks until you create a palindrome (3+ in a row or column).",
+              targetId: "tour-game-board",
+              mode: "coach",
+              showPrimary: false,
+              showBack: false,
+            }
+          : {
+              title: "Great Job",
+              description: "You scored your first palindrome. You’re ready to play.",
+              targetId: "tour-game-status-score",
+              mode: "modal",
+              showPrimary: true,
+              showBack: false,
+              primaryLabel: "Continue",
+            }
+
+  const tutorialStepsCount = tutorialPhase === "ui" ? uiSteps.length : 1
+  const tutorialStepIndex = tutorialPhase === "ui" ? tutorialUiIndex : 0
+
   return (
     <div style={containerStyle}>
         <style>{`
@@ -710,7 +1109,7 @@ export default function GameLayoutWeb() {
               }}>{userName}</span>
           </div>
 
-          <div style={{
+          <div id="tour-game-status-score" style={{
             display: "flex",
             flexDirection: "column",
             borderWidth: 1,
@@ -728,7 +1127,7 @@ export default function GameLayoutWeb() {
             <span style={{ fontSize: 42, fontWeight: "800", color: colors.accent, fontFamily: "system-ui" }}>{score}</span>
           </div>
 
-          <div style={{
+          <div id="tour-game-timer" style={{
              display: "flex",
              flexDirection: "column",
              alignItems: "center",
@@ -756,6 +1155,7 @@ export default function GameLayoutWeb() {
           </div>
 
           <div
+            id="tour-game-status-hints"
             onClick={findHint}
             style={{
               cursor: hints > 0 ? "pointer" : "not-allowed",
@@ -791,6 +1191,7 @@ export default function GameLayoutWeb() {
         }}>
           {/* Game Board */}
           <div
+            id="tour-game-board"
             ref={boardRef}
             style={{
               borderRadius: 24,
@@ -979,7 +1380,7 @@ export default function GameLayoutWeb() {
           </div>
 
           {/* Bottom Blocks Row */}
-          <div style={{
+          <div id="tour-game-blocks" style={{
             display: "flex",
             flexDirection: "row",
             flexWrap: "wrap",
@@ -1018,7 +1419,7 @@ export default function GameLayoutWeb() {
             if (pause) setPause(false)
             if (!isTimerRunning) setIsTimerRunning(true)
           }}>
-            <div style={{
+            <div id="tour-game-btn-play" style={{
               width: 80,
               height: 80,
               borderRadius: 25,
@@ -1038,7 +1439,7 @@ export default function GameLayoutWeb() {
           </Pressable>
 
           <Pressable onPress={() => setPause(true)}>
-            <div style={{
+            <div id="tour-game-btn-pause" style={{
               width: 80,
               height: 80,
               borderRadius: 25,
@@ -1058,7 +1459,7 @@ export default function GameLayoutWeb() {
           </Pressable>
 
           <Pressable onPress={() => router.push("/profile")}>
-             <div style={{
+             <div id="tour-game-btn-profile" style={{
               width: 80,
               height: 80,
               borderRadius: 25,
@@ -1079,7 +1480,7 @@ export default function GameLayoutWeb() {
           </Pressable>
 
           <Pressable onPress={() => setRestartConfirmationVisible(true)}>
-             <div style={{
+             <div id="tour-game-btn-restart" style={{
               width: 80,
               height: 80,
               borderRadius: 25,
@@ -1100,7 +1501,7 @@ export default function GameLayoutWeb() {
           </Pressable>
 
           <Pressable onPress={() => setSettingsVisible(true)}>
-             <div style={{
+             <div id="tour-game-btn-settings" style={{
               width: 80,
               height: 80,
               borderRadius: 25,
@@ -1117,6 +1518,27 @@ export default function GameLayoutWeb() {
              onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
             >
               <Ionicons name="settings-sharp" size={32} color={colors.text} />
+            </div>
+          </Pressable>
+
+          <Pressable onPress={openTutorial}>
+             <div style={{
+              width: 80,
+              height: 80,
+              borderRadius: 25,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
+              cursor: 'pointer',
+              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
+               border: "1px solid rgba(0,0,0,0.05)",
+                transition: "transform 0.1s",
+            }}
+             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
+             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <Ionicons name="help-circle-outline" size={32} color={colors.text} />
             </div>
           </Pressable>
         </div>
@@ -1499,6 +1921,24 @@ export default function GameLayoutWeb() {
             </div>
           </div>
         )}
+
+        <GameTutorialOverlay
+          open={tutorialOpen}
+          step={tutorialOpen ? tutorialStep : null}
+          stepIndex={tutorialStepIndex}
+          stepsCount={tutorialStepsCount}
+          accentColor={colors.accent}
+          onBack={backTutorial}
+          onNext={nextTutorial}
+          onSkip={skipTutorial}
+          onDone={() => {
+            if (tutorialPhase === "ui") {
+              setTutorialPhase("placeFirst")
+              return
+            }
+            doneTutorial()
+          }}
+        />
       </div>
   )
 }

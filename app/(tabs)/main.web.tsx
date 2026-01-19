@@ -12,6 +12,246 @@ type Tile = {
   onClick: () => void;
 };
 
+type TourStep = {
+  title: string;
+  description: string;
+  targetId?: string;
+};
+
+const TOUR_SEEN_KEY = 'palindrome_ui_tour_v1_seen';
+
+function safeGetTourSeen(): boolean {
+  try {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem(TOUR_SEEN_KEY) === '1';
+  } catch {
+    return true;
+  }
+}
+
+function safeSetTourSeen(): void {
+  try {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(TOUR_SEEN_KEY, '1');
+  } catch {
+    return;
+  }
+}
+
+function toTileId(title: string) {
+  return `tour-tile-${title.toLowerCase().replace(/\s+/g, '-')}`;
+}
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function TourOverlay(props: {
+  open: boolean;
+  stepIndex: number;
+  steps: TourStep[];
+  accentColor: string;
+  onBack: () => void;
+  onNext: () => void;
+  onSkip: () => void;
+  onDone: () => void;
+}) {
+  const { open, stepIndex, steps, accentColor, onBack, onNext, onSkip, onDone } = props;
+  const step = steps[stepIndex];
+  const [rect, setRect] = useState<DOMRect | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const update = () => {
+      if (!step?.targetId) {
+        setRect(null);
+        return;
+      }
+      const el = document.getElementById(step.targetId);
+      if (!el) {
+        setRect(null);
+        return;
+      }
+      setRect(el.getBoundingClientRect());
+    };
+
+    const raf = requestAnimationFrame(() => {
+      if (step?.targetId) {
+        const el = document.getElementById(step.targetId);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      }
+      update();
+      setTimeout(update, 260);
+    });
+
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update);
+    };
+  }, [open, step?.targetId]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onSkip();
+      if (e.key === 'ArrowRight' || e.key === 'Enter') onNext();
+      if (e.key === 'ArrowLeft') onBack();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onBack, onNext, onSkip]);
+
+  if (!open || !step) return null;
+
+  const isLast = stepIndex === steps.length - 1;
+  const viewportW = typeof window === 'undefined' ? 1024 : window.innerWidth;
+  const viewportH = typeof window === 'undefined' ? 768 : window.innerHeight;
+
+  const highlightPad = 10;
+  const highlight = rect
+    ? {
+        left: rect.left - highlightPad,
+        top: rect.top - highlightPad,
+        width: rect.width + highlightPad * 2,
+        height: rect.height + highlightPad * 2,
+      }
+    : null;
+
+  const tooltipW = Math.min(380, viewportW - 32);
+  const tooltipH = 180;
+
+  const baseLeft = highlight ? highlight.left + highlight.width / 2 - tooltipW / 2 : viewportW / 2 - tooltipW / 2;
+  const preferTop = highlight ? highlight.top > viewportH * 0.6 : false;
+  const baseTop = highlight
+    ? preferTop
+      ? highlight.top - tooltipH - 18
+      : highlight.top + highlight.height + 18
+    : viewportH / 2 - tooltipH / 2;
+
+  const tooltipLeft = clamp(baseLeft, 16, viewportW - tooltipW - 16);
+  const tooltipTop = clamp(baseTop, 16, viewportH - tooltipH - 16);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        fontFamily: 'Geist-Regular, system-ui',
+      }}
+    >
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.58)',
+          backdropFilter: 'blur(2px)',
+        }}
+      />
+
+      {highlight ? (
+        <div
+          style={{
+            position: 'fixed',
+            left: highlight.left,
+            top: highlight.top,
+            width: highlight.width,
+            height: highlight.height,
+            borderRadius: 20,
+            boxShadow: `0 0 0 2px ${accentColor}, 0 16px 40px rgba(0,0,0,0.35)`,
+            background: 'rgba(255,255,255,0.02)',
+          }}
+        />
+      ) : null}
+
+      <div
+        style={{
+          position: 'fixed',
+          left: tooltipLeft,
+          top: tooltipTop,
+          width: tooltipW,
+          maxWidth: 'calc(100vw - 32px)',
+          background: 'rgba(255,255,255,0.96)',
+          borderRadius: 18,
+          padding: 16,
+          boxShadow: '0 18px 50px rgba(0,0,0,0.35)',
+          border: '1px solid rgba(0,0,0,0.10)',
+          color: '#111111',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ fontFamily: 'Geist-Bold, system-ui', fontSize: 15, lineHeight: 1.2 }}>{step.title}</div>
+          <div style={{ fontSize: 12, color: 'rgba(17,17,17,0.6)' }}>
+            {stepIndex + 1}/{steps.length}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45, color: 'rgba(17,17,17,0.78)' }}>
+          {step.description}
+        </div>
+
+        <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={onSkip}
+            style={{
+              border: '1px solid rgba(17,17,17,0.16)',
+              background: 'transparent',
+              borderRadius: 12,
+              padding: '10px 12px',
+              cursor: 'pointer',
+              fontFamily: 'Geist-Regular, system-ui',
+              fontSize: 13,
+            }}
+          >
+            Skip
+          </button>
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button
+              onClick={onBack}
+              disabled={stepIndex === 0}
+              style={{
+                border: '1px solid rgba(17,17,17,0.16)',
+                background: 'transparent',
+                opacity: stepIndex === 0 ? 0.5 : 1,
+                borderRadius: 12,
+                padding: '10px 12px',
+                cursor: stepIndex === 0 ? 'default' : 'pointer',
+                fontFamily: 'Geist-Regular, system-ui',
+                fontSize: 13,
+              }}
+            >
+              Back
+            </button>
+
+            <button
+              onClick={isLast ? onDone : onNext}
+              style={{
+                border: `1px solid ${accentColor}`,
+                background: accentColor,
+                color: '#FFFFFF',
+                borderRadius: 12,
+                padding: '10px 14px',
+                cursor: 'pointer',
+                fontFamily: 'Geist-Bold, system-ui',
+                fontSize: 13,
+              }}
+            >
+              {isLast ? 'Got it' : 'Next'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MainWeb() {
   const { theme, toggleTheme, colors } = useThemeContext();
   const isDark = theme === 'dark';
@@ -50,6 +290,79 @@ export default function MainWeb() {
     await authService.signOut();
     router.replace('/');
   }, []);
+
+  const steps: TourStep[] = useMemo(
+    () => [
+      {
+        title: 'Quick Tour',
+        description:
+          'Here’s a 30-second walkthrough of the main options. You’ll only see this once.',
+      },
+      {
+        title: 'Single Player',
+        description:
+          'Start a fresh match and play at your own pace. This is the best place to begin.',
+        targetId: toTileId('Single Player'),
+      },
+      {
+        title: 'Multiplayer',
+        description:
+          'Play with friends when Multiplayer is available. For now, you’ll see “Coming Soon”.',
+        targetId: toTileId('Multiplayer'),
+      },
+      {
+        title: 'Practice Mode',
+        description:
+          'A relaxed mode for learning patterns and warming up. This is also landing soon.',
+        targetId: toTileId('Practice Mode'),
+      },
+      {
+        title: 'Settings & Profile',
+        description:
+          'Update your profile and preferences, including sound and haptics.',
+        targetId: toTileId('Settings'),
+      },
+    ],
+    [],
+  );
+
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+
+  useEffect(() => {
+    if (safeGetTourSeen()) return;
+    const t = setTimeout(() => setTourOpen(true), 450);
+    return () => clearTimeout(t);
+  }, []);
+
+  const openTour = useCallback(() => {
+    setTourStepIndex(0);
+    setTourOpen(true);
+  }, []);
+
+  const finishTour = useCallback(() => {
+    safeSetTourSeen();
+    setTourOpen(false);
+  }, []);
+
+  const nextTour = useCallback(() => {
+    setTourStepIndex((i) => {
+      const next = i + 1;
+      if (next >= steps.length) {
+        finishTour();
+        return i;
+      }
+      return next;
+    });
+  }, [finishTour, steps.length]);
+
+  const backTour = useCallback(() => {
+    setTourStepIndex((i) => Math.max(0, i - 1));
+  }, []);
+
+  const skipTour = useCallback(() => {
+    finishTour();
+  }, [finishTour]);
 
   const tiles: Tile[] = useMemo(
     () => [
@@ -322,6 +635,9 @@ export default function MainWeb() {
             <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
               <Ionicons name={isDark ? 'sunny' : 'moon'} size={20} color={isDark ? '#FFFFFF' : '#0060FF'} />
             </button>
+            <button className="icon-btn" onClick={openTour} aria-label="Open UI tour">
+              <Ionicons name="help-circle-outline" size={20} color={isDark ? '#FFFFFF' : '#0060FF'} />
+            </button>
             <button className="icon-btn" onClick={onSignOut} aria-label="Sign out">
               <Ionicons name="log-out-outline" size={20} color={isDark ? '#FFFFFF' : '#111111'} />
             </button>
@@ -339,6 +655,7 @@ export default function MainWeb() {
           {tiles.map((t) => (
             <div
               key={t.title}
+              id={toTileId(t.title)}
               className="tile"
               onClick={t.onClick}
               role="button"
@@ -375,6 +692,17 @@ export default function MainWeb() {
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
+
+      <TourOverlay
+        open={tourOpen}
+        stepIndex={tourStepIndex}
+        steps={steps}
+        accentColor={colors.accent}
+        onBack={backTour}
+        onNext={nextTour}
+        onSkip={skipTour}
+        onDone={finishTour}
+      />
     </div>
   );
 }

@@ -1,10 +1,10 @@
-import { ThemeProvider, useThemeContext } from '@/context/ThemeContext';
 import { SettingsProvider } from '@/context/SettingsContext';
+import { ThemeProvider, useThemeContext } from '@/context/ThemeContext';
 import { useAuth } from '@/hooks/useAuth';
 import * as Font from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
 const webFontCss = `
@@ -57,6 +57,7 @@ export default function RootLayout() {
   const { user, loading: authLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const splashHiddenRef = useRef(false);
 
   const [fontsLoaded] = Font.useFonts(
     Platform.OS === 'web'
@@ -86,13 +87,19 @@ export default function RootLayout() {
 
   const shouldShowSplash = !fontsLoaded || authLoading || showSplash;
 
+  const handleSplashReady = useCallback(() => {
+    if (splashHiddenRef.current) return;
+    splashHiddenRef.current = true;
+    setTimeout(() => setShowSplash(false), 0);
+  }, []);
+
   if (shouldShowSplash) {
     return (
       <>
         {Platform.OS === 'web'
           ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
           : null}
-        <SplashScreen onReady={() => setShowSplash(false)} />
+        <SplashScreen onReady={handleSplashReady} />
       </>
     );
   }
