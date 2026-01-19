@@ -1,22 +1,169 @@
+import { useSettings } from '@/context/SettingsContext';
+import { useCallback, useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
+
+type SoundKey = 'pickup' | 'drop' | 'error' | 'success';
+
+type WebTone = {
+  type: OscillatorType;
+  frequency: number;
+  durationMs: number;
+  attackMs: number;
+  gain: number;
+};
+
+const WEB_TONES: Record<SoundKey, WebTone> = {
+  pickup: { type: 'sine', frequency: 880, durationMs: 60, attackMs: 6, gain: 0.12 },
+  drop: { type: 'sine', frequency: 420, durationMs: 90, attackMs: 6, gain: 0.12 },
+  error: { type: 'square', frequency: 180, durationMs: 140, attackMs: 6, gain: 0.08 },
+  success: { type: 'triangle', frequency: 660, durationMs: 140, attackMs: 8, gain: 0.1 },
+};
+
+const NATIVE_SOUND_URIS: Record<SoundKey, string> = {
+  pickup: 'https://actions.google.com/sounds/v1/cartoon/pop.ogg',
+  drop: 'https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg',
+  error: 'https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg',
+  success: 'https://actions.google.com/sounds/v1/cartoon/ta_da.ogg',
+};
+
 export function useSound() {
-    const playPickupSound = () => {
-        // Placeholder for pickup sound
-        // console.log("Playing pickup sound");
-    };
+  const { soundEnabled } = useSettings();
 
-    const playDropSound = () => {
-        // Placeholder for drop sound
-        // console.log("Playing drop sound");
-    };
+  const webAudioContextRef = useRef<AudioContext | null>(null);
+  const nativeSoundsRef = useRef<Record<SoundKey, any> | null>(null);
+  const nativeLoadPromiseRef = useRef<Promise<void> | null>(null);
 
-    const playErrorSound = () => {
-        // Placeholder for error sound
-        // console.log("Playing error sound");
-    };
+  const getWebAudioContext = useCallback(() => {
+    if (Platform.OS !== 'web') return null;
+    if (webAudioContextRef.current) return webAudioContextRef.current;
 
-    return {
-        playPickupSound,
-        playDropSound,
-        playErrorSound,
+    const AudioContextCtor: typeof AudioContext | undefined =
+      (globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext;
+    if (!AudioContextCtor) return null;
+
+    const ctx = new AudioContextCtor();
+    webAudioContextRef.current = ctx;
+    return ctx;
+  }, []);
+
+  const playWebTone = useCallback((key: SoundKey) => {
+    const ctx = getWebAudioContext();
+    if (!ctx) return;
+
+    const tone = WEB_TONES[key];
+    const now = ctx.currentTime;
+
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.type = tone.type;
+    oscillator.frequency.setValueAtTime(tone.frequency, now);
+
+    const attackSeconds = tone.attackMs / 1000;
+    const durationSeconds = tone.durationMs / 1000;
+
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.linearRampToValueAtTime(tone.gain, now + attackSeconds);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + attackSeconds + durationSeconds);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    ctx.resume().catch(() => {});
+
+    oscillator.start(now);
+    oscillator.stop(now + attackSeconds + durationSeconds + 0.02);
+  }, [getWebAudioContext]);
+
+  const ensureNativeSounds = useCallback(async () => {
+    if (Platform.OS === 'web') return;
+    if (nativeSoundsRef.current) return;
+    if (nativeLoadPromiseRef.current) return nativeLoadPromiseRef.current;
+
+    nativeLoadPromiseRef.current = (async () => {
+      const { Audio } = await import('expo-av');
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      const { Sound } = Audio;
+      const entries = (Object.keys(NATIVE_SOUND_URIS) as SoundKey[]).map(async (key) => {
+        try {
+          const soundObject = new Sound();
+          await soundObject.loadAsync({ uri: NATIVE_SOUND_URIS[key] }, { shouldPlay: false });
+          return [key, soundObject] as const;
+        } catch {
+          return null;
+        }
+      });
+
+      const loaded = await Promise.all(entries);
+      const sounds = loaded.filter((v): v is readonly [SoundKey, any] => v !== null);
+      nativeSoundsRef.current = sounds.reduce((acc, [key, sound]) => {
+        acc[key] = sound;
+        return acc;
+      }, {} as Record<SoundKey, any>);
+    })();
+
+    return nativeLoadPromiseRef.current;
+  }, []);
+
+  const playNativeSound = useCallback(async (key: SoundKey) => {
+    try {
+      await ensureNativeSounds();
+      const sound = nativeSoundsRef.current?.[key];
+      if (!sound) return;
+      if (typeof sound.replayAsync === 'function') {
+        await sound.replayAsync();
+      } else if (typeof sound.playAsync === 'function') {
+        await sound.playAsync();
+      }
+    } catch {
+      return;
+    }
+  }, [ensureNativeSounds]);
+
+  const play = useCallback(
+    (key: SoundKey) => {
+      if (!soundEnabled) return;
+      if (Platform.OS === 'web') {
+        playWebTone(key);
+        return;
+      }
+      void playNativeSound(key);
+    },
+    [playNativeSound, playWebTone, soundEnabled],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (webAudioContextRef.current) {
+        webAudioContextRef.current.close().catch(() => {});
+        webAudioContextRef.current = null;
+      }
+      const sounds = nativeSoundsRef.current;
+      if (sounds) {
+        const unloads = (Object.keys(sounds) as SoundKey[]).map(async (k) => {
+          try {
+            await sounds[k].unloadAsync?.();
+          } catch {
+            return;
+          }
+        });
+        void Promise.all(unloads);
+        nativeSoundsRef.current = null;
+      }
+      nativeLoadPromiseRef.current = null;
     };
+  }, []);
+
+  const playPickupSound = useCallback(() => play('pickup'), [play]);
+  const playDropSound = useCallback(() => play('drop'), [play]);
+  const playErrorSound = useCallback(() => play('error'), [play]);
+  const playSuccessSound = useCallback(() => play('success'), [play]);
+
+  return { playPickupSound, playDropSound, playErrorSound, playSuccessSound };
 }

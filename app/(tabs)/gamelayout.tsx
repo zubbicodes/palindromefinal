@@ -1,19 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Animated,
-    GestureResponderEvent,
-    Image,
-    PanResponder,
-    PanResponderGestureState,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    View
+  Animated,
+  GestureResponderEvent,
+  Image,
+  PanResponder,
+  PanResponderGestureState,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
@@ -22,6 +23,7 @@ import GameLayoutWeb from './gamelayout.web';
 
 // ✅ Import theme context
 import { authService } from '@/authService';
+import { useSettings } from '@/context/SettingsContext';
 import { useThemeContext } from '@/context/ThemeContext';
 import { useSound } from '@/hooks/use-sound';
 
@@ -201,7 +203,8 @@ const DraggableBlock = ({
 function GameLayoutNative() {
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme } = useThemeContext();
-  const { playPickupSound, playDropSound, playErrorSound } = useSound();
+  const { soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled } = useSettings();
+  const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound();
 
   const [score, setScore] = useState(0);
   const [hints, setHints] = useState(2);
@@ -209,13 +212,28 @@ function GameLayoutNative() {
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([]);
   const [pause, setPause] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [vibrationEnabled, setVibrationEnabled] = useState(true);
 
   // ✅ Local state sync with context
   const [darkModeEnabled, setDarkModeEnabled] = useState(theme === 'dark');
   const [userName, setUserName] = useState('User');
   const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  const triggerHaptic = useCallback((kind: 'pickup' | 'drop' | 'error' | 'success') => {
+    if (!hapticsEnabled) return;
+    try {
+      if (kind === 'error') {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+      if (kind === 'success') {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      return;
+    }
+  }, [hapticsEnabled]);
 
   // Game Logic State
   const gridSize = 11;
@@ -416,6 +434,8 @@ function GameLayoutNative() {
               feedbackColor = "#F472B6";
             }
 
+            triggerHaptic('success');
+            playSuccessSound();
             setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
             setTimeout(() => setFeedback(null), 2000);
           }
@@ -458,6 +478,7 @@ function GameLayoutNative() {
     if (tryFindHint(3)) return;
     if (tryFindHint(2)) return;
     playErrorSound();
+    triggerHaptic('error');
   };
 
   const handleDrop = (row: number, col: number, colorIndex: number) => {
@@ -466,11 +487,13 @@ function GameLayoutNative() {
 
     if (gridStateRef.current[row][col] !== null) {
       playErrorSound();
+      triggerHaptic('error');
       return;
     }
 
     if (blockCountsRef.current[colorIndex] <= 0) {
       playErrorSound();
+      triggerHaptic('error');
       return;
     }
 
@@ -485,6 +508,7 @@ function GameLayoutNative() {
     });
 
     playDropSound();
+    triggerHaptic('drop');
     const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid);
     if (scoreFound > 0) setScore((prev) => prev + scoreFound);
   };
@@ -585,6 +609,7 @@ function GameLayoutNative() {
       onDrop={handleDrop}
       onPickup={() => {
         playPickupSound();
+        triggerHaptic('pickup');
         setDraggedColor(index);
         if (!isTimerRunning) setIsTimerRunning(true);
       }}
@@ -697,6 +722,13 @@ function GameLayoutNative() {
         ]}
       >
         {grid}
+        {feedback && (
+          <View pointerEvents="none" style={styles.feedbackContainer}>
+            <Text style={[styles.feedbackText, { color: feedback.color }]}>
+              {feedback.text}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View
@@ -707,18 +739,6 @@ function GameLayoutNative() {
       >
         <View style={styles.colorBlocksRow}>{blocks}</View>
       </View>
-
-      {/* Feedback Overlay */}
-      {feedback && (
-        <View
-          pointerEvents="none"
-          style={styles.feedbackContainer}
-        >
-          <Text style={[styles.feedbackText, { color: feedback.color }]}>
-            {feedback.text}
-          </Text>
-        </View>
-      )}
 
       <View style={styles.controlsRow}>
         <Pressable onPress={() => console.log('Play')}>
@@ -814,7 +834,7 @@ function GameLayoutNative() {
                       { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
                     ]}
                   >
-                    Sound
+                    Sound Effects
                   </Text>
                   <Switch
                     value={soundEnabled}
@@ -841,11 +861,11 @@ function GameLayoutNative() {
                       { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
                     ]}
                   >
-                    Vibration
+                    Haptic Feedback
                   </Text>
                   <Switch
-                    value={vibrationEnabled}
-                    onValueChange={setVibrationEnabled}
+                    value={hapticsEnabled}
+                    onValueChange={setHapticsEnabled}
                     disabled={false}
                     activeText=""
                     inActiveText=""
@@ -1047,8 +1067,12 @@ const styles = StyleSheet.create({
 
   feedbackContainer: {
     position: 'absolute',
-    top: '35%',
-    alignSelf: 'center',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 9999,
   },
   feedbackText: {

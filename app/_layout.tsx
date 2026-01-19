@@ -1,4 +1,5 @@
 import { ThemeProvider, useThemeContext } from '@/context/ThemeContext';
+import { SettingsProvider } from '@/context/SettingsContext';
 import { useAuth } from '@/hooks/useAuth';
 import * as Font from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -99,10 +100,12 @@ export default function RootLayout() {
   // ✅ Wrap your entire app in ThemeProvider
   return (
     <ThemeProvider>
-      {Platform.OS === 'web'
-        ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
-        : null}
-      <AppContent />
+      <SettingsProvider>
+        {Platform.OS === 'web'
+          ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
+          : null}
+        <AppContent />
+      </SettingsProvider>
     </ThemeProvider>
   );
 }

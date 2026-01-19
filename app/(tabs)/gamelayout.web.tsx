@@ -1,5 +1,6 @@
 "use client"
 
+import { useSettings } from "@/context/SettingsContext"
 import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { Ionicons } from "@expo/vector-icons"
@@ -164,6 +165,7 @@ const DraggableBlock = ({
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
+          fontFamily: "Geist-Regular, system-ui",
         }}
       >
         <div
@@ -197,19 +199,25 @@ const DraggableBlock = ({
 export default function GameLayoutWeb() {
   const router = useRouter()
   const { theme, colors, toggleTheme } = useThemeContext()
-  const { playPickupSound, playDropSound, playErrorSound } = useSound()
+  const { soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled } = useSettings()
+  const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound()
 
   const [score, setScore] = useState(0)
   const [hints, setHints] = useState(2)
   const [time, setTime] = useState("00:00")
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([])
   const [settingsVisible, setSettingsVisible] = useState(false)
-  const [soundEnabled, setSoundEnabled] = useState(true)
-  const [vibrationEnabled, setVibrationEnabled] = useState(true)
   const [pause, setPause] = useState(false)
   const [avatar, setAvatar] = useState<string | null>(null)
   const [userName, setUserName] = useState("John Doe")
   const [restartConfirmationVisible, setRestartConfirmationVisible] = useState(false)
+
+  const triggerHaptic = useCallback((pattern: number | number[]) => {
+    if (!hapticsEnabled) return
+    if (typeof navigator === "undefined") return
+    if (!("vibrate" in navigator)) return
+    navigator.vibrate(pattern)
+  }, [hapticsEnabled])
 
   useEffect(() => {
     // Fetch user profile data from Supabase
@@ -408,6 +416,7 @@ export default function GameLayoutWeb() {
 
   const handleDragStart = (colorIndex: number) => {
     playPickupSound()
+    triggerHaptic(10)
     setDraggedColor(colorIndex)
     if (!isTimerRunning) {
       setIsTimerRunning(true)
@@ -449,6 +458,7 @@ export default function GameLayoutWeb() {
     const transferredColor = e.dataTransfer.getData("color")
     if (!transferredColor) {
       playErrorSound()
+      triggerHaptic([0, 30, 20, 30])
       return false
     }
 
@@ -456,16 +466,19 @@ export default function GameLayoutWeb() {
 
     if (isNaN(colorIndex) || colorIndex < 0 || colorIndex >= colorGradients.length) {
       playErrorSound()
+      triggerHaptic([0, 30, 20, 30])
       return false
     }
 
     if (gridState[row][col] !== null) {
       playErrorSound()
+      triggerHaptic([0, 30, 20, 30])
       return false
     }
 
     if (blockCounts[colorIndex] <= 0) {
       playErrorSound()
+      triggerHaptic([0, 30, 20, 30])
       return false
     }
 
@@ -481,6 +494,7 @@ export default function GameLayoutWeb() {
     })
 
     playDropSound()
+    triggerHaptic(14)
     console.log(`Successfully placed color ${colorIndex} at ${row},${col}`)
 
     const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid)
@@ -555,6 +569,8 @@ export default function GameLayoutWeb() {
             }
 
             setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() })
+            playSuccessSound()
+            triggerHaptic([0, 12, 10, 12])
             setTimeout(() => setFeedback(null), 2000)
           }
         }
@@ -608,6 +624,7 @@ export default function GameLayoutWeb() {
 
     // No hint found
     playErrorSound()
+    triggerHaptic([0, 30, 20, 30])
   }
 
   const containerStyle: React.CSSProperties = {
@@ -791,32 +808,43 @@ export default function GameLayoutWeb() {
           >
             {/* Feedback Overlay */}
             {feedback && (
-                <div
-                key={feedback.id}
+              <div
                 style={{
-                    position: "absolute",
-                    top: "50%",
-                    left: "50%",
-                    transform: "translate(-50%, -50%)",
-                    zIndex: 9999,
-                    pointerEvents: 'none',
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 9999,
+                  pointerEvents: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <div
+                  key={feedback.id}
+                  style={{
                     animation: "popIn 0.5s ease-out forwards, floatUp 1.5s ease-in 1s forwards",
                     width: "100%",
                     textAlign: "center",
-                }}
+                  }}
                 >
-                <h2 style={{
-                    fontSize: 56,
-                    fontWeight: "900",
-                    color: feedback.color,
-                    textShadow: "0px 4px 20px rgba(0,0,0,0.4)",
-                    margin: 0,
-                    fontFamily: "Geist-Regular, system-ui",
-                    whiteSpace: "nowrap"
-                }}>
+                  <h2
+                    style={{
+                      fontSize: 56,
+                      fontWeight: "900",
+                      color: feedback.color,
+                      textShadow: "0px 4px 20px rgba(0,0,0,0.4)",
+                      margin: 0,
+                      fontFamily: "Geist-Regular, system-ui",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {feedback.text}
-                </h2>
+                  </h2>
                 </div>
+              </div>
             )}
 
             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -1208,17 +1236,17 @@ export default function GameLayoutWeb() {
                     marginTop: 10,
                     marginBottom: 20,
                   }}>
-                    <span style={{ fontSize: 18, fontWeight: "600", color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound Effects</span>
+                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound Effects</span>
                     <Switch
                       value={soundEnabled}
                       onValueChange={setSoundEnabled}
-                      circleSize={24}
-                      barHeight={28}
+                      circleSize={18}
+                      barHeight={22}
                       backgroundActive={colors.accent}
                       backgroundInactive="#ccc"
                       circleActiveColor="#fff"
                       circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.2}
+                      switchWidthMultiplier={2.5}
                       renderActiveText={false}
                       renderInActiveText={false}
                     />
@@ -1231,17 +1259,17 @@ export default function GameLayoutWeb() {
                     alignItems: "center",
                     marginBottom: 10,
                   }}>
-                    <span style={{ fontSize: 18, fontWeight: "600", color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Haptic Feedback</span>
+                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Haptic Feedback</span>
                     <Switch
-                      value={vibrationEnabled}
-                      onValueChange={setVibrationEnabled}
-                      circleSize={24}
-                      barHeight={28}
+                      value={hapticsEnabled}
+                      onValueChange={setHapticsEnabled}
+                      circleSize={18}
+                      barHeight={22}
                       backgroundActive={colors.accent}
                       backgroundInactive="#ccc"
                       circleActiveColor="#fff"
                       circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.2}
+                      switchWidthMultiplier={2.5}
                       renderActiveText={false}
                       renderInActiveText={false}
                     />
@@ -1381,7 +1409,7 @@ export default function GameLayoutWeb() {
                         onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.1)"}
                         onMouseLeave={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
                         >
-                            <span style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>Cancel</span>
+                            <span style={{ fontSize: 16, fontFamily: "Geist-Regular, system-ui", fontWeight: "600", color: colors.text }}>Cancel</span>
                         </div>
                     </Pressable>
 
@@ -1406,7 +1434,7 @@ export default function GameLayoutWeb() {
                         onMouseDown={e => e.currentTarget.style.transform = "scale(0.98)"}
                         onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
                         >
-                            <span style={{ fontSize: 16, fontWeight: "600", color: "#fff" }}>Restart</span>
+                            <span style={{ fontSize: 16, fontFamily: "Geist-Regular, system-ui", fontWeight: "600", color: "#fff" }}>Restart</span>
                         </div>
                     </Pressable>
                   </div>
