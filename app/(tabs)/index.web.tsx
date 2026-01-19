@@ -49,20 +49,18 @@ export default function LoginWeb() {
     try {
       const result = await authService.signIn(email, password);
 
-      if (result.success && result.user) {
-        // Login successful - navigate to game layout
-        // Use replace instead of push to prevent back navigation issues
-        router.push('/gamelayout');
+      if (result.success) {
+        router.replace('/gamelayout');
       } else {
         // Show friendly error message
         const friendlyError = result.error ? getFriendlyErrorMessage(result.error) : 'Login failed. Please try again.';
         setError(friendlyError);
-        setLoading(false);
       }
     } catch (err: any) {
       console.error('Login error:', err);
       const friendlyError = err.code ? getFriendlyErrorMessage(err.code) : 'An unexpected error occurred';
       setError(friendlyError);
+    } finally {
       setLoading(false);
     }
   };

@@ -63,7 +63,7 @@ const handleSignUp = async () => {
 
     console.log('📦 signUp result:', result);
     
-    if (result.success && result.user) {
+    if (result.success) {
       console.log('✅ Supabase signup successful!');
       
       // Show success and navigate

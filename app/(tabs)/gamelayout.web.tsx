@@ -209,6 +209,7 @@ export default function GameLayoutWeb() {
   const [pause, setPause] = useState(false)
   const [avatar, setAvatar] = useState<string | null>(null)
   const [userName, setUserName] = useState("John Doe")
+  const [restartConfirmationVisible, setRestartConfirmationVisible] = useState(false)
 
   useEffect(() => {
     // Fetch user profile data from Supabase
@@ -298,7 +299,7 @@ export default function GameLayoutWeb() {
     setBulldogPositions(newPositions)
   }, [center, gridSize, halfWord, word])
 
-  useEffect(() => {
+  const initializeGame = useCallback(() => {
     spawnBulldogs()
 
     // Pre-place 3 random colors on horizontal 'I', 'N', 'D' (coordinates (5,3), (5,4), (5,5))
@@ -309,27 +310,39 @@ export default function GameLayoutWeb() {
     ]
     const initialColors = indPositions.map(() => Math.floor(Math.random() * 5))
 
-    setGridState(prev => {
-      const newGrid = prev.map(r => [...r])
+    setGridState(() => {
+      const newGrid = Array.from({ length: gridSize }, () => Array(gridSize).fill(null))
       indPositions.forEach((pos, idx) => {
         newGrid[pos.row][pos.col] = initialColors[idx]
       })
       return newGrid
     })
 
-    setBlockCounts(prev => {
-      const next = [...prev]
-      initialColors.forEach(colorIdx => {
-        next[colorIdx] = Math.max(0, next[colorIdx] - 1)
-      })
-      return next
+    const initialCounts = [16, 16, 16, 16, 16]
+    initialColors.forEach(colorIdx => {
+      initialCounts[colorIdx] = Math.max(0, initialCounts[colorIdx] - 1)
     })
-  }, [spawnBulldogs])
+    setBlockCounts(initialCounts)
+
+    setScore(0)
+    setHints(2)
+    setTime("00:00")
+    setSecondsElapsed(0)
+    setIsTimerRunning(false)
+    setPause(false)
+    setFeedback(null)
+    setDragOverCell(null)
+    setActiveHint(null)
+  }, [spawnBulldogs, gridSize])
+
+  useEffect(() => {
+    initializeGame()
+  }, [initializeGame])
 
   // Fetch/Refresh user profile
   useEffect(() => {
     const loadUserData = async () => {
-      const user = await authService.getCurrentUser()
+      const user = await authService.getSessionUser()
 
       if (user) {
         if (user.displayName) setUserName(user.displayName)
@@ -1037,6 +1050,27 @@ export default function GameLayoutWeb() {
             </div>
           </Pressable>
 
+          <Pressable onPress={() => setRestartConfirmationVisible(true)}>
+             <div style={{
+              width: 80,
+              height: 80,
+              borderRadius: 25,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
+              cursor: 'pointer',
+              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
+               border: "1px solid rgba(0,0,0,0.05)",
+                transition: "transform 0.1s",
+            }}
+             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
+             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <Ionicons name="refresh" size={32} color={colors.text} />
+            </div>
+          </Pressable>
+
           <Pressable onPress={() => setSettingsVisible(true)}>
              <div style={{
               width: 80,
@@ -1263,6 +1297,119 @@ export default function GameLayoutWeb() {
                     <span style={{ fontSize: 16, color: colors.text, fontFamily: "system-ui" }}>Terms & Conditions</span>
                     <span style={{ fontSize: 22, fontWeight: "600", color: colors.accent, fontFamily: "system-ui" }}>›</span>
                   </Pressable>
+                </div>
+              </div>
+            </BlurView>
+          </div>
+        )}
+
+        {/* Restart Confirmation Modal */}
+        {restartConfirmationVisible && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10000,
+          }}>
+            <BlurView
+              intensity={20}
+              tint="default"
+              experimentalBlurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            >
+              <div style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 30px",
+                height: "100%", 
+                width: "100%",
+                backgroundColor: "rgba(0,0,0,0.4)"
+              }}>
+                <div style={{
+                  width: "100%",
+                  maxWidth: 400,
+                  borderRadius: 32,
+                  padding: 32,
+                  boxShadow: "0px 20px 40px rgba(0, 0, 0, 0.4)",
+                  background: theme === "dark"
+                    ? "linear-gradient(to right bottom, #000017, #000074)"
+                    : "#FFFFFF",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  alignItems: "center",
+                }}>
+                  <h2 style={{
+                    fontSize: 24,
+                    fontWeight: "700",
+                    color: colors.text,
+                    fontFamily: "Geist-Regular, system-ui",
+                    marginBottom: 16,
+                    textAlign: "center",
+                    marginTop: 0,
+                  }}>Restart Game?</h2>
+                  <p style={{
+                    fontSize: 16,
+                    color: colors.text,
+                    opacity: 0.8,
+                    fontFamily: "Geist-Regular, system-ui",
+                    marginBottom: 32,
+                    textAlign: "center",
+                  }}>
+                    Are you sure you want to restart? Current progress will be lost.
+                  </p>
+                  
+                  <div style={{ display: "flex", flexDirection: "row", gap: 20, width: "100%" }}>
+                    <Pressable 
+                        onPress={() => setRestartConfirmationVisible(false)}
+                        style={{ flex: 1 }}
+                    >
+                        <div style={{
+                            padding: "16px",
+                            borderRadius: 16,
+                            backgroundColor: "rgba(0,0,0,0.05)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            transition: "background-color 0.2s"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.1)"}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                        >
+                            <span style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>Cancel</span>
+                        </div>
+                    </Pressable>
+
+                    <Pressable 
+                        onPress={() => {
+                            initializeGame()
+                            setRestartConfirmationVisible(false)
+                        }}
+                        style={{ flex: 1 }}
+                    >
+                        <div style={{
+                            padding: "16px",
+                            borderRadius: 16,
+                            background: "linear-gradient(to right, #ff4b4b, #ff0000)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            boxShadow: "0 4px 12px rgba(255, 0, 0, 0.3)",
+                            transition: "transform 0.1s"
+                        }}
+                        onMouseDown={e => e.currentTarget.style.transform = "scale(0.98)"}
+                        onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                        >
+                            <span style={{ fontSize: 16, fontWeight: "600", color: "#fff" }}>Restart</span>
+                        </div>
+                    </Pressable>
+                  </div>
                 </div>
               </div>
             </BlurView>

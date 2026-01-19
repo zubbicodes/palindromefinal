@@ -71,36 +71,30 @@ export default function RootLayout() {
 
     const inTabsGroup = segments[0] === '(tabs)';
     const routeName = segments[1] ?? 'index';
-    const isPublicRoute = (inTabsGroup && (routeName === 'index' || routeName === 'signup')) || segments[0] === 'auth';
+    const isAuthScreen = inTabsGroup && (routeName === 'index' || routeName === 'signup');
+    const isPublicRoute = isAuthScreen || segments[0] === 'auth';
 
     if (!user && !isPublicRoute) {
-      // Redirect to the sign-in page.
       router.replace('/');
-    } else if (user && segments[0] !== '(tabs)') {
-      // Redirect to the home page.
+    } else if (user && isAuthScreen) {
+      router.replace('/(tabs)/gamelayout');
+    } else if (user && segments[0] !== '(tabs)' && segments[0] !== 'auth') {
       router.replace('/(tabs)/gamelayout');
     }
-  }, [user, segments, authLoading]);
+  }, [user, segments, authLoading, router]);
 
-  useEffect(() => {
-    if (fontsLoaded && !authLoading) {
-      const timer = setTimeout(() => setShowSplash(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [fontsLoaded, authLoading]);
+  const shouldShowSplash = !fontsLoaded || authLoading || showSplash;
 
-  // const shouldShowSplash = !fontsLoaded || authLoading || showSplash;
-
-  // if (shouldShowSplash) {
-  //   return (
-  //     <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
-  //       {Platform.OS === 'web'
-  //         ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
-  //         : null}
-  //       <SplashScreen onReady={() => {}} />
-  //     </Animated.View>
-  //   );
-  // }
+  if (shouldShowSplash) {
+    return (
+      <>
+        {Platform.OS === 'web'
+          ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
+          : null}
+        <SplashScreen onReady={() => setShowSplash(false)} />
+      </>
+    );
+  }
 
   // ✅ Wrap your entire app in ThemeProvider
   return (

@@ -50,7 +50,7 @@ export default function AuthCallbackScreen() {
          // But we shouldn't error immediately if it's just mounting
       }
     })();
-  }, [params.code, params.error, params.error_description]);
+  }, [params.code, params.access_token, params.refresh_token, params.error, params.error_description]);
 
   return (
     <View
