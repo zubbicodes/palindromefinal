@@ -68,7 +68,7 @@ function SignupNativeScreen() {
     try {
       const result = await authService.signInWithGoogle();
       if (result.success) {
-        router.replace('/gamelayout');
+        router.replace('/main');
       } else {
         Alert.alert('Signup Failed', result.error || 'Google sign-in failed');
       }

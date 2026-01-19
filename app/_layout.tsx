@@ -78,9 +78,9 @@ export default function RootLayout() {
     if (!user && !isPublicRoute) {
       router.replace('/');
     } else if (user && isAuthScreen) {
-      router.replace('/(tabs)/gamelayout');
+      router.replace('/(tabs)/main');
     } else if (user && segments[0] !== '(tabs)' && segments[0] !== 'auth') {
-      router.replace('/(tabs)/gamelayout');
+      router.replace('/(tabs)/main');
     }
   }, [user, segments, authLoading, router]);
 

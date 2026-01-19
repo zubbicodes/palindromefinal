@@ -41,7 +41,7 @@ export default function LoginScreen() {
     try {
       const result = await authService.signIn(email, password);
       if (result.success) {
-        router.replace('/gamelayout');
+        router.replace('/main');
       } else {
         const message = result.error ? getFriendlyErrorMessage(result.error) : 'Login failed';
         Alert.alert('Login Failed', message);
@@ -80,7 +80,7 @@ export default function LoginScreen() {
     try {
       const result = await authService.signInWithGoogle();
       if (result.success) {
-        router.replace('/gamelayout');
+        router.replace('/main');
       } else {
         Alert.alert('Login Failed', result.error || 'Google sign-in failed');
       }
@@ -96,7 +96,7 @@ export default function LoginScreen() {
     try {
       const result = await authService.signInWithApple();
       if (result.success) {
-        router.replace('/gamelayout');
+        router.replace('/main');
       } else {
         Alert.alert('Login Failed', result.error || 'Apple sign-in failed');
       }

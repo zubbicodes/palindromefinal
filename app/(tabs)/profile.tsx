@@ -158,7 +158,7 @@ export default function ProfileScreen() {
               if (router.canGoBack()) {
                 router.back();
               } else {
-                router.replace('/gamelayout');
+              router.replace('/main');
               }
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
