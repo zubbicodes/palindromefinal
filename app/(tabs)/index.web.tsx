@@ -210,7 +210,7 @@ export default function LoginWeb() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'flex-start',
-              marginTop: '100px'
+              marginTop: '60px'
             }}
           >
             <div style={{ width: '400px', textAlign: 'right' }}>
@@ -242,7 +242,7 @@ export default function LoginWeb() {
               minWidth: '400px',
               maxWidth: '400px',
               width: '100%',
-              marginTop: '120px'
+              marginTop: '80px'
             }}
           >
             {/* Bordered Card */}

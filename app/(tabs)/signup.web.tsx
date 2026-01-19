@@ -1,7 +1,6 @@
 import { authService } from '@/authService'; // Adjust path as needed
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router'; // Added for navigation
 import React, { useEffect, useState } from 'react';
 
@@ -125,7 +124,7 @@ const handleSignUp = async () => {
         display: 'flex',
         overflowY: windowWidth < 900 ? 'auto' : 'hidden', // ✅ small screens scroll
         flexDirection: 'column',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'flex-start',
         background:
           theme === 'dark'
@@ -162,37 +161,29 @@ const handleSignUp = async () => {
       )}
 
       {/* ✅ Top Bar */}
-      <LinearGradient
-        colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF', '#FFFFFF']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+      <div
         style={{
           width: '100%',
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-          paddingVertical: 20,
-          justifyContent: 'center',
-          alignItems: 'center',
+          borderBottom: `1px solid ${colors.border}`,
+          padding: '20px 0',
+          textAlign: 'center',
+          fontWeight: 700,
+          color: colors.primary,
+          fontSize: '22px',
+          letterSpacing: '0.5px',
+          background: theme === 'dark' ? 'linear-gradient(to right, #000017, #000074)' : '#FFFFFF',
+          backdropFilter: 'blur(10px)',
         }}
       >
-        <span
-          style={{
-            fontWeight: 700,
-            color: colors.primary,
-            fontSize: '22px',
-            letterSpacing: '0.5px',
-          }}
-        >
-          PALINDROME®
-        </span>
-      </LinearGradient>
+        PALINDROME®
+      </div>
 
       {/* ✅ Main Section */}
       <div
         style={{
           flex: 1,
           width: '100%',
-          maxWidth: '1200px',
+          maxWidth: '1100px',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'flex-start',
@@ -200,26 +191,23 @@ const handleSignUp = async () => {
           gap: '60px',
           flexWrap: 'wrap',
           boxSizing: 'border-box',
-          marginLeft: 260,
-          marginTop: 100,
         }}
       >
         {/* Left Text */}
         <div
           style={{
             flex: 1,
-            minWidth: '340px',
+            minWidth: '360px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
+            marginTop: '60px'
           }}
         >
           <div
             style={{
-              width: '100%',
-              maxWidth: '400px',
+              width: '400px',
               textAlign: 'right',
-              margin: '0 auto',
             }}
           >
             <h1
@@ -247,11 +235,10 @@ const handleSignUp = async () => {
         <div
           style={{
             flex: 1,
-            minWidth: '380px',
+            minWidth: '400px',
             maxWidth: '400px',
             width: '100%',
-            margin: '0 auto',
-            
+            marginTop: '80px'
           }}
         >
           <div

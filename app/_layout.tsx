@@ -5,7 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
-import Animated, { FadeOut } from 'react-native-reanimated';
 
 const webFontCss = `
 @font-face {
@@ -73,8 +72,12 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === '(tabs)';
 
     if (!user && inAuthGroup) {
-      // Redirect to the sign-in page.
-      router.replace('/');
+      // Only redirect if trying to access protected routes (gamelayout, profile)
+      // Allow access to public routes (index/login, signup)
+      const protectedRoutes = ['gamelayout', 'profile'];
+      if (segments[1] && protectedRoutes.includes(segments[1])) {
+        router.replace('/');
+      }
     } else if (user && segments[0] !== '(tabs)') {
       // Redirect to the home page.
       router.replace('/(tabs)/gamelayout');
@@ -88,18 +91,18 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, authLoading]);
 
-  const shouldShowSplash = !fontsLoaded || authLoading || showSplash;
+  // const shouldShowSplash = !fontsLoaded || authLoading || showSplash;
 
-  if (shouldShowSplash) {
-    return (
-      <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
-        {Platform.OS === 'web'
-          ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
-          : null}
-        <SplashScreen onReady={() => {}} />
-      </Animated.View>
-    );
-  }
+  // if (shouldShowSplash) {
+  //   return (
+  //     <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
+  //       {Platform.OS === 'web'
+  //         ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
+  //         : null}
+  //       <SplashScreen onReady={() => {}} />
+  //     </Animated.View>
+  //   );
+  // }
 
   // ✅ Wrap your entire app in ThemeProvider
   return (
