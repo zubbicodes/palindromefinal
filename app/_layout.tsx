@@ -70,13 +70,13 @@ export default function RootLayout() {
   useEffect(() => {
     if (authLoading) return;
 
-    const inAuthGroup = segments[0] === '(tabs)';
+    const inTabsGroup = segments[0] === '(tabs)';
+    const routeName = segments[1] ?? 'index';
+    const isPublicRoute = inTabsGroup && (routeName === 'index' || routeName === 'signup');
 
-    if (!user && inAuthGroup) {
-      // Redirect to the sign-in page.
+    if (!user && inTabsGroup && !isPublicRoute) {
       router.replace('/');
-    } else if (user && segments[0] !== '(tabs)') {
-      // Redirect to the home page.
+    } else if (user && (segments[0] !== '(tabs)' || isPublicRoute)) {
       router.replace('/(tabs)/gamelayout');
     }
   }, [user, segments, authLoading]);
@@ -88,25 +88,15 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, authLoading]);
 
-  if (!fontsLoaded || authLoading) {
-    // Keep splash screen visible while fonts or auth are loading
-    return (
-      <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
-        {Platform.OS === 'web'
-          ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
-          : null}
-        <SplashScreen onReady={undefined} />
-      </Animated.View>
-    );
-  }
+  const shouldShowSplash = !fontsLoaded || authLoading || showSplash;
 
-  if (showSplash) {
+  if (shouldShowSplash) {
     return (
       <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
         {Platform.OS === 'web'
           ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
           : null}
-        <SplashScreen onReady={undefined} />
+        <SplashScreen onReady={() => {}} />
       </Animated.View>
     );
   }
