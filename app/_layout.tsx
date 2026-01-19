@@ -69,15 +69,13 @@ export default function RootLayout() {
   useEffect(() => {
     if (authLoading) return;
 
-    const inAuthGroup = segments[0] === '(tabs)';
+    const inTabsGroup = segments[0] === '(tabs)';
+    const routeName = segments[1] ?? 'index';
+    const isPublicRoute = (inTabsGroup && (routeName === 'index' || routeName === 'signup')) || segments[0] === 'auth';
 
-    if (!user && inAuthGroup) {
-      // Only redirect if trying to access protected routes (gamelayout, profile)
-      // Allow access to public routes (index/login, signup)
-      const protectedRoutes = ['gamelayout', 'profile'];
-      if (segments[1] && protectedRoutes.includes(segments[1])) {
-        router.replace('/');
-      }
+    if (!user && !isPublicRoute) {
+      // Redirect to the sign-in page.
+      router.replace('/');
     } else if (user && segments[0] !== '(tabs)') {
       // Redirect to the home page.
       router.replace('/(tabs)/gamelayout');
