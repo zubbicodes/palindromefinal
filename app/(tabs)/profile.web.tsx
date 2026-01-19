@@ -95,7 +95,7 @@ export default function ProfileScreenWeb() {
   };
 
   const uploadAvatar = async (uri: string) => {
-    const user = await authService.getCurrentUser();
+    const user = await authService.getSessionUser();
     if (!user) return;
 
     setUploading(true);
@@ -116,7 +116,7 @@ export default function ProfileScreenWeb() {
   };
 
   const handleSave = async () => {
-    const user = await authService.getCurrentUser();
+    const user = await authService.getSessionUser();
     if (!user) return;
 
     setLoading(true);

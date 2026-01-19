@@ -114,8 +114,7 @@ class AuthService {
       }
 
       // For native mobile apps
-      const redirectTo = Linking.createURL('/auth/callback');
-      console.log('OAuth Redirect URL:', redirectTo); // Debugging
+      const redirectTo = Linking.createURL('auth/callback');
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -162,8 +161,7 @@ class AuthService {
       }
 
       // For native mobile apps
-      const redirectTo = Linking.createURL('/auth/callback');
-      console.log('OAuth Redirect URL (Apple):', redirectTo);
+      const redirectTo = Linking.createURL('auth/callback');
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
@@ -300,6 +298,48 @@ class AuthService {
     } catch (e) {
       console.error('Error in getProfile:', e);
       return null;
+    }
+  }
+
+  async ensureProfile(user: AuthUser) {
+    try {
+      const supabase = getSupabaseClient();
+
+      const { data: existing, error: existingError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!existingError && existing) {
+        await this.saveProfileToCache(user.id, existing);
+        return { success: true, profile: existing };
+      }
+
+      const fullName =
+        user.displayName ?? (user.email ? user.email.split('@')[0] : null);
+
+      const profile = {
+        id: user.id,
+        full_name: fullName,
+        email: user.email,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: upserted, error: upsertError } = await supabase
+        .from('profiles')
+        .upsert(profile, { onConflict: 'id' })
+        .select('*')
+        .single();
+
+      if (upsertError) {
+        return { success: false, error: upsertError.message };
+      }
+
+      await this.saveProfileToCache(user.id, upserted);
+      return { success: true, profile: upserted };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to ensure profile' };
     }
   }
 
