@@ -50,7 +50,7 @@ export default function LoginWeb() {
       const result = await authService.signIn(email, password);
 
       if (result.success) {
-        router.replace('/gamelayout');
+        router.replace('/main');
       } else {
         // Show friendly error message
         const friendlyError = result.error ? getFriendlyErrorMessage(result.error) : 'Login failed. Please try again.';

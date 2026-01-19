@@ -41,7 +41,7 @@ export default function AuthCallbackScreen() {
       if (url) {
         const result = await authService.completeOAuthRedirect(url);
         if (result.success) {
-          router.replace('/gamelayout');
+          router.replace('/main');
         } else {
           setError(result.error || 'Failed to complete sign in');
         }
