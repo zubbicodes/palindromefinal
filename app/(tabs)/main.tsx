@@ -2,6 +2,7 @@ import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -10,13 +11,13 @@ import {
     Modal,
     Platform,
     Pressable,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     View,
     useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type TourStep = {
   title: string;
@@ -222,17 +223,31 @@ export default function MainScreen() {
   const { theme, toggleTheme, colors } = useThemeContext();
   const isDark = theme === 'dark';
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   const [displayName, setDisplayName] = useState<string>('Player');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const columns = width >= 900 ? 2 : 1;
+  const columns = width >= 360 ? 2 : 1;
+  const isCompact = width < 420;
+  const float = useRef(new Animated.Value(0)).current;
 
   const backgroundColors = useMemo(() => {
     return isDark ? (['#000017', '#000074'] as const) : (['#FFFFFF', '#E9EFFF'] as const);
   }, [isDark]);
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, { toValue: 1, duration: 2400, useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: 2400, useNativeDriver: true }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [float]);
 
   const steps: TourStep[] = useMemo(
     () => [
@@ -404,106 +419,148 @@ export default function MainScreen() {
     router.push('/profile');
   }, [router]);
 
+  const orbAOffset = float.interpolate({ inputRange: [0, 1], outputRange: [0, -14] });
+  const orbBOffset = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+  const orbCOffset = float.interpolate({ inputRange: [0, 1], outputRange: [0, -18] });
+
   return (
     <LinearGradient colors={backgroundColors} style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Animated.View style={[styles.orb, styles.orbA, { transform: [{ translateY: orbAOffset }] }]}>
+          <LinearGradient colors={['rgba(142,217,252,0.55)', 'rgba(60,141,234,0.0)']} style={styles.orbFill} />
+        </Animated.View>
+        <Animated.View style={[styles.orb, styles.orbB, { transform: [{ translateY: orbBOffset }] }]}>
+          <LinearGradient colors={['rgba(255,238,96,0.55)', 'rgba(255,164,11,0.0)']} style={styles.orbFill} />
+        </Animated.View>
+        <Animated.View style={[styles.orb, styles.orbC, { transform: [{ translateY: orbCOffset }] }]}>
+          <LinearGradient colors={['rgba(195,93,217,0.42)', 'rgba(195,93,217,0.0)']} style={styles.orbFill} />
+        </Animated.View>
+      </View>
+
+      <SafeAreaView edges={['left', 'right', 'bottom']} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingHorizontal: width >= 900 ? 40 : 20, paddingTop: 24, paddingBottom: 40 },
+            {
+              paddingHorizontal: isCompact ? 14 : 16,
+              paddingTop: insets.top + (isCompact ? 12 : 16),
+              paddingBottom: 28,
+            },
           ]}
         >
-          <View style={styles.headerRow}>
-            <View style={styles.headerLeft}>
-              <Text style={[styles.brand, { color: isDark ? '#FFFFFF' : '#0060FF' }]}>PALINDROME®</Text>
-              <Text style={[styles.welcome, { color: isDark ? '#DADADA' : '#49463F' }]}>
-                Welcome, {displayName}
-              </Text>
-            </View>
+          <View style={[styles.topbarWrap, { borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)' }]}>
+            <BlurView intensity={20} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <View style={styles.topbarRow}>
+              <View style={styles.brandWrap}>
+                <Text style={[styles.brand, { color: isDark ? '#FFFFFF' : '#0060FF' }]}>PALINDROME®</Text>
+                <Text style={[styles.welcome, { color: isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.62)' }]}>
+                  Welcome, {displayName}
+                </Text>
+              </View>
 
-            <View style={styles.headerRight}>
-              <Pressable
-                onPress={toggleTheme}
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,96,255,0.10)',
-                    opacity: pressed ? 0.75 : 1,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Toggle theme"
-              >
-                <Ionicons name={isDark ? 'sunny' : 'moon'} size={20} color={isDark ? '#FFFFFF' : '#0060FF'} />
-              </Pressable>
+              <View style={styles.actionsRow}>
+                <Pressable
+                  onPress={toggleTheme}
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
+                      borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
+                      opacity: pressed ? 0.78 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Toggle theme"
+                >
+                  <Ionicons name={isDark ? 'sunny' : 'moon'} size={19} color={isDark ? '#FFFFFF' : '#0060FF'} />
+                </Pressable>
 
-              <Pressable
-                onPress={openTour}
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,96,255,0.10)',
-                    opacity: pressed ? 0.75 : 1,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Open UI tour"
-              >
-                <Ionicons name="help-circle-outline" size={20} color={isDark ? '#FFFFFF' : '#0060FF'} />
-              </Pressable>
+                <Pressable
+                  onPress={openTour}
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
+                      borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
+                      opacity: pressed ? 0.78 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open UI tour"
+                >
+                  <Ionicons name="help-circle-outline" size={19} color={isDark ? '#FFFFFF' : '#0060FF'} />
+                </Pressable>
 
-              <Pressable
-                onPress={handleSignOut}
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)',
-                    opacity: pressed ? 0.75 : 1,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Sign out"
-              >
-                <Ionicons name="log-out-outline" size={20} color={isDark ? '#FFFFFF' : '#111111'} />
-              </Pressable>
+                <Pressable
+                  onPress={handleSignOut}
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
+                      borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
+                      opacity: pressed ? 0.78 : 1,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign out"
+                >
+                  <Ionicons name="log-out-outline" size={19} color={isDark ? '#FFFFFF' : '#111111'} />
+                </Pressable>
+              </View>
             </View>
           </View>
 
-          <View style={[styles.cardGrid, { gap: width >= 900 ? 18 : 14 }]}>
-            <View ref={singleRef} style={{ width: columns === 2 ? '50%' : '100%', paddingRight: columns === 2 ? 9 : 0 }}>
-              <MenuCard
+          <View style={{ marginTop: 14 }}>
+            <Text style={[styles.heroTitle, { color: isDark ? '#FFFFFF' : '#0A0F2D' }]}>Choose Your Mode</Text>
+            <Text
+              style={[
+                styles.heroSubtitle,
+                { color: isDark ? 'rgba(255,255,255,0.74)' : 'rgba(17,17,17,0.62)' },
+              ]}
+            >
+              Jump in fast. Multiplayer and Practice land soon.
+            </Text>
+          </View>
+
+          <View style={styles.tileGrid}>
+            <View ref={singleRef} style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}>
+              <MenuTile
                 title="Single Player"
                 subtitle="Start a new game"
+                badge="Play"
                 icon="person"
                 colors={['#8ed9fc', '#3c8dea']}
                 onPress={handleSinglePlayer}
               />
             </View>
 
-            <View ref={multiRef} style={{ width: columns === 2 ? '50%' : '100%', paddingLeft: columns === 2 ? 9 : 0 }}>
-              <MenuCard
+            <View ref={multiRef} style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}>
+              <MenuTile
                 title="Multiplayer"
                 subtitle="Play with friends"
+                badge="Soon"
                 icon="people"
                 colors={['#ffee60', '#ffa40b']}
                 onPress={handleComingSoon}
               />
             </View>
 
-            <View ref={practiceRef} style={{ width: columns === 2 ? '50%' : '100%', paddingRight: columns === 2 ? 9 : 0 }}>
-              <MenuCard
+            <View ref={practiceRef} style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}>
+              <MenuTile
                 title="Practice Mode"
                 subtitle="Warm up and explore"
+                badge="Soon"
                 icon="school"
                 colors={['#C40111', '#F01D2E']}
                 onPress={handleComingSoon}
               />
             </View>
 
-            <View ref={settingsRef} style={{ width: columns === 2 ? '50%' : '100%', paddingLeft: columns === 2 ? 9 : 0 }}>
-              <MenuCard
+            <View ref={settingsRef} style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}>
+              <MenuTile
                 title="Settings"
                 subtitle="Profile and preferences"
+                badge="Open"
                 icon="settings"
                 colors={['#111111', '#3C3C3C']}
                 onPress={handleSettings}
@@ -535,39 +592,73 @@ export default function MainScreen() {
   );
 }
 
-function MenuCard(props: {
+function MenuTile(props: {
   title: string;
   subtitle: string;
+  badge: string;
   icon: keyof typeof Ionicons.glyphMap;
   colors: readonly [string, string];
   onPress: () => void;
 }) {
-  const { theme } = useThemeContext();
-  const isDark = theme === 'dark';
+  const sparkle = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const a = Animated.loop(
+      Animated.sequence([
+        Animated.timing(sparkle, { toValue: 1, duration: 2200, useNativeDriver: true }),
+        Animated.timing(sparkle, { toValue: 0, duration: 2200, useNativeDriver: true }),
+      ]),
+    );
+    a.start();
+    return () => a.stop();
+  }, [sparkle]);
+
+  const sparkleTranslate = sparkle.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
 
   return (
     <Pressable
       onPress={props.onPress}
       style={({ pressed }) => [
-        styles.cardPressable,
+        styles.tilePressable,
         {
           transform: [{ scale: pressed ? 0.98 : 1 }],
-          shadowOpacity: pressed ? 0.12 : 0.2,
+          shadowOpacity: pressed ? 0.14 : 0.24,
         },
       ]}
       accessibilityRole="button"
       accessibilityLabel={props.title}
     >
-      <LinearGradient colors={props.colors} style={styles.cardGradient}>
-        <View style={styles.cardInner}>
-          <View style={styles.cardIconRow}>
-            <View style={[styles.cardIconWrap, { backgroundColor: 'rgba(255,255,255,0.22)' }]}>
+      <LinearGradient colors={props.colors} style={styles.tileGradient}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.spark,
+            {
+              transform: [{ translateY: sparkleTranslate }],
+              opacity: 0.55,
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0.55)', 'rgba(255,255,255,0.0)']}
+            style={styles.sparkFill}
+          />
+        </Animated.View>
+
+        <View style={styles.tileInner}>
+          <View style={styles.tileTopRow}>
+            <View style={styles.tileIconWrap}>
               <Ionicons name={props.icon} size={22} color="#FFFFFF" />
+            </View>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{props.badge}</Text>
             </View>
           </View>
 
-          <Text style={styles.cardTitle}>{props.title}</Text>
-          <Text style={[styles.cardSubtitle, { opacity: isDark ? 0.92 : 0.88 }]}>{props.subtitle}</Text>
+          <View>
+            <Text style={styles.tileTitle}>{props.title}</Text>
+            <Text style={styles.tileSubtitle}>{props.subtitle}</Text>
+          </View>
         </View>
       </LinearGradient>
     </Pressable>
@@ -578,33 +669,65 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     width: '100%',
-    maxWidth: 1100,
+    maxWidth: 980,
     alignSelf: 'center',
   },
-  headerRow: {
+  orb: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  orbFill: {
+    flex: 1,
+    borderRadius: 999,
+  },
+  orbA: {
+    width: 280,
+    height: 280,
+    left: -120,
+    top: -130,
+  },
+  orbB: {
+    width: 320,
+    height: 320,
+    right: -170,
+    top: 40,
+  },
+  orbC: {
+    width: 360,
+    height: 360,
+    right: -220,
+    bottom: -260,
+  },
+  topbarWrap: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  topbarRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 16,
-    marginBottom: 18,
+    gap: 12,
   },
-  headerLeft: {
+  brandWrap: {
     flexShrink: 1,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
   },
   brand: {
     fontFamily: 'Geist-Bold',
-    fontSize: 22,
-    letterSpacing: 0.5,
+    fontSize: 18,
+    letterSpacing: 0.6,
   },
   welcome: {
     fontFamily: 'Geist-Regular',
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 12,
+    marginTop: 3,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   iconButton: {
     width: 42,
@@ -612,54 +735,97 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
-  cardGrid: {
+  heroTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 24,
+    letterSpacing: -0.2,
+  },
+  heroSubtitle: {
+    fontFamily: 'Geist-Regular',
+    fontSize: 13,
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  tileGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 10,
+    marginTop: 14,
+    marginHorizontal: -6,
   },
-  cardPressable: {
-    borderRadius: 22,
+  tileWrap: {
+    paddingHorizontal: 6,
+    marginBottom: 12,
+  },
+  tilePressable: {
+    borderRadius: 18,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 22,
     elevation: 6,
-    marginBottom: 18,
   },
-  cardGradient: {
-    borderRadius: 22,
-    minHeight: 140,
+  tileGradient: {
+    borderRadius: 18,
+    minHeight: 114,
   },
-  cardInner: {
-    paddingHorizontal: 18,
-    paddingVertical: 18,
+  tileInner: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     justifyContent: 'space-between',
-    minHeight: 140,
+    minHeight: 114,
   },
-  cardIconRow: {
+  tileTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 10,
   },
-  cardIconWrap: {
+  tileIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
-  cardTitle: {
+  badge: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  badgeText: {
+    fontFamily: 'Geist-Regular',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.92)',
+  },
+  tileTitle: {
     fontFamily: 'Geist-Bold',
-    fontSize: 20,
+    fontSize: 16,
     color: '#FFFFFF',
     marginTop: 10,
   },
-  cardSubtitle: {
+  tileSubtitle: {
     fontFamily: 'Geist-Regular',
-    fontSize: 13,
-    color: '#FFFFFF',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.90)',
     marginTop: 6,
+  },
+  spark: {
+    position: 'absolute',
+    right: 10,
+    top: 10,
+    width: 46,
+    height: 46,
+    borderRadius: 999,
+  },
+  sparkFill: {
+    flex: 1,
+    borderRadius: 999,
   },
   toast: {
     position: 'absolute',
