@@ -5,7 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
-import Animated, { FadeOut } from 'react-native-reanimated';
 
 const webFontCss = `
 @font-face {
@@ -72,11 +71,13 @@ export default function RootLayout() {
 
     const inTabsGroup = segments[0] === '(tabs)';
     const routeName = segments[1] ?? 'index';
-    const isPublicRoute = inTabsGroup && (routeName === 'index' || routeName === 'signup');
+    const isPublicRoute = (inTabsGroup && (routeName === 'index' || routeName === 'signup')) || segments[0] === 'auth';
 
-    if (!user && inTabsGroup && !isPublicRoute) {
+    if (!user && !isPublicRoute) {
+      // Redirect to the sign-in page.
       router.replace('/');
-    } else if (user && (segments[0] !== '(tabs)' || isPublicRoute)) {
+    } else if (user && segments[0] !== '(tabs)') {
+      // Redirect to the home page.
       router.replace('/(tabs)/gamelayout');
     }
   }, [user, segments, authLoading]);
@@ -88,18 +89,18 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, authLoading]);
 
-  const shouldShowSplash = !fontsLoaded || authLoading || showSplash;
+  // const shouldShowSplash = !fontsLoaded || authLoading || showSplash;
 
-  if (shouldShowSplash) {
-    return (
-      <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
-        {Platform.OS === 'web'
-          ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
-          : null}
-        <SplashScreen onReady={() => {}} />
-      </Animated.View>
-    );
-  }
+  // if (shouldShowSplash) {
+  //   return (
+  //     <Animated.View exiting={FadeOut.duration(600)} style={{ flex: 1 }}>
+  //       {Platform.OS === 'web'
+  //         ? React.createElement('style', { dangerouslySetInnerHTML: { __html: webFontCss } })
+  //         : null}
+  //       <SplashScreen onReady={() => {}} />
+  //     </Animated.View>
+  //   );
+  // }
 
   // ✅ Wrap your entire app in ThemeProvider
   return (

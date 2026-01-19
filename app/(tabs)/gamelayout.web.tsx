@@ -6,11 +6,11 @@ import { Ionicons } from "@expo/vector-icons"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { BlurView } from "expo-blur"
 import { useRouter } from "expo-router"
-import { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import {
-    Dimensions,
-    Pressable, // Keeps Pressable for unified event handling or allows simple onClick
-    StyleSheet,
+  Dimensions,
+  Pressable, // Keeps Pressable for unified event handling or allows simple onClick
+  StyleSheet,
 } from "react-native"
 // react-native-svg works on web, usually maps to <svg>, but we can also use native <svg> if RN-SVG gives trouble. 
 // However, sticking to RN-SVG is usually fine on web if setup correctly. The user snippet used Svg, let's stick to it or standard svg if safer.
@@ -599,41 +599,22 @@ export default function GameLayoutWeb() {
 
   const containerStyle: React.CSSProperties = {
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "row",
     flex: 1,
     alignItems: "center",
-    paddingTop: 0,
-    justifyContent: "space-between",
+    justifyContent: "center",
+    padding: "40px",
     background: theme === "dark"
       ? "linear-gradient(to right bottom, #000017, #000074)"
       : "linear-gradient(to right bottom, #FFFFFF, #F5F5F5)",
     minHeight: "100vh",
     width: "100%",
+    boxSizing: "border-box",
+    gap: 60,
   }
 
   return (
     <div style={containerStyle}>
-      <div style={{
-        width: "100%",
-        maxWidth: "100vw",
-        padding: "20px", // from RN paddingVertical 20? No, original had paddingVertical: -1 which is weird, maybe typo. Let's strictly use 100% width.
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        flex: 1,
-      }}>
-        <h1 style={{
-          fontSize: 26,
-          fontWeight: "900",
-          marginBottom: 10,
-          textAlign: "center",
-          marginTop: 15,
-          color: colors.accent,
-          fontFamily: "system-ui, -apple-system, sans-serif", // Approximate RN font
-          margin: "15px 0 10px 0",
-        }}>PALINDROME®</h1>
-
         <style>{`
           @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
@@ -651,43 +632,79 @@ export default function GameLayoutWeb() {
           }
         `}</style>
 
-        <div style={{
-          height: 1,
-          width: "100%",
-          backgroundColor: theme === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)",
-        }} />
-
-        {/* Status Row */}
+        {/* Left Panel: Status & Info */}
         <div style={{
           display: "flex",
-          flexDirection: "row",
+          flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          gap: layoutConfig.statusGap,
-          marginTop: layoutConfig.statusMargin.top,
-          marginBottom: layoutConfig.statusMargin.bottom,
+          gap: 30,
+          minWidth: 200,
         }}>
+          <h1 style={{
+            fontSize: 32,
+            fontWeight: "900",
+            marginBottom: 20,
+            textAlign: "center",
+            color: colors.accent,
+            fontFamily: "system-ui, -apple-system, sans-serif",
+            margin: 0,
+            textShadow: "0 2px 10px rgba(0,0,0,0.1)",
+          }}>PALINDROME®</h1>
+
+          {/* User Profile Summary */}
           <div style={{
             display: "flex",
-            flexDirection: "row",
+            alignItems: "center",
+            gap: 15,
+            padding: "10px 20px",
+            backgroundColor: theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+            borderRadius: 20,
+            marginBottom: 10,
+          }}>
+             <img
+                src={avatar ? avatar : require("../../assets/images/profile.jpg")}
+                style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: 25,
+                  objectFit: 'contain',
+                  border: `2px solid ${colors.accent}`
+                }}
+                alt="Profile"
+              />
+              <span style={{
+                fontSize: 18,
+                fontWeight: "700",
+                color: colors.text,
+                fontFamily: "system-ui"
+              }}>{userName}</span>
+          </div>
+
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
             borderWidth: 1,
             borderStyle: "solid",
-            borderRadius: 16,
-            width: 120,
-            height: 60,
+            borderRadius: 24,
+            width: "100%",
+            padding: "20px 0",
             justifyContent: "center",
             alignItems: "center",
-            boxShadow: "0px 3px 3px rgba(0, 0, 0, 0.1)",
+            boxShadow: "0px 10px 20px rgba(0, 0, 0, 0.1)",
             backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
             borderColor: colors.border,
           }}>
-            <span style={{ fontSize: 16, color: colors.secondaryText, fontFamily: "system-ui" }}>Score</span>
-            <span style={{ marginLeft: 16, fontSize: 28, fontWeight: "600", color: colors.accent, fontFamily: "system-ui" }}>{score}</span>
+            <span style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: colors.secondaryText, fontFamily: "system-ui", marginBottom: 5 }}>Score</span>
+            <span style={{ fontSize: 42, fontWeight: "800", color: colors.accent, fontFamily: "system-ui" }}>{score}</span>
           </div>
 
-          <div style={{}}>
-            <Svg height="60" width="300">
+          <div style={{
+             display: "flex",
+             flexDirection: "column",
+             alignItems: "center",
+             justifyContent: "center",
+          }}>
+             <Svg height="80" width="200">
               <Defs>
                 <SvgLinearGradient id="timeGradWeb" x1="0" y1="0" x2="1" y2="1">
                   <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
@@ -696,11 +713,11 @@ export default function GameLayoutWeb() {
               </Defs>
               <SvgText
                 fill="url(#timeGradWeb)"
-                fontSize="34"
+                fontSize="48"
                 fontFamily="Geist-Regular"
                 fontWeight="bold"
                 x="50%"
-                y="60%"
+                y="65%"
                 textAnchor="middle"
               >
                 {time}
@@ -714,84 +731,81 @@ export default function GameLayoutWeb() {
               cursor: hints > 0 ? "pointer" : "not-allowed",
               opacity: hints > 0 ? 1 : 0.6,
               display: "flex",
-              flexDirection: "row",
+              flexDirection: "column",
               borderWidth: 1,
               borderStyle: "solid",
-              borderRadius: 16,
-              width: 120,
-              height: 60,
+              borderRadius: 24,
+              width: "100%",
+              padding: "20px 0",
               justifyContent: "center",
               alignItems: "center",
-              boxShadow: "0px 3px 3px rgba(0, 0, 0, 0.1)",
+              boxShadow: "0px 10px 20px rgba(0, 0, 0, 0.1)",
               backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
               borderColor: colors.border,
-            }}>
-            <span style={{ fontSize: 16, color: colors.secondaryText, fontFamily: "system-ui" }}>Hints</span>
-            <span style={{ marginLeft: 16, fontSize: 28, fontWeight: "600", color: "#C35DD9", fontFamily: "system-ui" }}>{hints}</span>
+              transition: "transform 0.2s",
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.02)"}
+            onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+          >
+            <span style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: colors.secondaryText, fontFamily: "system-ui", marginBottom: 5 }}>Hints</span>
+            <span style={{ fontSize: 32, fontWeight: "700", color: "#C35DD9", fontFamily: "system-ui" }}>{hints}</span>
           </div>
         </div>
 
-        {/* Main Game Area */}
+        {/* Center Panel: Board & Blocks */}
         <div style={{
           display: "flex",
-          flexDirection: "row",
-          justifyContent: "center",
+          flexDirection: "column",
           alignItems: "center",
-          flex: 1,
-          margin: "10px 0",
-          gap: layoutConfig.mainLayoutGap,
-          zIndex: 1,
+          gap: 40,
         }}>
-          {/* Left Color Blocks */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-            <div style={{
-              borderRadius: 14,
-              padding: "12px 16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontFamily: "Geist-Regular",
-              backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
-              width: layoutConfig.colorBlockWrapper.width,
-              height: layoutConfig.colorBlockWrapper.height,
-            }}>
-              <div style={{
-                display: "flex",
-                flexDirection: 'column',
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 16,
-              }}>
-                {colorGradients.map((gradient, i) => (
-                  <DraggableBlock
-                    key={`left-${i}`}
-                    colorIndex={i}
-                    gradient={gradient}
-                    count={blockCounts[i]}
-                    layoutConfig={layoutConfig}
-
-                    onDragStart={handleDragStart}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
           {/* Game Board */}
           <div
             ref={boardRef}
             style={{
-              borderRadius: 16,
-              padding: 6,
+              borderRadius: 24,
+              padding: 12,
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
               backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
+              boxShadow: theme === "dark" ? "0 20px 50px rgba(0,0,0,0.5)" : "0 20px 50px rgba(0,0,0,0.1)",
               width: layoutConfig.boardSize,
               height: layoutConfig.boardSize,
               zIndex: 1,
+              position: 'relative',
             }}
           >
+            {/* Feedback Overlay */}
+            {feedback && (
+                <div
+                key={feedback.id}
+                style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 9999,
+                    pointerEvents: 'none',
+                    animation: "popIn 0.5s ease-out forwards, floatUp 1.5s ease-in 1s forwards",
+                    width: "100%",
+                    textAlign: "center",
+                }}
+                >
+                <h2 style={{
+                    fontSize: 56,
+                    fontWeight: "900",
+                    color: feedback.color,
+                    textShadow: "0px 4px 20px rgba(0,0,0,0.4)",
+                    margin: 0,
+                    fontFamily: "Geist-Regular, system-ui",
+                    whiteSpace: "nowrap"
+                }}>
+                    {feedback.text}
+                </h2>
+                </div>
+            )}
+
             <div style={{ display: "flex", flexDirection: "column" }}>
               {Array.from({ length: gridSize }, (_, row) => (
                 <div key={row} style={{ display: "flex", flexDirection: "row" }}>
@@ -814,31 +828,31 @@ export default function GameLayoutWeb() {
                       borderWidth: 1,
                       borderStyle: "solid",
                       borderColor: "#CCDAE466",
-                      borderRadius: 6,
+                      borderRadius: 8,
                       margin: 3,
                       display: "flex",
                       justifyContent: "center",
                       alignItems: "center",
                       backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
-                      transition: "all 0.1s ease",
+                      transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
                       position: "relative",
+                      boxShadow: "inset 0 2px 4px rgba(0,0,0,0.05)",
                     }
 
                     const isHint = activeHint?.row === row && activeHint?.col === col
-                    // Prioritize hint style or merge/override
+                    
                     if (isHovered || isHint) {
                       cellStyle.backgroundColor = theme === "dark" ? "rgba(100, 200, 255, 0.4)" : "rgba(100, 200, 255, 0.3)"
                       cellStyle.borderColor = theme === "dark" ? "rgba(100, 200, 255, 0.8)" : "rgba(50, 150, 255, 0.6)"
                       cellStyle.borderWidth = 2
-                      cellStyle.boxShadow = "0 0 4px #4A9EFF"
+                      cellStyle.boxShadow = "0 0 12px rgba(74, 158, 255, 0.5)"
+                      cellStyle.transform = "scale(1.05)"
+                      cellStyle.zIndex = 10
                     }
 
                     if (isHint) {
-                      // Add specific hint overrides (Gold/Yellow theme for hint distinction, or keep blue?)
-                      // User asked for "generated a hint ... stating that either a hover effect is generated"
-                      // So reusing the hover effect (Blue) is good, but let's add the Gold border to signify it's a HINT not just hover.
                       cellStyle.borderColor = "#FFD700"
-                      cellStyle.boxShadow = "0 0 15px rgba(255, 215, 0, 0.8)"
+                      cellStyle.boxShadow = "0 0 20px rgba(255, 215, 0, 0.6)"
                     }
 
                     return (
@@ -855,12 +869,13 @@ export default function GameLayoutWeb() {
                             style={{
                               width: "100%",
                               height: "100%",
-                              borderRadius: 4,
+                              borderRadius: 6,
                               background: `linear-gradient(to right bottom, ${colorGradients[cellColorIndex][0]}, ${colorGradients[cellColorIndex][1]})`,
                               position: "absolute",
                               top: 0,
                               left: 0,
                               zIndex: 0,
+                              boxShadow: "0 2px 5px rgba(0,0,0,0.2)"
                             }}
                           />
                         )}
@@ -874,7 +889,7 @@ export default function GameLayoutWeb() {
                               right: 0,
                               bottom: 0,
                               background: `linear-gradient(to right bottom, ${colorGradients[activeHint.colorIndex][0]}, ${colorGradients[activeHint.colorIndex][1]})`,
-                              borderRadius: 4,
+                              borderRadius: 6,
                               animation: "pulse 1.5s infinite",
                               zIndex: 1,
                             }}
@@ -892,9 +907,10 @@ export default function GameLayoutWeb() {
                             <img
                               src="/bulldog.png"
                               style={{
-                                width: layoutConfig.cellSize - 14,
-                                height: layoutConfig.cellSize - 14,
+                                width: layoutConfig.cellSize - 10,
+                                height: layoutConfig.cellSize - 10,
                                 objectFit: "contain",
+                                filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.3))"
                               }}
                               alt="bulldog"
                             />
@@ -903,9 +919,10 @@ export default function GameLayoutWeb() {
                             <span
                               style={{
                                 color: colors.text,
-                                fontSize: layoutConfig.cellSize > 40 ? 16 : 14,
-                                fontWeight: "700",
+                                fontSize: layoutConfig.cellSize > 40 ? 18 : 15,
+                                fontWeight: "800",
                                 fontFamily: "system-ui",
+                                textShadow: cellColorIndex !== null ? "0 1px 2px rgba(0,0,0,0.3)" : "none"
                               }}
                             >
                               {letter}
@@ -920,143 +937,129 @@ export default function GameLayoutWeb() {
             </div>
           </div>
 
-          {/* Feedback Overlay */}
-          {feedback && (
-            <div
-              key={feedback.id}
-              style={{
-                position: "absolute",
-                top: "30%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                zIndex: 9999,
-                pointerEvents: 'none',
-                animation: "popIn 0.5s ease-out forwards, floatUp 1.5s ease-in 1s forwards"
-              }}
-            >
-              <h2 style={{
-                fontSize: 48,
-                fontWeight: "900",
-                color: feedback.color,
-                textShadow: "0px 4px 10px rgba(0,0,0,0.3)",
-                margin: 0,
-                fontFamily: "Geist-Regular, system-ui",
-                whiteSpace: "nowrap"
-              }}>
-                {feedback.text}
-              </h2>
-            </div>
-          )}
-
-          {/* Right Color Blocks */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-            <div style={{
-              borderRadius: 14,
-              padding: "12px 16px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              fontFamily: "Geist-Regular",
-              backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
-              width: layoutConfig.colorBlockWrapper.width,
-              height: layoutConfig.colorBlockWrapper.height,
-            }}>
-              <div style={{
-                display: "flex",
-                flexDirection: 'column',
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 16,
-              }}>
-                {colorGradients.map((gradient, i) => (
-                  <DraggableBlock
-                    key={`right-${i}`}
-                    colorIndex={i}
-                    gradient={gradient}
-                    count={blockCounts[i]}
-                    layoutConfig={layoutConfig}
-                    onDragStart={handleDragStart}
-                  />
-                ))}
-              </div>
-            </div>
+          {/* Bottom Blocks Row */}
+          <div style={{
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 20,
+            padding: "20px 40px",
+            backgroundColor: theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.5)",
+            borderRadius: 30,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+            backdropFilter: "blur(10px)",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+          }}>
+            {colorGradients.map((gradient, i) => (
+              <DraggableBlock
+                key={`bottom-${i}`}
+                colorIndex={i}
+                gradient={gradient}
+                count={blockCounts[i]}
+                layoutConfig={layoutConfig}
+                onDragStart={handleDragStart}
+              />
+            ))}
           </div>
         </div>
 
-        {/* Bottom Controls */}
+        {/* Right Panel: Controls */}
         <div style={{
-          position: "relative",
-          left: 0,
-          right: 0,
           display: "flex",
-          flexDirection: "row",
-          justifyContent: "center",
-          gap: 18,
-          padding: "20px 0",
-          bottom: layoutConfig.controlsBottom,
+          flexDirection: "column",
+          gap: 20,
+          minWidth: 100,
         }}>
-          <Pressable onPress={() => {
+           <Pressable onPress={() => {
             if (pause) setPause(false)
             if (!isTimerRunning) setIsTimerRunning(true)
           }}>
             <div style={{
-              width: 35,
-              height: 35,
-              borderRadius: "50%",
+              width: 80,
+              height: 80,
+              borderRadius: 25,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               background: "linear-gradient(to right bottom, #8ed9fc, #3c8dea)",
-              cursor: 'pointer'
-            }}>
-              <Ionicons name="play" size={20} color="#1a63cc" />
+              cursor: 'pointer',
+              boxShadow: "0 8px 16px rgba(60, 141, 234, 0.3)",
+              transition: "transform 0.1s",
+            }}
+             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
+             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <Ionicons name="play" size={40} color="#fff" />
             </div>
           </Pressable>
+
           <Pressable onPress={() => setPause(true)}>
             <div style={{
-              width: 35,
-              height: 35,
-              borderRadius: "50%",
+              width: 80,
+              height: 80,
+              borderRadius: 25,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               background: "linear-gradient(to right bottom, #ffee60, #ffa40b)",
-              cursor: 'pointer'
-            }}>
-              <Ionicons name="pause" size={20} color="#de5f07" />
+              cursor: 'pointer',
+              boxShadow: "0 8px 16px rgba(255, 164, 11, 0.3)",
+              transition: "transform 0.1s",
+            }}
+             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
+             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <Ionicons name="pause" size={40} color="#fff" />
             </div>
           </Pressable>
+
           <Pressable onPress={() => router.push("/profile")}>
-            <div style={{
-              width: 35,
-              height: 35,
-              borderRadius: "50%",
+             <div style={{
+              width: 80,
+              height: 80,
+              borderRadius: 25,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: "linear-gradient(to right bottom, #8ed9fc, #3c8dea)",
-              cursor: 'pointer'
-            }}>
-              <Ionicons name="list" size={20} color="#1a63cc" />
+              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
+              cursor: 'pointer',
+              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
+              border: "1px solid rgba(0,0,0,0.05)",
+               transition: "transform 0.1s",
+            }}
+             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
+             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <Ionicons name="list" size={32} color={colors.text} />
             </div>
           </Pressable>
+
           <Pressable onPress={() => setSettingsVisible(true)}>
-            <div style={{
-              width: 35,
-              height: 35,
-              borderRadius: "50%",
+             <div style={{
+              width: 80,
+              height: 80,
+              borderRadius: 25,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              background: "linear-gradient(to right bottom, #8ed9fc, #3c8dea)",
-              cursor: 'pointer'
-            }}>
-              <Ionicons name="settings" size={20} color="#1a63cc" />
+              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
+              cursor: 'pointer',
+              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
+               border: "1px solid rgba(0,0,0,0.05)",
+                transition: "transform 0.1s",
+            }}
+             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
+             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <Ionicons name="settings-sharp" size={32} color={colors.text} />
             </div>
           </Pressable>
         </div>
 
-        {/* Settings Modal - using fixed position div overlay */}
+        {/* Settings Modal */}
         {settingsVisible && (
           <div style={{
             position: "fixed",
@@ -1078,43 +1081,46 @@ export default function GameLayoutWeb() {
                 alignItems: "center",
                 justifyContent: "center",
                 padding: "0 30px",
-                height: "100%", // ensure center
+                height: "100%", 
                 width: "100%",
+                backgroundColor: "rgba(0,0,0,0.4)"
               }}>
                 <div style={{
                   width: "100%",
-                  maxWidth: 340,
-                  borderRadius: 24,
-                  padding: 24,
-                  boxShadow: "0px 10px 20px rgba(0, 0, 0, 0.25)",
-                  maxHeight: 500,
+                  maxWidth: 400,
+                  borderRadius: 32,
+                  padding: 32,
+                  boxShadow: "0px 20px 40px rgba(0, 0, 0, 0.4)",
                   background: theme === "dark"
                     ? "linear-gradient(to right bottom, #000017, #000074)"
-                    : "linear-gradient(to right bottom, #FFFFFF, #F5F5F5)",
+                    : "#FFFFFF",
                   display: 'flex',
-                  flexDirection: 'column'
+                  flexDirection: 'column',
+                  border: "1px solid rgba(255,255,255,0.1)"
                 }}>
                   <div style={{
                     display: "flex",
                     flexDirection: "row",
-                    justifyContent: "center",
+                    justifyContent: "space-between",
                     alignItems: "center",
-                    marginBottom: 10,
+                    marginBottom: 24,
                   }}>
-                    <div style={{ flex: 1 }} />
                     <span style={{
-                      fontSize: 22,
+                      fontSize: 28,
                       fontWeight: "900",
                       fontFamily: "Geist-Regular, system-ui",
                       color: colors.text,
                     }}>Settings</span>
-                    <Pressable onPress={() => setSettingsVisible(false)} style={{ flex: 1, alignItems: "flex-end" }}>
+                    <Pressable onPress={() => setSettingsVisible(false)} style={{ 
+                        width: 40, height: 40, alignItems: "center", justifyContent: "center",
+                        backgroundColor: "rgba(0,0,0,0.05)", borderRadius: 20
+                    }}>
                       <span style={{
-                        fontSize: 26,
+                        fontSize: 24,
                         fontWeight: "700",
-                        fontFamily: "Geist-Regular, system-ui",
-                        color: colors.accent,
-                        cursor: 'pointer'
+                        color: colors.text,
+                        cursor: 'pointer',
+                        lineHeight: 1
                       }}>×</span>
                     </Pressable>
                   </div>
@@ -1123,22 +1129,25 @@ export default function GameLayoutWeb() {
                     display: "flex",
                     flexDirection: "row",
                     alignItems: "center",
-                    marginBottom: 20,
+                    marginBottom: 30,
+                    padding: 15,
+                    backgroundColor: "rgba(0,0,0,0.03)",
+                    borderRadius: 20
                   }}>
                     <img
                       src={avatar ? avatar : require("../../assets/images/profile.jpg")}
                       style={{
-                        width: 70,
-                        height: 70,
-                        borderRadius: 25,
-                        marginRight: 15,
+                        width: 60,
+                        height: 60,
+                        borderRadius: 30,
+                        marginRight: 20,
                         objectFit: 'contain'
                       }}
                       alt="Profile"
                     />
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                       <span style={{
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight: "700",
                         color: colors.text,
                         fontFamily: "Geist-Regular, system-ui"
@@ -1146,12 +1155,12 @@ export default function GameLayoutWeb() {
                       <Pressable onPress={() => router.push("/profile")}>
                         <span style={{
                           fontSize: 14,
-                          textDecoration: "underline",
+                          fontWeight: "600",
                           marginTop: 4,
                           color: colors.accent,
                           cursor: 'pointer',
                           fontFamily: "Geist-Regular, system-ui"
-                        }}>Edit Profile</span>
+                        }}>View Profile</span>
                       </Pressable>
                     </div>
                   </div>
@@ -1162,20 +1171,20 @@ export default function GameLayoutWeb() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginTop: 14,
-                    marginBottom: 6,
+                    marginTop: 10,
+                    marginBottom: 20,
                   }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound</span>
+                    <span style={{ fontSize: 18, fontWeight: "600", color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound Effects</span>
                     <Switch
                       value={soundEnabled}
                       onValueChange={setSoundEnabled}
-                      circleSize={18}
-                      barHeight={22}
+                      circleSize={24}
+                      barHeight={28}
                       backgroundActive={colors.accent}
                       backgroundInactive="#ccc"
                       circleActiveColor="#fff"
                       circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
+                      switchWidthMultiplier={2.2}
                       renderActiveText={false}
                       renderInActiveText={false}
                     />
@@ -1186,24 +1195,24 @@ export default function GameLayoutWeb() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginTop: 14,
-                    marginBottom: 6,
+                    marginBottom: 10,
                   }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Vibration</span>
+                    <span style={{ fontSize: 18, fontWeight: "600", color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Haptic Feedback</span>
                     <Switch
                       value={vibrationEnabled}
                       onValueChange={setVibrationEnabled}
-                      circleSize={18}
-                      barHeight={22}
+                      circleSize={24}
+                      barHeight={28}
                       backgroundActive={colors.accent}
                       backgroundInactive="#ccc"
                       circleActiveColor="#fff"
                       circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
+                      switchWidthMultiplier={2.2}
                       renderActiveText={false}
                       renderInActiveText={false}
                     />
                   </div>
+
 
                   <div style={{
                     display: "flex",
@@ -1316,6 +1325,5 @@ export default function GameLayoutWeb() {
           </div>
         )}
       </div>
-    </div>
   )
 }
