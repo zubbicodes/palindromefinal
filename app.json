@@ -55,6 +55,7 @@
         "expo-build-properties",
         {
           "android": {
+            "ndkVersion": "29.0.14206865",
             "newArchEnabled": true,
             "packagingOptions": {
               "pickFirst": [
@@ -65,7 +66,8 @@
             "extraMavenRepos": []
           }
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
