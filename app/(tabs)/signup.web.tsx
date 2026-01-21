@@ -503,32 +503,30 @@ const handleSignUp = async () => {
                 <div style={{ width: '70px', height: '1px', background: colors.border }} />
               </div>
 
-              {/*
-                Social signup button temporarily disabled.
-                <button
-                  onClick={handleGoogleSignIn}
-                  disabled={loading}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: '50px',
-                    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
-                    color: colors.text,
-                    border: `1px solid ${colors.border}`,
-                    fontWeight: 600,
-                    fontSize: '15px',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    opacity: loading ? 0.7 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                  }}
-                >
-                  <img src="/images/google.png" alt="Google" style={{ width: 18, height: 18 }} />
-                  Continue with Google
-                </button>
-              */}
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '50px',
+                  backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+                  color: colors.text,
+                  border: `1px solid ${colors.border}`,
+                  fontWeight: 600,
+                  fontSize: '15px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  marginBottom: '20px',
+                }}
+              >
+                <img src="/images/google.png" alt="Google" style={{ width: 18, height: 18 }} />
+                Continue with Google
+              </button>
             </div>
           </div>
 

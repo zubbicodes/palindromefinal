@@ -10,7 +10,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gammagames.palindrome"
+      "bundleIdentifier": "com.gammagames.palindrome",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +21,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.gammagames.palindrome"
+      "package": "com.gammagames.palindrome",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -36,6 +38,7 @@
     "plugins": [
       "expo-router",
       "expo-font",
+      "@react-native-google-signin/google-signin",
       [
         "expo-splash-screen",
         {

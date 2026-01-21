@@ -309,9 +309,7 @@ function SignupNativeScreen() {
             )}
           </TouchableOpacity>
 
-          {/*
-            Social signup divider and Google button temporarily disabled.
-            <View style={styles.dividerRow}>
+          <View style={styles.dividerRow}>
               <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' }]} />
               <Text style={[styles.dividerText, { color: isDark ? '#AAB3FF' : '#007BFF' }]}>or</Text>
               <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' }]} />
@@ -334,7 +332,6 @@ function SignupNativeScreen() {
                 Continue with Google
               </Text>
             </TouchableOpacity>
-          */}
 
           {/* Footer */}
           <View style={styles.footer}>

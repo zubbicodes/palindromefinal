@@ -423,8 +423,6 @@ export default function LoginWeb() {
               <div style={{ width: '70px', height: '1px', background: colors.border }} />
             </div>
 
-            {/* 
-              Social login buttons temporarily disabled.
               <button
                 onClick={handleGoogleSignIn}
                 disabled={loading}
@@ -474,7 +472,6 @@ export default function LoginWeb() {
                 <Ionicons name="logo-apple" size={20} color={theme === 'dark' ? '#FFFFFF' : '#000000'} />
                 Continue with Apple
               </button>
-            */}
 
             {/* Footer */}
             <div style={{ textAlign: 'center', fontSize: '14px', color: colors.text }}>
