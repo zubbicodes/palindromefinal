@@ -5,6 +5,7 @@ import {
   isErrorWithCode,
   statusCodes,
 } from '@react-native-google-signin/google-signin';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
@@ -175,7 +176,7 @@ class AuthService {
       if (Platform.OS === 'web') {
         const origin = typeof window !== 'undefined' && window.location.origin 
           ? window.location.origin 
-          : 'https://palindrome.web-testlink.com';
+          : 'https://gammagamesbyoxford.com';
         
         const redirectTo = `${origin}/auth/callback`;
         const { data, error } = await supabase.auth.signInWithOAuth({
@@ -195,7 +196,51 @@ class AuthService {
         return { success: true };
       }
 
-      // For native mobile apps
+      if (Platform.OS === 'ios') {
+        try {
+          const credential = await AppleAuthentication.signInAsync({
+            requestedScopes: [
+              AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+              AppleAuthentication.AppleAuthenticationScope.EMAIL,
+            ],
+          });
+
+          if (credential.identityToken) {
+            const { data, error } = await supabase.auth.signInWithIdToken({
+              provider: 'apple',
+              token: credential.identityToken,
+            });
+
+            if (error) return { success: false, error: error.message, code: (error as any).code };
+
+            // If we got a user, and we also have name information from Apple (only on first login),
+            // we might want to ensure it's saved.
+            if (data.user && credential.fullName) {
+               const givenName = credential.fullName.givenName;
+               const familyName = credential.fullName.familyName;
+               const displayName = [givenName, familyName].filter(Boolean).join(' ');
+               
+               if (displayName) {
+                 // Attempt to update profile immediately if possible, or at least return it in user object
+                 // Ideally we call updateProfile, but we can't await it inside this flow easily without side effects?
+                 // Actually we can.
+                 await this.updateProfile(data.user.id, { full_name: displayName });
+               }
+            }
+
+            return { success: true, user: data.user ? toAuthUser(data.user) : null };
+          } else {
+             return { success: false, error: 'No identity token provided' };
+          }
+        } catch (e: any) {
+          if (e.code === 'ERR_REQUEST_CANCELED') {
+             return { success: false, error: 'Sign in cancelled' };
+          }
+          throw e;
+        }
+      }
+
+      // For Android (or other native platforms), use standard OAuth flow
       const redirectTo = Linking.createURL('auth/callback');
       
       const { data, error } = await supabase.auth.signInWithOAuth({
