@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -264,8 +265,6 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          {/* 
-            Social login divider and buttons temporarily disabled.
             <View style={styles.dividerRow}>
               <View
                 style={[
@@ -320,7 +319,6 @@ export default function LoginScreen() {
                 Continue with Apple
               </Text>
             </TouchableOpacity>
-          */}
 
           {/* Footer */}
           <View style={styles.footer}>

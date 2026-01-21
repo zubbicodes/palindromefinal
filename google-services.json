@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "851216822060",
+    "project_id": "clear-safeguard-480812-g6",
+    "storage_bucket": "clear-safeguard-480812-g6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:851216822060:android:6433bb4587432278554689",
+        "android_client_info": {
+          "package_name": "com.gammagames.palindrome"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "851216822060-02k6v3ohd2il23origmnabm88er4laku.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCCzXgvqOLIZoFTq4bJWcAuSvhkfA30OWQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "851216822060-02k6v3ohd2il23origmnabm88er4laku.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,8 +1,14 @@
 import { getSupabaseClient } from '@/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
+
 export interface AuthUser {
   id: string;
   email: string | null;
@@ -52,6 +58,15 @@ const parseOAuthRedirectUrl = (url: string) => {
 };
 
 class AuthService {
+  constructor() {
+    if (Platform.OS !== 'web') {
+      GoogleSignin.configure({
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
+        offlineAccess: true,
+      });
+    }
+  }
+
   async exchangeCodeForSession(code: string): Promise<AuthResult> {
     try {
       const supabase = getSupabaseClient();
@@ -113,21 +128,41 @@ class AuthService {
         return { success: true };
       }
 
-      // For native mobile apps
-      const redirectTo = Linking.createURL('auth/callback');
+      // Native Google Sign-In
+      try {
+        await GoogleSignin.hasPlayServices();
+        const userInfo = await GoogleSignin.signIn();
+        
+        // Handle different response structures from the library
+      const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo, skipBrowserRedirect: true },
-      });
+      if (idToken) {
+          const { data, error } = await supabase.auth.signInWithIdToken({
+            provider: 'google',
+            token: idToken,
+          });
 
-      if (error) return { success: false, error: error.message, code: (error as any).code };
-      if (!data?.url) return { success: false, error: 'Missing OAuth URL' };
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      if (result.type !== 'success' || !result.url) return { success: false, error: 'Sign in canceled' };
-
-      return await this.completeOAuthRedirect(result.url);
+          if (error) return { success: false, error: error.message, code: (error as any).code };
+          return { success: true, user: data.user ? toAuthUser(data.user) : null };
+        } else {
+          return { success: false, error: 'No ID token found' };
+        }
+      } catch (error: any) {
+        if (isErrorWithCode(error)) {
+          switch (error.code) {
+            case statusCodes.SIGN_IN_CANCELLED:
+              return { success: false, error: 'Sign in cancelled' };
+            case statusCodes.IN_PROGRESS:
+              return { success: false, error: 'Sign in in progress' };
+            case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+              return { success: false, error: 'Play services not available' };
+            default:
+              return { success: false, error: error.message || 'Google sign-in failed' };
+          }
+        } else {
+          return { success: false, error: error?.message || 'Google sign-in failed' };
+        }
+      }
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to sign in with Google' };
     }
@@ -238,7 +273,18 @@ class AuthService {
     try {
       const supabase = getSupabaseClient();
       const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) return null;
+
+      if (error) {
+        if (
+          error.message?.includes('Refresh Token') ||
+          error.message?.includes('Invalid Refresh Token')
+        ) {
+          await supabase.auth.signOut();
+        }
+        return null;
+      }
+
+      if (!data.user) return null;
       return toAuthUser(data.user);
     } catch {
       return null;
@@ -250,7 +296,19 @@ class AuthService {
     try {
       const supabase = getSupabaseClient();
       const { data, error } = await supabase.auth.getSession();
-      if (error || !data.session?.user) return null;
+
+      if (error) {
+        // If the session is invalid (e.g. refresh token missing/revoked), clear it
+        if (
+          error.message?.includes('Refresh Token') ||
+          error.message?.includes('Invalid Refresh Token')
+        ) {
+          await supabase.auth.signOut();
+        }
+        return null;
+      }
+
+      if (!data.session?.user) return null;
       return toAuthUser(data.session.user);
     } catch {
       return null;
