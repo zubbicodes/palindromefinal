@@ -38,10 +38,15 @@ jobs:
 
       - name: 🔐 Decode Keystore
         id: decode_keystore
-        if: secrets.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
-          echo "Keystore decoded"
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+            echo "Keystore decoded"
+          else
+            echo "No keystore secret found, skipping decode."
+          fi
 
       - name: 🛠 Build APK
         env:
