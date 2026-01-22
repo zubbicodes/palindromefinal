@@ -116,7 +116,7 @@ class AuthService {
       if (Platform.OS === 'web') {
         const origin = typeof window !== 'undefined' && window.location.origin 
           ? window.location.origin 
-          : 'https://palindrome.web-testlink.com';
+          : 'https://gammagamesbyoxford.com';
         
         const redirectTo = `${origin}/auth/callback`;
         const { data, error } = await supabase.auth.signInWithOAuth({
