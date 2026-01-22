@@ -60,6 +60,7 @@ const parseOAuthRedirectUrl = (url: string) => {
 
 class AuthService {
   constructor() {
+    // Configure Google Sign-In for native platforms
     if (Platform.OS !== 'web') {
       GoogleSignin.configure({
         webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
@@ -114,6 +115,7 @@ class AuthService {
       const supabase = getSupabaseClient();
 
       if (Platform.OS === 'web') {
+        // Web: Use Supabase OAuth flow
         const origin = typeof window !== 'undefined' && window.location.origin 
           ? window.location.origin 
           : 'https://gammagamesbyoxford.com';
@@ -129,40 +131,47 @@ class AuthService {
         return { success: true };
       }
 
-      // Native Google Sign-In
+      // Native: Use Google Sign-In SDK
       try {
+        // Check if Google Play Services are available
         await GoogleSignin.hasPlayServices();
+        
+        // Sign in with Google
         const userInfo = await GoogleSignin.signIn();
         
-        // Handle different response structures from the library
-      const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
+        // Extract ID token (handle different response structures)
+        const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
 
-      if (idToken) {
-          const { data, error } = await supabase.auth.signInWithIdToken({
-            provider: 'google',
-            token: idToken,
-          });
-
-          if (error) return { success: false, error: error.message, code: (error as any).code };
-          return { success: true, user: data.user ? toAuthUser(data.user) : null };
-        } else {
+        if (!idToken) {
           return { success: false, error: 'No ID token found' };
         }
+
+        // Sign in to Supabase with the Google ID token
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+        });
+
+        if (error) {
+          return { success: false, error: error.message, code: (error as any).code };
+        }
+
+        return { success: true, user: data.user ? toAuthUser(data.user) : null };
       } catch (error: any) {
+        // Handle Google Sign-In specific errors
         if (isErrorWithCode(error)) {
           switch (error.code) {
             case statusCodes.SIGN_IN_CANCELLED:
               return { success: false, error: 'Sign in cancelled' };
             case statusCodes.IN_PROGRESS:
-              return { success: false, error: 'Sign in in progress' };
+              return { success: false, error: 'Sign in already in progress' };
             case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
-              return { success: false, error: 'Play services not available' };
+              return { success: false, error: 'Google Play Services not available' };
             default:
               return { success: false, error: error.message || 'Google sign-in failed' };
           }
-        } else {
-          return { success: false, error: error?.message || 'Google sign-in failed' };
         }
+        return { success: false, error: error?.message || 'Google sign-in failed' };
       }
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to sign in with Google' };
