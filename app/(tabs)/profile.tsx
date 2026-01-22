@@ -8,15 +8,13 @@ import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   Image,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
-import ProfileWeb from './profile.web';
 
 const { width } = Dimensions.get('window');
 
@@ -113,7 +111,7 @@ export default function ProfileScreen() {
         full_name: fullName,
         email: email,
         phone: phone,
-        updated_at: new Date(),
+        updated_at: new Date().toISOString(),
       };
 
       const result = await authService.updateProfile(user.id, updates);
@@ -129,10 +127,6 @@ export default function ProfileScreen() {
       setLoading(false);
     }
   };
-
-  if (Platform.OS === 'web') {
-    return <ProfileWeb />;
-  }
 
   return (
     <LinearGradient

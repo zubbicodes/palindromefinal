@@ -6,21 +6,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
-  GestureResponderEvent,
-  Image,
-  PanResponder,
-  PanResponderGestureState,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View
+    Animated,
+    GestureResponderEvent,
+    Image,
+    PanResponder,
+    PanResponderGestureState,
+    Pressable,
+    StyleSheet,
+    Text,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 import { Switch } from 'react-native-switch';
-import GameLayoutWeb from './gamelayout.web';
 
 // ✅ Import theme context
 import { authService } from '@/authService';
@@ -387,7 +385,7 @@ function GameTutorialOverlayNative(props: {
   );
 }
 
-function GameLayoutNative() {
+export default function GameLayout() {
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme, colors } = useThemeContext();
   const { soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled } = useSettings();
@@ -1389,11 +1387,6 @@ function GameLayoutNative() {
       />
     </SafeAreaView>
   );
-}
-
-export default function GameLayout() {
-  if (Platform.OS === 'web') return <GameLayoutWeb />;
-  return <GameLayoutNative />;
 }
 
 
