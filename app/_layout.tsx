@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
+import 'react-native-url-polyfill/auto';
 
 const webFontCss = `
 @font-face {
