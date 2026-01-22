@@ -17,9 +17,8 @@ import {
   View
 } from 'react-native';
 import { getFriendlyErrorMessage } from '../../utils/authErrors';
-import SignUpWeb from './signup.web';
 
-function SignupNativeScreen() {
+export default function SignupScreen() {
   const router = useRouter();
   const { theme } = useThemeContext();
   const isDark = theme === 'dark';
@@ -357,11 +356,6 @@ function SignupNativeScreen() {
       </ScrollView>
     </LinearGradient>
   );
-}
-
-export default function SignupScreen() {
-  if (Platform.OS === 'web') return <SignUpWeb />;
-  return <SignupNativeScreen />;
 }
 
 const styles = StyleSheet.create({

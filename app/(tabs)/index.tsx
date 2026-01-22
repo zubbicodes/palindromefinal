@@ -5,19 +5,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { getFriendlyErrorMessage } from '../../utils/authErrors';
-import LoginWeb from './index.web';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -27,10 +25,6 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-
-  if (Platform.OS === 'web') {
-    return <LoginWeb />;
-  }
 
   const handleLogin = async () => {
     if (!email || !password) {
