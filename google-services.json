@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "851216822060-lt1rbc71vn7t86ould073265meepqhla.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gammagames.palindrome",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
           "client_id": "851216822060-02k6v3ohd2il23origmnabm88er4laku.apps.googleusercontent.com",
           "client_type": 3
         }
