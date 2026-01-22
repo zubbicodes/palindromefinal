@@ -30,7 +30,7 @@ export function useSound() {
   const { soundEnabled } = useSettings();
 
   const webAudioContextRef = useRef<AudioContext | null>(null);
-  const nativeSoundsRef = useRef<Record<SoundKey, any> | null>(null);
+  const nativeSoundsRef = useRef<Partial<Record<SoundKey, any>> | null>(null);
   const nativeLoadPromiseRef = useRef<Promise<void> | null>(null);
 
   const getWebAudioContext = useCallback(() => {
@@ -81,20 +81,19 @@ export function useSound() {
     if (nativeLoadPromiseRef.current) return nativeLoadPromiseRef.current;
 
     nativeLoadPromiseRef.current = (async () => {
-      const { Audio } = await import('expo-av');
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
+      const { createAudioPlayer, setAudioModeAsync } = await import('expo-audio');
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        shouldPlayInBackground: false,
+        interruptionMode: 'duckOthers',
+        shouldRouteThroughEarpiece: false,
       });
 
-      const { Sound } = Audio;
       const entries = (Object.keys(NATIVE_SOUND_URIS) as SoundKey[]).map(async (key) => {
         try {
-          const soundObject = new Sound();
-          await soundObject.loadAsync({ uri: NATIVE_SOUND_URIS[key] }, { shouldPlay: false });
-          return [key, soundObject] as const;
+          const player = createAudioPlayer(NATIVE_SOUND_URIS[key]);
+          return [key, player] as const;
         } catch {
           return null;
         }
@@ -116,11 +115,8 @@ export function useSound() {
       await ensureNativeSounds();
       const sound = nativeSoundsRef.current?.[key];
       if (!sound) return;
-      if (typeof sound.replayAsync === 'function') {
-        await sound.replayAsync();
-      } else if (typeof sound.playAsync === 'function') {
-        await sound.playAsync();
-      }
+      sound.seekTo(0);
+      sound.play();
     } catch {
       return;
     }
@@ -146,14 +142,13 @@ export function useSound() {
       }
       const sounds = nativeSoundsRef.current;
       if (sounds) {
-        const unloads = (Object.keys(sounds) as SoundKey[]).map(async (k) => {
+        (Object.keys(sounds) as SoundKey[]).forEach((k) => {
           try {
-            await sounds[k].unloadAsync?.();
+            sounds[k].remove();
           } catch {
-            return;
+            // ignore
           }
         });
-        void Promise.all(unloads);
         nativeSoundsRef.current = null;
       }
       nativeLoadPromiseRef.current = null;

@@ -12,7 +12,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.gammagames.palindrome",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +26,11 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.gammagames.palindrome",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "output": "static",
@@ -39,6 +46,7 @@
     "plugins": [
       "expo-router",
       "expo-font",
+      "expo-apple-authentication",
       "@react-native-google-signin/google-signin",
       [
         "expo-splash-screen",
@@ -55,6 +63,7 @@
         "expo-build-properties",
         {
           "android": {
+            "ndkVersion": "29.0.14206865",
             "newArchEnabled": true,
             "packagingOptions": {
               "pickFirst": [
@@ -65,7 +74,8 @@
             "extraMavenRepos": []
           }
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
