@@ -216,7 +216,7 @@ export default function ProfileScreenWeb() {
             {/* Avatar */}
             <View style={styles.avatarWrapper}>
               <Image
-                source={avatar ? { uri: avatar } : require('../../assets/images/profile.jpg')}
+                source={avatar ? { uri: avatar } : require('../../assets/images/profile_ph.png')}
                 style={styles.avatar}
               />
               <TouchableOpacity

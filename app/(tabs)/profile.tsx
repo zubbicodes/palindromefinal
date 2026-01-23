@@ -180,7 +180,7 @@ export default function ProfileScreen() {
         {/* Profile Image */}
         <TouchableOpacity onPress={pickImage} disabled={uploading}>
           <Image
-            source={avatar ? { uri: avatar } : require('../../assets/images/profile.jpg')}
+            source={avatar ? { uri: avatar } : require('../../assets/images/profile_ph.png')}
             style={styles.profileImage}
           />
           {uploading && (

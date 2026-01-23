@@ -32,6 +32,7 @@ jobs:
         run: |
           echo "EXPO_PUBLIC_SUPABASE_URL=https://agjktsybmlmikxuvodkc.supabase.co" >> .env
           echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnamt0c3libWxtaWt4dXZvZGtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNDQ3OTgsImV4cCI6MjA4MzYyMDc5OH0.vVrSSfmpYJyMLnjuQ0oGWbxlgGXNPqPL0l7Mvq5WLeo" >> .env
+          echo "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=851216822060-02k6v3ohd2il23origmnabm88er4laku.apps.googleusercontent.com" >> .env
 
       - name: ⚙️ Prebuild
         run: npx expo prebuild --platform android --no-install

@@ -6,15 +6,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Animated,
-    GestureResponderEvent,
-    Image,
-    PanResponder,
-    PanResponderGestureState,
-    Pressable,
-    StyleSheet,
-    Text,
-    View
+  Animated,
+  GestureResponderEvent,
+  Image,
+  PanResponder,
+  PanResponderGestureState,
+  Pressable,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
@@ -1207,7 +1207,7 @@ export default function GameLayout() {
                 {/* Profile */}
                 <View style={styles.profileSection}>
                   <Image
-                    source={profileImage ? { uri: profileImage } : require('../../assets/images/profile.jpg')}
+                    source={profileImage ? { uri: profileImage } : require('../../assets/images/profile_ph.png')}
                     style={styles.profileImage}
                   />
                   <View style={styles.profileTextContainer}>

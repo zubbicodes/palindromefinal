@@ -4,12 +4,12 @@ import { useSettings } from "@/context/SettingsContext"
 import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { Ionicons } from "@expo/vector-icons"
-import AsyncStorage from "@react-native-async-storage/async-storage"
 import { BlurView } from "expo-blur"
 import { useRouter } from "expo-router"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import {
   Dimensions,
+  Image,
   Pressable, // Keeps Pressable for unified event handling or allows simple onClick
   StyleSheet,
 } from "react-native"
@@ -470,6 +470,7 @@ export default function GameLayoutWeb() {
   const [avatar, setAvatar] = useState<string | null>(null)
   const [userName, setUserName] = useState("John Doe")
   const [restartConfirmationVisible, setRestartConfirmationVisible] = useState(false)
+  const [homeConfirmationVisible, setHomeConfirmationVisible] = useState(false)
   const [tutorialOpen, setTutorialOpen] = useState(false)
   const [tutorialPhase, setTutorialPhase] = useState<GameTutorialPhase>("ui")
   const [tutorialUiIndex, setTutorialUiIndex] = useState(0)
@@ -704,34 +705,7 @@ export default function GameLayoutWeb() {
     initializeGame()
   }, [initializeGame])
 
-  // Fetch/Refresh user profile
-  useEffect(() => {
-    const loadUserData = async () => {
-      const user = await authService.getSessionUser()
 
-      if (user) {
-        if (user.displayName) setUserName(user.displayName)
-        else if (user.email) setUserName(user.email.split("@")[0])
-
-        try {
-          const storedAvatar = await AsyncStorage.getItem(`user_avatar_${user.id}`)
-          if (storedAvatar) {
-            setAvatar(storedAvatar)
-          }
-        } catch (error) {
-          console.error("Error loading avatar", error)
-        }
-      } else {
-        setUserName("User")
-      }
-    }
-
-    if (settingsVisible) {
-      loadUserData()
-    }
-    // Also fetch on mount
-    loadUserData()
-  }, [settingsVisible])
 
   useEffect(() => {
     const measureBoard = () => {
@@ -1090,16 +1064,17 @@ export default function GameLayoutWeb() {
             borderRadius: 20,
             marginBottom: 10,
           }}>
-             <img
-                src={avatar ? avatar : require("../../assets/images/profile.jpg")}
+             <Image
+                source={avatar ? { uri: avatar } : require("../../assets/images/profile_ph.png")}
                 style={{
                   width: 50,
                   height: 50,
                   borderRadius: 25,
-                  objectFit: 'contain',
-                  border: `2px solid ${colors.accent}`
+                  resizeMode: 'contain',
+                  borderWidth: 2,
+                  borderColor: colors.accent,
                 }}
-                alt="Profile"
+                accessibilityLabel="Profile"
               />
               <span style={{
                 fontSize: 18,
@@ -1500,6 +1475,27 @@ export default function GameLayoutWeb() {
             </div>
           </Pressable>
 
+          <Pressable onPress={() => setHomeConfirmationVisible(true)}>
+             <div id="tour-game-btn-home" style={{
+              width: 80,
+              height: 80,
+              borderRadius: 25,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
+              cursor: 'pointer',
+              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
+               border: "1px solid rgba(0,0,0,0.05)",
+                transition: "transform 0.1s",
+            }}
+             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
+             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <Ionicons name="home" size={32} color={colors.text} />
+            </div>
+          </Pressable>
+
           <Pressable onPress={() => setSettingsVisible(true)}>
              <div id="tour-game-btn-settings" style={{
               width: 80,
@@ -1618,16 +1614,16 @@ export default function GameLayoutWeb() {
                     backgroundColor: "rgba(0,0,0,0.03)",
                     borderRadius: 20
                   }}>
-                    <img
-                      src={avatar ? avatar : require("../../assets/images/profile.jpg")}
+                    <Image
+                      source={avatar ? { uri: avatar } : require("../../assets/images/profile_ph.png")}
                       style={{
                         width: 60,
                         height: 60,
                         borderRadius: 30,
                         marginRight: 20,
-                        objectFit: 'contain'
+                        resizeMode: 'contain'
                       }}
-                      alt="Profile"
+                      accessibilityLabel="Profile"
                     />
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                       <span style={{
@@ -1866,7 +1862,118 @@ export default function GameLayoutWeb() {
           </div>
         )}
 
-        {/* Pause Overlay */}
+        {/* Home Confirmation Modal */}
+        {homeConfirmationVisible && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10000,
+          }}>
+            <BlurView
+              intensity={20}
+              tint="default"
+              experimentalBlurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            >
+              <div style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 30px",
+                height: "100%", 
+                width: "100%",
+                backgroundColor: "rgba(0,0,0,0.4)"
+              }}>
+                <div style={{
+                  width: "100%",
+                  maxWidth: 400,
+                  borderRadius: 32,
+                  padding: 32,
+                  boxShadow: "0px 20px 40px rgba(0, 0, 0, 0.4)",
+                  background: theme === "dark"
+                    ? "linear-gradient(to right bottom, #000017, #000074)"
+                    : "#FFFFFF",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  alignItems: "center",
+                }}>
+                  <h2 style={{
+                    fontSize: 24,
+                    fontWeight: "700",
+                    color: colors.text,
+                    fontFamily: "Geist-Regular, system-ui",
+                    marginBottom: 16,
+                    textAlign: "center",
+                    marginTop: 0,
+                  }}>Return to Main Menu?</h2>
+                  <p style={{
+                    fontSize: 16,
+                    color: colors.text,
+                    opacity: 0.8,
+                    fontFamily: "Geist-Regular, system-ui",
+                    marginBottom: 32,
+                    textAlign: "center",
+                  }}>
+                    Are you sure you want to leave? Current game progress will be lost.
+                  </p>
+                  
+                  <div style={{ display: "flex", flexDirection: "row", gap: 20, width: "100%" }}>
+                    <Pressable 
+                        onPress={() => setHomeConfirmationVisible(false)}
+                        style={{ flex: 1 }}
+                    >
+                        <div style={{
+                            padding: "16px",
+                            borderRadius: 16,
+                            backgroundColor: "rgba(0,0,0,0.05)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            transition: "background-color 0.2s"
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.1)"}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                        >
+                            <span style={{ fontSize: 16, fontFamily: "Geist-Regular, system-ui", fontWeight: "600", color: colors.text }}>Cancel</span>
+                        </div>
+                    </Pressable>
+
+                    <Pressable 
+                        onPress={() => {
+                            setHomeConfirmationVisible(false)
+                            router.push("/")
+                        }}
+                        style={{ flex: 1 }}
+                    >
+                        <div style={{
+                            padding: "16px",
+                            borderRadius: 16,
+                            background: "linear-gradient(to right, #ff4b4b, #ff0000)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            boxShadow: "0 4px 12px rgba(255, 0, 0, 0.3)",
+                            transition: "transform 0.1s"
+                        }}
+                        onMouseDown={e => e.currentTarget.style.transform = "scale(0.98)"}
+                        onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                        >
+                            <span style={{ fontSize: 16, fontFamily: "Geist-Regular, system-ui", fontWeight: "600", color: "#fff" }}>Leave</span>
+                        </div>
+                    </Pressable>
+                  </div>
+                </div>
+              </div>
+            </BlurView>
+          </div>
+        )}
         {pause && (
           <div style={{
             position: "fixed",
