@@ -276,10 +276,22 @@ class AuthService {
   async signUp(email: string, password: string, displayName?: string): Promise<AuthResult> {
     try {
       const supabase = getSupabaseClient();
+      const emailRedirectTo =
+        Platform.OS === 'web'
+          ? `${
+              typeof window !== 'undefined' && window.location.origin
+                ? window.location.origin
+                : 'https://gammagamesbyoxford.com'
+            }/auth/verified`
+          : Linking.createURL('auth/verified');
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: displayName ? { data: { displayName } } : undefined,
+        options: {
+          emailRedirectTo,
+          ...(displayName ? { data: { displayName } } : {}),
+        },
       });
 
       if (error) return { success: false, error: error.message, code: (error as any).code };
