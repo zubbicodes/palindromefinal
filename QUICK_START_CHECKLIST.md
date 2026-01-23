@@ -17,18 +17,18 @@ Use this checklist to ensure you've completed all steps for Google Authenticatio
   - [ ] Client ID copied: `___________________________`
   - [ ] Client Secret copied: `___________________________`
 - [ ] **Android Client ID** created
-  - [ ] Package name set: `com.gammagames.palindrome`
+  - [ ] Package name set: `com.gammagames.palindromeuk`
   - [ ] SHA-1 fingerprint added (see SHA1_FINGERPRINT_GUIDE.md)
 
 ## ✅ Step 2: Firebase Console
 
 - [ ] Firebase project created
 - [ ] Android app added to Firebase
-  - [ ] Package name: `com.gammagames.palindrome`
+  - [ ] Package name: `com.gammagames.palindromeuk`
   - [ ] SHA-1 fingerprint added
   - [ ] `google-services.json` downloaded
 - [ ] iOS app added to Firebase (optional)
-  - [ ] Bundle ID: `com.gammagames.palindrome`
+  - [ ] Bundle ID: `com.gammagames.palindromeuk`
   - [ ] `GoogleService-Info.plist` downloaded
 - [ ] Google Sign-In enabled in Firebase Authentication
 

@@ -20,8 +20,8 @@ Before starting, make sure you have:
 - ✅ A Google account
 - ✅ A Supabase account and project
 - ✅ Android Studio installed
-- ✅ Your app's package name: `com.gammagames.palindrome`
-- ✅ Your app's bundle identifier (iOS): `com.gammagames.palindrome`
+- ✅ Your app's package name: `com.gammagames.palindromeuk`
+- ✅ Your app's bundle identifier (iOS): `com.gammagames.palindromeuk`
 
 ---
 

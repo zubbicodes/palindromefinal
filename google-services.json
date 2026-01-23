@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "204741176302",
+    "project_id": "palindrome-app-485119",
+    "storage_bucket": "palindrome-app-485119.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:204741176302:android:9ac88876c823faa040fcff",
+        "android_client_info": {
+          "package_name": "com.gammagames.palindromeuk"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "204741176302-mcr5b9vtrvpq0ftn9qts2qvgkruig5dt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gammagames.palindromeuk",
+            "certificate_hash": "f434da349ea70ccd1b70d569f8bc9f449941d431"
+          }
+        },
+        {
+          "client_id": "204741176302-4i6qore3g2jqf91q50u636fvvte3mqnd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5DwuR0646Gq5XyI5XLhT4hDrYo15jHZ4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "204741176302-4i6qore3g2jqf91q50u636fvvte3mqnd.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "204741176302-ij5gn9l7mtii34dhf4r8fqo2h2ddl06m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.gammagames.palindrome"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
