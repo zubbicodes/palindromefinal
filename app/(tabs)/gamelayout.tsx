@@ -14,7 +14,8 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
@@ -228,6 +229,81 @@ type MeasuredRect = { x: number; y: number; width: number; height: number } | nu
 
 const GAME_TUTORIAL_SEEN_KEY = 'palindrome_game_tutorial_v1_seen';
 
+function SpotlightMask(props: {
+  rect: MeasuredRect;
+  blockInteraction: boolean;
+}) {
+  const { width, height } = useWindowDimensions();
+
+  if (!props.rect) {
+    return (
+      <View
+        pointerEvents={props.blockInteraction ? 'auto' : 'none'}
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: props.blockInteraction ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.3)' },
+        ]}
+      />
+    );
+  }
+
+  // Padding logic
+  const padding = 8;
+  const safeX = Math.max(0, props.rect.x - padding);
+  const safeY = Math.max(0, props.rect.y - padding);
+  const safeW = Math.min(width - safeX, props.rect.width + padding * 2);
+  const safeH = Math.min(height - safeY, props.rect.height + padding * 2);
+
+  const maskColor = props.blockInteraction ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.35)';
+  const pointerEvents = props.blockInteraction ? 'auto' : 'none';
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      {/* Top */}
+      <View pointerEvents={pointerEvents} style={{ position: 'absolute', top: 0, left: 0, width: width, height: safeY, backgroundColor: maskColor }} />
+      {/* Bottom */}
+      <View pointerEvents={pointerEvents} style={{ position: 'absolute', top: safeY + safeH, left: 0, width: width, height: height - (safeY + safeH), backgroundColor: maskColor }} />
+      {/* Left */}
+      <View pointerEvents={pointerEvents} style={{ position: 'absolute', top: safeY, left: 0, width: safeX, height: safeH, backgroundColor: maskColor }} />
+      {/* Right */}
+      <View pointerEvents={pointerEvents} style={{ position: 'absolute', top: safeY, left: safeX + safeW, right: 0, height: safeH, backgroundColor: maskColor }} />
+      
+      {/* Blocker for the hole if interaction is blocked */}
+      {props.blockInteraction && (
+        <View
+          pointerEvents="auto"
+          style={{
+            position: 'absolute',
+            top: safeY,
+            left: safeX,
+            width: safeW,
+            height: safeH,
+          }}
+        />
+      )}
+
+      {/* Border */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: safeY,
+          left: safeX,
+          width: safeW,
+          height: safeH,
+          borderRadius: 12,
+          borderWidth: 2,
+          borderColor: 'rgba(255,255,255,0.3)',
+          shadowColor: '#FFF',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.2,
+          shadowRadius: 10,
+        }}
+      />
+    </View>
+  );
+}
+
 function GameTutorialOverlayNative(props: {
   open: boolean;
   step: GameTutorialStep | null;
@@ -251,37 +327,7 @@ function GameTutorialOverlayNative(props: {
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <View
-        pointerEvents={blockInteraction ? 'auto' : 'none'}
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: blockInteraction ? 'rgba(0,0,0,0.62)' : 'rgba(0,0,0,0.28)',
-          },
-        ]}
-      />
-
-      {props.rect ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: props.rect.x - 10,
-            top: props.rect.y - 10,
-            width: props.rect.width + 20,
-            height: props.rect.height + 20,
-            borderRadius: 22,
-            borderWidth: 2,
-            borderColor: props.accentColor,
-            backgroundColor: 'rgba(255,255,255,0.02)',
-            shadowColor: '#000',
-            shadowOpacity: 0.35,
-            shadowRadius: 18,
-            shadowOffset: { width: 0, height: 14 },
-            elevation: 10,
-          }}
-        />
-      ) : null}
+      <SpotlightMask rect={props.rect} blockInteraction={blockInteraction} />
 
       <View
         pointerEvents="auto"

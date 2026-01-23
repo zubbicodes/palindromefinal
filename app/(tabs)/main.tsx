@@ -33,6 +33,54 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
+function SpotlightMask(props: { rect: MeasuredRect }) {
+  const { width, height } = useWindowDimensions();
+
+  if (!props.rect) {
+    return <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />;
+  }
+
+  // Add padding around the target
+  const padding = 8;
+  const safeX = Math.max(0, props.rect.x - padding);
+  const safeY = Math.max(0, props.rect.y - padding);
+  const safeW = Math.min(width - safeX, props.rect.width + padding * 2);
+  const safeH = Math.min(height - safeY, props.rect.height + padding * 2);
+
+  const maskColor = 'rgba(0,0,0,0.75)'; // Slightly darker for better contrast
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {/* Top */}
+      <View style={{ position: 'absolute', top: 0, left: 0, width: width, height: safeY, backgroundColor: maskColor }} />
+      {/* Bottom */}
+      <View style={{ position: 'absolute', top: safeY + safeH, left: 0, width: width, height: height - (safeY + safeH), backgroundColor: maskColor }} />
+      {/* Left */}
+      <View style={{ position: 'absolute', top: safeY, left: 0, width: safeX, height: safeH, backgroundColor: maskColor }} />
+      {/* Right */}
+      <View style={{ position: 'absolute', top: safeY, left: safeX + safeW, right: 0, height: safeH, backgroundColor: maskColor }} />
+      
+      {/* Optional: A subtle glow or border around the target to make it "pop" */}
+      <View
+        style={{
+          position: 'absolute',
+          top: safeY,
+          left: safeX,
+          width: safeW,
+          height: safeH,
+          borderRadius: 12,
+          borderWidth: 2,
+          borderColor: 'rgba(255,255,255,0.3)',
+          shadowColor: '#FFF',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.2,
+          shadowRadius: 10,
+        }}
+      />
+    </View>
+  );
+}
+
 function TourOverlayNative(props: {
   open: boolean;
   stepIndex: number;
@@ -53,29 +101,7 @@ function TourOverlayNative(props: {
   return (
     <Modal visible={props.open} transparent animationType="fade" onRequestClose={props.onSkip}>
       <View style={StyleSheet.absoluteFill}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.62)' }]} />
-
-        {props.rect ? (
-          <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              left: props.rect.x - 10,
-              top: props.rect.y - 10,
-              width: props.rect.width + 20,
-              height: props.rect.height + 20,
-              borderRadius: 22,
-              borderWidth: 2,
-              borderColor: props.accentColor,
-              backgroundColor: 'rgba(255,255,255,0.02)',
-              shadowColor: '#000',
-              shadowOpacity: 0.35,
-              shadowRadius: 18,
-              shadowOffset: { width: 0, height: 14 },
-              elevation: 10,
-            }}
-          />
-        ) : null}
+        <SpotlightMask rect={props.rect} />
 
         <TourTooltip
           step={step}
