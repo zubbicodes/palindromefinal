@@ -5,22 +5,26 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getFriendlyErrorMessage } from '../../utils/authErrors';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { theme } = useThemeContext();
   const isDark = theme === 'dark';
+  const { height: windowHeight } = useWindowDimensions();
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -111,231 +115,244 @@ export default function LoginScreen() {
       }
       style={{ flex: 1 }}
     >
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
-      >
-        <View style={[styles.container]}>
-          {/* Header */}
-          <Text
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View
             style={[
-              styles.title,
-              { color: isDark ? '#FFFFFF' : '#000000' },
+              styles.container,
+              {
+                paddingTop: windowHeight < 700 ? 16 : 24,
+                paddingBottom: windowHeight < 700 ? 16 : 24,
+              },
             ]}
           >
-            Login to your account
-          </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              { color: isDark ? '#DADADA' : '#49463F' },
-            ]}
-          >
-            Continue Your Palindrome Journey
-          </Text>
-
-          {/* Email Input */}
-          <View style={styles.inputGroup}>
-            <View style={styles.floatingLabelWrapper}>
-              <Text
-                style={[
-                  styles.floatingLabel,
-                  {
-                    backgroundColor: isDark
-                      ? 'rgba(0,0,23,1)'
-                      : '#FFF',
-                    color: isDark ? '#FFF' : '#000',
-                  },
-                ]}
-              >
-                Email address
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: isDark
-                      ? 'rgba(255,255,255,0.08)'
-                      : 'rgba(255,255,255,0.6)',
-                    color: isDark ? '#FFF' : '#000',
-                    borderColor: isDark ? '#2A2D50' : '#EFE8E8',
-                  },
-                ]}
-                placeholder="e.g. wilson09@gmail.com"
-                placeholderTextColor={isDark ? '#CCC' : '#555'}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-                editable={!loading}
-              />
-            </View>
-          </View>
-
-          {/* Password Input */}
-          <View style={styles.inputGroup}>
-            <View style={styles.floatingLabelWrapper}>
-              <Text
-                style={[
-                  styles.floatingLabel,
-                  {
-                    backgroundColor: isDark
-                      ? 'rgba(0,0,23,1)'
-                      : '#FFF',
-                    color: isDark ? '#FFF' : '#000',
-                  },
-                ]}
-              >
-                Password
-              </Text>
-              <View
-                style={[
-                  styles.passwordContainer,
-                  {
-                    backgroundColor: isDark
-                      ? 'rgba(255,255,255,0.08)'
-                      : 'rgba(255,255,255,0.6)',
-                    borderColor: isDark ? '#2A2D50' : '#EFE8E8',
-                  },
-                ]}
-              >
-                <TextInput
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+                <Text
                   style={[
-                    styles.passwordInput,
-                    { color: isDark ? '#FFF' : '#000' },
+                    styles.title,
+                    { color: isDark ? '#FFFFFF' : '#000000' },
                   ]}
-                  placeholder="********"
-                  placeholderTextColor={isDark ? '#CCC' : '#555'}
-                  secureTextEntry={!passwordVisible}
-                  value={password}
-                  onChangeText={setPassword}
-                  editable={!loading}
-                />
+                >
+                  Login to your account
+                </Text>
+                <Text
+                  style={[
+                    styles.subtitle,
+                    {
+                      color: isDark ? '#DADADA' : '#49463F',
+                      marginBottom: windowHeight < 700 ? 24 : 40,
+                    },
+                  ]}
+                >
+                  Continue Your Palindrome Journey
+                </Text>
+
+                <View style={styles.inputGroup}>
+                  <View style={styles.floatingLabelWrapper}>
+                    <Text
+                      style={[
+                        styles.floatingLabel,
+                        {
+                          backgroundColor: isDark ? 'rgba(0,0,23,1)' : '#FFF',
+                          color: isDark ? '#FFF' : '#000',
+                        },
+                      ]}
+                    >
+                      Email address
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          backgroundColor: isDark
+                            ? 'rgba(255,255,255,0.08)'
+                            : 'rgba(255,255,255,0.6)',
+                          color: isDark ? '#FFF' : '#000',
+                          borderColor: isDark ? '#2A2D50' : '#EFE8E8',
+                        },
+                      ]}
+                      placeholder="e.g. wilson09@gmail.com"
+                      placeholderTextColor={isDark ? '#CCC' : '#555'}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      value={email}
+                      onChangeText={setEmail}
+                      editable={!loading}
+                      returnKeyType="next"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <View style={styles.floatingLabelWrapper}>
+                    <Text
+                      style={[
+                        styles.floatingLabel,
+                        {
+                          backgroundColor: isDark ? 'rgba(0,0,23,1)' : '#FFF',
+                          color: isDark ? '#FFF' : '#000',
+                        },
+                      ]}
+                    >
+                      Password
+                    </Text>
+                    <View
+                      style={[
+                        styles.passwordContainer,
+                        {
+                          backgroundColor: isDark
+                            ? 'rgba(255,255,255,0.08)'
+                            : 'rgba(255,255,255,0.6)',
+                          borderColor: isDark ? '#2A2D50' : '#EFE8E8',
+                        },
+                      ]}
+                    >
+                      <TextInput
+                        style={[
+                          styles.passwordInput,
+                          { color: isDark ? '#FFF' : '#000' },
+                        ]}
+                        placeholder="********"
+                        placeholderTextColor={isDark ? '#CCC' : '#555'}
+                        secureTextEntry={!passwordVisible}
+                        value={password}
+                        onChangeText={setPassword}
+                        editable={!loading}
+                        returnKeyType="done"
+                        onSubmitEditing={handleLogin}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setPasswordVisible(!passwordVisible)}
+                        style={styles.iconButton}
+                        disabled={loading}
+                      >
+                        <Ionicons
+                          name={passwordVisible ? 'eye-outline' : 'eye-off-outline'}
+                          size={20}
+                          color={isDark ? '#CCC' : '#999'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
                 <TouchableOpacity
-                  onPress={() => setPasswordVisible(!passwordVisible)}
-                  style={styles.iconButton}
+                  style={styles.forgotWrapper}
+                  onPress={handleForgotPassword}
+                  disabled={loading}
+                >
+                  <Text
+                    style={[
+                      styles.forgotPassword,
+                      { color: isDark ? '#FF6B81' : '#FF002B' },
+                    ]}
+                  >
+                    Forgot password?
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.loginButton,
+                    { backgroundColor: isDark ? '#375FFF' : '#007BFF' },
+                    loading && { opacity: 0.7 },
+                  ]}
+                  onPress={handleLogin}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.loginButtonText}>Log In</Text>
+                  )}
+                </TouchableOpacity>
+
+                <View style={styles.dividerRow}>
+                  <View
+                    style={[
+                      styles.dividerLine,
+                      { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' },
+                    ]}
+                  />
+                  <Text style={[styles.dividerText, { color: isDark ? '#AAB3FF' : '#007BFF' }]}>
+                    or
+                  </Text>
+                  <View
+                    style={[
+                      styles.dividerLine,
+                      { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' },
+                    ]}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.googleButton,
+                    {
+                      borderColor: isDark ? 'rgba(255,255,255,0.25)' : '#E5E7EB',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+                    },
+                    loading && { opacity: 0.7 },
+                  ]}
+                  onPress={handleGoogleSignIn}
+                  disabled={loading}
+                >
+                  <Image source={require('../../assets/images/google.png')} style={styles.googleIcon} />
+                  <Text style={[styles.googleText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
+                    Continue with Google
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.googleButton,
+                    {
+                      borderColor: isDark ? 'rgba(255,255,255,0.25)' : '#E5E7EB',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+                      marginTop: 12,
+                    },
+                    loading && { opacity: 0.7 },
+                  ]}
+                  onPress={handleAppleSignIn}
                   disabled={loading}
                 >
                   <Ionicons
-                    name={passwordVisible ? 'eye-outline' : 'eye-off-outline'}
-                    size={20}
-                    color={isDark ? '#CCC' : '#999'}
+                    name="logo-apple"
+                    size={24}
+                    color={isDark ? '#FFFFFF' : '#000000'}
+                    style={{ marginRight: 10 }}
                   />
+                  <Text style={[styles.googleText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
+                    Continue with Apple
+                  </Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          </View>
 
-          {/* Forgot Password */}
-          <TouchableOpacity
-            style={styles.forgotWrapper}
-            onPress={handleForgotPassword}
-            disabled={loading}
-          >
-            <Text
-              style={[
-                styles.forgotPassword,
-                { color: isDark ? '#FF6B81' : '#FF002B' },
-              ]}
-            >
-              Forgot password?
-            </Text>
-          </TouchableOpacity>
-
-          {/* Log In Button */}
-          <TouchableOpacity
-            style={[
-              styles.loginButton,
-              { backgroundColor: isDark ? '#375FFF' : '#007BFF' },
-              loading && { opacity: 0.7 }
-            ]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.loginButtonText}>Log In</Text>
-            )}
-          </TouchableOpacity>
-
-            <View style={styles.dividerRow}>
-              <View
-                style={[
-                  styles.dividerLine,
-                  { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' },
-                ]}
-              />
-              <Text style={[styles.dividerText, { color: isDark ? '#AAB3FF' : '#007BFF' }]}>
-                or
-              </Text>
-              <View
-                style={[
-                  styles.dividerLine,
-                  { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB' },
-                ]}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.googleButton,
-                {
-                  borderColor: isDark ? 'rgba(255,255,255,0.25)' : '#E5E7EB',
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
-                },
-                loading && { opacity: 0.7 },
-              ]}
-              onPress={handleGoogleSignIn}
-              disabled={loading}
-            >
-              <Image source={require('../../assets/images/google.png')} style={styles.googleIcon} />
-              <Text style={[styles.googleText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
-                Continue with Google
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.googleButton,
-                {
-                  borderColor: isDark ? 'rgba(255,255,255,0.25)' : '#E5E7EB',
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
-                  marginTop: 12,
-                },
-                loading && { opacity: 0.7 },
-              ]}
-              onPress={handleAppleSignIn}
-              disabled={loading}
-            >
-              <Ionicons name="logo-apple" size={24} color={isDark ? '#FFFFFF' : '#000000'} style={{ marginRight: 10 }} />
-              <Text style={[styles.googleText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
-                Continue with Apple
-              </Text>
-            </TouchableOpacity>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text
-              style={[
-                styles.footerText,
-                { color: isDark ? '#DDD' : '#2A2A2A' },
-              ]}
-            >
-              New on Palindrome?{' '}
+            <View style={styles.footer}>
               <Text
                 style={[
-                  styles.footerBold,
-                  { color: isDark ? '#6C8CFF' : '#007BFF' },
+                  styles.footerText,
+                  { color: isDark ? '#DDD' : '#2A2A2A' },
                 ]}
-                onPress={() => router.push('/signup')}
               >
-                Create an account.
+                New on Palindrome?{' '}
+                <Text
+                  style={[
+                    styles.footerBold,
+                    { color: isDark ? '#6C8CFF' : '#007BFF' },
+                  ]}
+                  onPress={() => router.push('/signup')}
+                >
+                  Create an account.
+                </Text>
               </Text>
-            </Text>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </LinearGradient>
   );
 }
@@ -344,8 +361,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 80,
-    paddingBottom: 60,
   },
   title: {
     fontFamily: 'Geist-Bold',
@@ -451,7 +466,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   footer: {
-    marginTop: 240,
     alignItems: 'center',
   },
   footerText: {
