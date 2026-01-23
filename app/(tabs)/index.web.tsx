@@ -101,6 +101,7 @@ export default function LoginWeb() {
         setError(result.error || 'Google sign-in failed');
         setLoading(false);
       }
+      // On web, if successful, the page will redirect automatically
     } catch (err: any) {
       setError(err?.message || 'Google sign-in failed');
       setLoading(false);
