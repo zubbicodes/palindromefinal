@@ -1,4 +1,5 @@
 import { authService } from '@/authService';
+import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useThemeContext } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,12 +16,33 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { Switch } from 'react-native-switch';
 
 const { width } = Dimensions.get('window');
+
+const COLOR_GRADIENTS = [
+  ['#C40111', '#F01D2E'],
+  ['#757F35', '#99984D'],
+  ['#1177FE', '#48B7FF'],
+  ['#111111', '#3C3C3C'],
+  ['#E7CC01', '#E7E437'],
+] as const;
+
+const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
+  symbols: ['●', '▲', '■', '◆', '★'],
+  emojis: ['🍓', '🥑', '🫐', '🖤', '🍋'],
+  cards: ['♥', '♣', '♦', '♠', '★'],
+  letters: ['A', 'B', 'C', 'D', 'E'],
+} as const;
+
+function getColorBlindToken(mode: ColorBlindMode, index: number) {
+  return COLOR_BLIND_TOKENS[mode][index] ?? '?';
+}
 
 export default function ProfileScreen() {
   const { theme } = useThemeContext();
   const isDark = theme === 'dark';
+  const { colorBlindEnabled, colorBlindMode, setColorBlindEnabled, setColorBlindMode } = useSettings();
 
   const [avatar, setAvatar] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -315,6 +337,83 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <View
+          style={[
+            styles.accessibilityCard,
+            {
+              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.92)',
+              borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
+            },
+          ]}
+        >
+          <Text style={[styles.accessibilityTitle, { color: isDark ? '#FFFFFF' : '#0A0F2D' }]}>
+            Accessibility
+          </Text>
+
+          <View style={styles.accessibilityRow}>
+            <Text style={[styles.accessibilityLabel, { color: isDark ? '#FFFFFF' : '#111111' }]}>
+              Color Blind Mode
+            </Text>
+            <Switch
+              value={colorBlindEnabled}
+              onValueChange={setColorBlindEnabled}
+              disabled={false}
+              activeText=""
+              inActiveText=""
+              circleSize={18}
+              barHeight={22}
+              circleBorderWidth={0}
+              backgroundActive="#0060FF"
+              backgroundInactive="#ccc"
+              circleActiveColor="#FFFFFF"
+              circleInActiveColor="#FFFFFF"
+              changeValueImmediately={true}
+              switchWidthMultiplier={2.5}
+            />
+          </View>
+
+          <Text style={[styles.accessibilitySubtitle, { color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(17,17,17,0.65)' }]}>
+            Choose how colors are represented in the game.
+          </Text>
+
+          <View style={styles.modeGrid}>
+            {(['symbols', 'emojis', 'cards', 'letters'] as const).map((mode) => {
+              const selected = colorBlindMode === mode;
+              return (
+                <TouchableOpacity
+                  key={mode}
+                  onPress={() => setColorBlindMode(mode)}
+                  style={[
+                    styles.modeTile,
+                    {
+                      borderColor: selected ? '#0060FF' : isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)',
+                      backgroundColor: selected ? (isDark ? 'rgba(0,96,255,0.22)' : 'rgba(0,96,255,0.08)') : 'transparent',
+                    },
+                  ]}
+                  activeOpacity={0.9}
+                >
+                  <Text style={[styles.modeTitle, { color: isDark ? '#FFFFFF' : '#111111' }]}>
+                    {mode === 'symbols'
+                      ? 'Symbols'
+                      : mode === 'emojis'
+                        ? 'Emojis'
+                        : mode === 'cards'
+                          ? 'Cards'
+                          : 'Letters'}
+                  </Text>
+                  <View style={styles.modePreviewRow}>
+                    {COLOR_GRADIENTS.map((g, i) => (
+                      <LinearGradient key={i} colors={g} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.modePreviewSwatch}>
+                        <Text style={styles.modePreviewToken}>{getColorBlindToken(mode, i)}</Text>
+                      </LinearGradient>
+                    ))}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {/* ✅ Gradient Logout Button */}
         <TouchableOpacity
           style={[
@@ -445,7 +544,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   logoutButton: {
-    marginTop: 180,
+    marginTop: 24,
     width: '85%',
     borderRadius: 25,
     paddingVertical: 14,
@@ -455,5 +554,70 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
+  },
+  accessibilityCard: {
+    width: '85%',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 20,
+  },
+  accessibilityTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Geist-Bold',
+  },
+  accessibilityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  accessibilityLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Geist-Regular',
+  },
+  accessibilitySubtitle: {
+    marginTop: 10,
+    fontSize: 12,
+    fontFamily: 'Geist-Regular',
+  },
+  modeGrid: {
+    marginTop: 12,
+    flexDirection: 'column',
+    gap: 10,
+  },
+  modeTile: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  modeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: 'Geist-Bold',
+    marginBottom: 10,
+  },
+  modePreviewRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modePreviewSwatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modePreviewToken: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    fontFamily: 'Geist-Bold',
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
 });

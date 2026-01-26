@@ -51,12 +51,13 @@ function TourOverlay(props: {
   stepIndex: number;
   steps: TourStep[];
   accentColor: string;
+  isDark: boolean;
   onBack: () => void;
   onNext: () => void;
   onSkip: () => void;
   onDone: () => void;
 }) {
-  const { open, stepIndex, steps, accentColor, onBack, onNext, onSkip, onDone } = props;
+  const { open, stepIndex, steps, accentColor, isDark, onBack, onNext, onSkip, onDone } = props;
   const step = steps[stepIndex];
   const [rect, setRect] = useState<DOMRect | null>(null);
 
@@ -146,15 +147,56 @@ function TourOverlay(props: {
         fontFamily: 'Geist-Regular, system-ui',
       }}
     >
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.58)',
-          backdropFilter: 'blur(2px)',
-        }}
-      />
+      {/* Spotlight mask with proper cutout using SVG mask */}
+      {highlight ? (
+        <svg
+          style={{
+            position: 'fixed',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }}
+        >
+          <defs>
+            <mask id="spotlight-mask">
+              {/* Everything is white (visible) by default */}
+              <rect width="100%" height="100%" fill="white" />
+              {/* The highlighted area is black (transparent) */}
+              <rect
+                x={highlight.left}
+                y={highlight.top}
+                width={highlight.width}
+                height={highlight.height}
+                rx="20"
+                fill="black"
+              />
+            </mask>
+          </defs>
+          {/* Apply the mask to create the spotlight effect */}
+          <rect
+            width="100%"
+            height="100%"
+            fill="rgba(0,0,0,0.58)"
+            mask="url(#spotlight-mask)"
+            style={{ backdropFilter: 'blur(2px)' }}
+          />
+        </svg>
+      ) : (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.58)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
 
+      {/* Highlight border (separate from the mask) */}
       {highlight ? (
         <div
           style={{
@@ -165,7 +207,9 @@ function TourOverlay(props: {
             height: highlight.height,
             borderRadius: 20,
             boxShadow: `0 0 0 2px ${accentColor}, 0 16px 40px rgba(0,0,0,0.35)`,
-            background: 'rgba(255,255,255,0.02)',
+            background: 'transparent',
+            pointerEvents: 'none',
+            zIndex: 2,
           }}
         />
       ) : null}
@@ -177,22 +221,23 @@ function TourOverlay(props: {
           top: tooltipTop,
           width: tooltipW,
           maxWidth: 'calc(100vw - 32px)',
-          background: 'rgba(255,255,255,0.96)',
+          background: isDark ? 'rgba(10,10,28,0.96)' : 'rgba(255,255,255,0.96)',
           borderRadius: 18,
           padding: 16,
           boxShadow: '0 18px 50px rgba(0,0,0,0.35)',
-          border: '1px solid rgba(0,0,0,0.10)',
-          color: '#111111',
+          border: isDark ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.10)',
+          color: isDark ? '#FFFFFF' : '#111111',
+          zIndex: 3,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontFamily: 'Geist-Bold, system-ui', fontSize: 15, lineHeight: 1.2 }}>{step.title}</div>
-          <div style={{ fontSize: 12, color: 'rgba(17,17,17,0.6)' }}>
+          <div style={{ fontFamily: 'Geist-Bold, system-ui', fontSize: 15, lineHeight: 1.2, color: isDark ? '#FFFFFF' : '#111111' }}>{step.title}</div>
+          <div style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(17,17,17,0.6)' }}>
             {stepIndex + 1}/{steps.length}
           </div>
         </div>
 
-        <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45, color: 'rgba(17,17,17,0.78)' }}>
+        <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45, color: isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.78)' }}>
           {step.description}
         </div>
 
@@ -200,13 +245,14 @@ function TourOverlay(props: {
           <button
             onClick={onSkip}
             style={{
-              border: '1px solid rgba(17,17,17,0.16)',
+              border: isDark ? '1px solid rgba(255,255,255,0.16)' : '1px solid rgba(17,17,17,0.16)',
               background: 'transparent',
               borderRadius: 12,
               padding: '10px 12px',
               cursor: 'pointer',
               fontFamily: 'Geist-Regular, system-ui',
               fontSize: 13,
+              color: isDark ? '#FFFFFF' : '#111111',
             }}
           >
             Skip
@@ -217,7 +263,7 @@ function TourOverlay(props: {
               onClick={onBack}
               disabled={stepIndex === 0}
               style={{
-                border: '1px solid rgba(17,17,17,0.16)',
+                border: isDark ? '1px solid rgba(255,255,255,0.16)' : '1px solid rgba(17,17,17,0.16)',
                 background: 'transparent',
                 opacity: stepIndex === 0 ? 0.5 : 1,
                 borderRadius: 12,
@@ -225,6 +271,7 @@ function TourOverlay(props: {
                 cursor: stepIndex === 0 ? 'default' : 'pointer',
                 fontFamily: 'Geist-Regular, system-ui',
                 fontSize: 13,
+                color: isDark ? '#FFFFFF' : '#111111',
               }}
             >
               Back
@@ -698,6 +745,7 @@ export default function MainWeb() {
         stepIndex={tourStepIndex}
         steps={steps}
         accentColor={colors.accent}
+        isDark={isDark}
         onBack={backTour}
         onNext={nextTour}
         onSkip={skipTour}

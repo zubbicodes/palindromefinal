@@ -6,16 +6,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
-  GestureResponderEvent,
-  Image,
-  PanResponder,
-  PanResponderGestureState,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions
+    Animated,
+    GestureResponderEvent,
+    Image,
+    PanResponder,
+    PanResponderGestureState,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
@@ -23,7 +23,7 @@ import { Switch } from 'react-native-switch';
 
 // ✅ Import theme context
 import { authService } from '@/authService';
-import { useSettings } from '@/context/SettingsContext';
+import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useThemeContext } from '@/context/ThemeContext';
 import { useSound } from '@/hooks/use-sound';
 
@@ -34,6 +34,17 @@ const COLOR_GRADIENTS = [
   ['#111111', '#3C3C3C'],
   ['#E7CC01', '#E7E437'],
 ] as const;
+
+const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
+  symbols: ['●', '▲', '■', '◆', '★'],
+  emojis: ['🍓', '🥑', '🫐', '🖤', '🍋'],
+  cards: ['♥', '♣', '♦', '♠', '★'],
+  letters: ['A', 'B', 'C', 'D', 'E'],
+} as const;
+
+function getColorBlindToken(mode: ColorBlindMode, index: number) {
+  return COLOR_BLIND_TOKENS[mode][index] ?? '?';
+}
 
 type BoardLayout = { x: number; y: number; width: number; height: number };
 
@@ -58,8 +69,10 @@ const DraggableBlock = ({
   onPickup: () => void;
   onDragUpdate: (row: number | null, col: number | null) => void;
 }) => {
+  const { colorBlindEnabled, colorBlindMode } = useSettings();
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const [isDragging, setIsDragging] = useState(false);
+  const token = colorBlindEnabled ? getColorBlindToken(colorBlindMode, index) : null;
 
   const latest = useRef({
     boardLayout,
@@ -167,6 +180,7 @@ const DraggableBlock = ({
           end={{ x: 1, y: 1 }}
           style={styles.gradientColorBlock}
         >
+          {token ? <Text style={styles.colorBlindBlockToken}>{token}</Text> : null}
           <Text style={styles.blockText}>{blockCount}</Text>
         </LinearGradient>
       </View>
@@ -193,6 +207,7 @@ const DraggableBlock = ({
           style={styles.gradientColorBlock}
         >
           {/* Hide number when dragging for "picking one" look */}
+          {token ? <Text style={styles.colorBlindBlockToken}>{token}</Text> : null}
           {!isDragging && <Text style={styles.blockText}>{blockCount}</Text>}
         </LinearGradient>
       </Animated.View>
@@ -434,7 +449,7 @@ function GameTutorialOverlayNative(props: {
 export default function GameLayout() {
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme, colors } = useThemeContext();
-  const { soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled } = useSettings();
+  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings();
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound();
 
   const [score, setScore] = useState(0);
@@ -929,6 +944,25 @@ export default function GameLayout() {
                 style={[StyleSheet.absoluteFill, { opacity: 0.6 }]}
               />
             )}
+            {activeHint?.row === row && activeHint?.col === col && colorBlindEnabled && (
+              <View pointerEvents="none" style={styles.colorBlindTokenOverlay}>
+                <Text style={styles.colorBlindTokenText}>
+                  {getColorBlindToken(colorBlindMode, activeHint.colorIndex)}
+                </Text>
+              </View>
+            )}
+            {gridState[row][col] !== null && colorBlindEnabled && !letter && (
+              <View pointerEvents="none" style={styles.colorBlindTokenOverlay}>
+                <Text style={styles.colorBlindTokenText}>
+                  {getColorBlindToken(colorBlindMode, gridState[row][col]!)}
+                </Text>
+              </View>
+            )}
+            {gridState[row][col] !== null && colorBlindEnabled && letter && (
+              <Text style={styles.colorBlindTokenCorner}>
+                {getColorBlindToken(colorBlindMode, gridState[row][col]!)}
+              </Text>
+            )}
             {isBulldog && (
               <Image
                 source={require('../../assets/images/bulldog.png')}
@@ -1332,6 +1366,38 @@ export default function GameLayout() {
                 </View>
 
                 <View style={styles.optionRow}>
+                  <View style={{ flexDirection: 'column' }}>
+                    <Text
+                      style={[
+                        styles.optionLabel,
+                        { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                      ]}
+                    >
+                      Color Blind Mode
+                    </Text>
+                    <Text style={{ fontSize: 12, marginTop: 4, color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)' }}>
+                      Preference: {colorBlindMode === 'symbols' ? 'Symbols' : colorBlindMode === 'emojis' ? 'Emojis' : colorBlindMode === 'cards' ? 'Cards' : 'Letters'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={colorBlindEnabled}
+                    onValueChange={setColorBlindEnabled}
+                    disabled={false}
+                    activeText=""
+                    inActiveText=""
+                    circleSize={18}
+                    barHeight={22}
+                    circleBorderWidth={0}
+                    backgroundActive="#0060FF"
+                    backgroundInactive="#ccc"
+                    circleActiveColor="#FFFFFF"
+                    circleInActiveColor="#FFFFFF"
+                    changeValueImmediately={true}
+                    switchWidthMultiplier={2.5}
+                  />
+                </View>
+
+                <View style={styles.optionRow}>
                   <Text
                     style={[
                       styles.optionLabel,
@@ -1459,6 +1525,10 @@ const styles = StyleSheet.create({
   colorBlockWrapper: { width: 50, height: 50, marginHorizontal: 4 },
   gradientColorBlock: { flex: 1, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   blockText: { color: '#fff', fontSize: 20, fontWeight: '500' },
+  colorBlindBlockToken: { position: 'absolute', top: 6, left: 8, color: '#FFFFFF', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  colorBlindTokenOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 2, justifyContent: 'center', alignItems: 'center' },
+  colorBlindTokenText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  colorBlindTokenCorner: { position: 'absolute', zIndex: 2, bottom: 3, right: 4, color: '#FFFFFF', fontSize: 10, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   controlsRow: { position: 'absolute', top: 720, width: 300, flexDirection: 'row', justifyContent: 'space-around' },
   gradientButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 
