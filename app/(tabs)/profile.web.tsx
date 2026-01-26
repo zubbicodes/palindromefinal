@@ -1,4 +1,5 @@
 import { authService } from '@/authService';
+import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -6,20 +7,41 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
 import {
-  Dimensions,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { Switch } from 'react-native-switch';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+const COLOR_GRADIENTS = [
+  ['#C40111', '#F01D2E'],
+  ['#757F35', '#99984D'],
+  ['#1177FE', '#48B7FF'],
+  ['#111111', '#3C3C3C'],
+  ['#E7CC01', '#E7E437'],
+] as const;
+
+const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
+  symbols: ['●', '▲', '■', '◆', '★'],
+  emojis: ['🍓', '🥑', '🫐', '🖤', '🍋'],
+  cards: ['♥', '♣', '♦', '♠', '★'],
+  letters: ['A', 'B', 'C', 'D', 'E'],
+} as const;
+
+function getColorBlindToken(mode: ColorBlindMode, index: number) {
+  return COLOR_BLIND_TOKENS[mode][index] ?? '?';
+}
+
 export default function ProfileScreenWeb() {
   const { colors, theme } = useTheme();
+  const { colorBlindEnabled, colorBlindMode, setColorBlindEnabled, setColorBlindMode } = useSettings();
 
   const gradientColors =
     theme === 'dark'
@@ -306,6 +328,74 @@ export default function ProfileScreenWeb() {
             </TouchableOpacity>
           </View>
         </View>
+
+        <View
+          style={[
+            styles.accessibilityCard,
+            {
+              backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.92)',
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Text style={[styles.accessibilityTitle, { color: colors.text }]}>Accessibility</Text>
+          <View style={styles.accessibilityRow}>
+            <Text style={[styles.accessibilityLabel, { color: colors.text }]}>Color Blind Mode</Text>
+            <Switch
+              value={colorBlindEnabled}
+              onValueChange={setColorBlindEnabled}
+              circleSize={18}
+              barHeight={22}
+              backgroundActive={colors.primary}
+              backgroundInactive="#ccc"
+              circleActiveColor="#fff"
+              circleInActiveColor="#fff"
+              switchWidthMultiplier={2.5}
+              renderActiveText={false}
+              renderInActiveText={false}
+            />
+          </View>
+          <Text style={[styles.accessibilitySubtitle, { color: colors.secondaryText }]}>
+            Choose how colors are represented in the game.
+          </Text>
+
+          <View style={styles.modeGrid}>
+            {(['symbols', 'emojis', 'cards', 'letters'] as const).map((mode) => {
+              const selected = colorBlindMode === mode;
+              return (
+                <TouchableOpacity
+                  key={mode}
+                  onPress={() => setColorBlindMode(mode)}
+                  style={[
+                    styles.modeTile,
+                    {
+                      borderColor: selected ? colors.primary : colors.border,
+                      backgroundColor: selected ? (theme === 'dark' ? 'rgba(0,96,255,0.20)' : 'rgba(0,96,255,0.08)') : 'transparent',
+                    },
+                  ]}
+                  activeOpacity={0.9}
+                >
+                  <Text style={[styles.modeTitle, { color: colors.text }]}>
+                    {mode === 'symbols'
+                      ? 'Symbols'
+                      : mode === 'emojis'
+                        ? 'Emojis'
+                        : mode === 'cards'
+                          ? 'Cards'
+                          : 'Letters'}
+                  </Text>
+                  <View style={styles.modePreviewRow}>
+                    {COLOR_GRADIENTS.map((g, i) => (
+                      <LinearGradient key={i} colors={g} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.modePreviewSwatch}>
+                        <Text style={styles.modePreviewToken}>{getColorBlindToken(mode, i)}</Text>
+                      </LinearGradient>
+                    ))}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
         {/* Logout */}
         <TouchableOpacity
           style={[styles.logoutButton, { backgroundColor: colors.primary }]}
@@ -488,5 +578,68 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
+  },
+  accessibilityCard: {
+    width: '100%',
+    maxWidth: 620,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    marginTop: 18,
+  },
+  accessibilityTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  accessibilityRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  accessibilityLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  accessibilitySubtitle: {
+    marginTop: 10,
+    fontSize: 12,
+  },
+  modeGrid: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  modeTile: {
+    width: '48%',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  modeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
+  modePreviewRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modePreviewSwatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modePreviewToken: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
 });

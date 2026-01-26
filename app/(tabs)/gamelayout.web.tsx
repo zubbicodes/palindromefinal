@@ -1,6 +1,6 @@
 "use client"
 
-import { useSettings } from "@/context/SettingsContext"
+import { ColorBlindMode, useSettings } from "@/context/SettingsContext"
 import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { Ionicons } from "@expo/vector-icons"
@@ -72,6 +72,17 @@ const getLayoutConfig = () => {
   }
 }
 
+const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
+  symbols: ["●", "▲", "■", "◆", "★"],
+  emojis: ["🍓", "🥑", "🫐", "🖤", "🍋"],
+  cards: ["♥", "♣", "♦", "♠", "★"],
+  letters: ["A", "B", "C", "D", "E"],
+} as const
+
+function getColorBlindToken(mode: ColorBlindMode, index: number) {
+  return COLOR_BLIND_TOKENS[mode][index] ?? "?"
+}
+
 const DraggableBlock = ({
   colorIndex,
   gradient,
@@ -85,7 +96,9 @@ const DraggableBlock = ({
   layoutConfig: any
   onDragStart: (colorIndex: number) => void
 }) => {
+  const { colorBlindEnabled, colorBlindMode } = useSettings()
   const [isDragging, setIsDragging] = useState(false)
+  const token = colorBlindEnabled ? getColorBlindToken(colorBlindMode, colorIndex) : null
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     if (count > 0) {
@@ -130,11 +143,28 @@ const DraggableBlock = ({
               width: "100%",
               height: "100%",
               borderRadius: 10,
+              position: "relative",
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
             }}
           >
+            {token ? (
+              <span
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  left: 12,
+                  color: "#fff",
+                  fontWeight: "900",
+                  fontSize: 18,
+                  textShadow: "0 1px 4px rgba(0,0,0,0.45)",
+                  userSelect: "none",
+                }}
+              >
+                {token}
+              </span>
+            ) : null}
             <span
               style={{
                 color: "#fff",
@@ -174,12 +204,29 @@ const DraggableBlock = ({
             width: "100%",
             height: "100%",
             borderRadius: 10,
+            position: "relative",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
             userSelect: "none",
           }}
         >
+          {token ? (
+            <span
+              style={{
+                position: "absolute",
+                top: 10,
+                left: 12,
+                color: "#fff",
+                fontWeight: "900",
+                fontSize: 18,
+                textShadow: "0 1px 4px rgba(0,0,0,0.45)",
+                userSelect: "none",
+              }}
+            >
+              {token}
+            </span>
+          ) : null}
           <span
             style={{
               color: "#fff",
@@ -495,7 +542,7 @@ function GameTutorialOverlay(props: {
 export default function GameLayoutWeb() {
   const router = useRouter()
   const { theme, colors, toggleTheme } = useThemeContext()
-  const { soundEnabled, hapticsEnabled, setSoundEnabled, setHapticsEnabled } = useSettings()
+  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings()
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound()
 
   const [score, setScore] = useState(0)
@@ -1357,6 +1404,58 @@ export default function GameLayoutWeb() {
                           alignItems: "center",
                           pointerEvents: "none",
                         }}>
+                          {isHint && activeHint && colorBlindEnabled && cellColorIndex === null && (
+                            <span
+                              style={{
+                                position: "absolute",
+                                inset: 0,
+                                display: "flex",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                color: "#FFFFFF",
+                                fontWeight: "900",
+                                fontSize: layoutConfig.cellSize > 40 ? 18 : 15,
+                                textShadow: "0 1px 4px rgba(0,0,0,0.45)",
+                                userSelect: "none",
+                              }}
+                            >
+                              {getColorBlindToken(colorBlindMode, activeHint.colorIndex)}
+                            </span>
+                          )}
+                          {cellColorIndex !== null && colorBlindEnabled && !letter && (
+                            <span
+                              style={{
+                                position: "absolute",
+                                inset: 0,
+                                display: "flex",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                color: "#FFFFFF",
+                                fontWeight: "900",
+                                fontSize: layoutConfig.cellSize > 40 ? 18 : 15,
+                                textShadow: "0 1px 4px rgba(0,0,0,0.45)",
+                                userSelect: "none",
+                              }}
+                            >
+                              {getColorBlindToken(colorBlindMode, cellColorIndex)}
+                            </span>
+                          )}
+                          {cellColorIndex !== null && colorBlindEnabled && letter && (
+                            <span
+                              style={{
+                                position: "absolute",
+                                right: 4,
+                                bottom: 3,
+                                color: "#FFFFFF",
+                                fontWeight: "900",
+                                fontSize: 10,
+                                textShadow: "0 1px 4px rgba(0,0,0,0.45)",
+                                userSelect: "none",
+                              }}
+                            >
+                              {getColorBlindToken(colorBlindMode, cellColorIndex)}
+                            </span>
+                          )}
                           {isBulldog && (
                             <img
                               src="/bulldog.png"
@@ -1718,6 +1817,34 @@ export default function GameLayoutWeb() {
                     <Switch
                       value={hapticsEnabled}
                       onValueChange={setHapticsEnabled}
+                      circleSize={18}
+                      barHeight={22}
+                      backgroundActive={colors.accent}
+                      backgroundInactive="#ccc"
+                      circleActiveColor="#fff"
+                      circleInActiveColor="#fff"
+                      switchWidthMultiplier={2.5}
+                      renderActiveText={false}
+                      renderInActiveText={false}
+                    />
+                  </div>
+
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 10,
+                  }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Color Blind Mode</span>
+                      <span style={{ fontSize: 12, marginTop: 4, color: theme === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)", fontFamily: "Geist-Regular, system-ui" }}>
+                        Preference: {colorBlindMode === "symbols" ? "Symbols" : colorBlindMode === "emojis" ? "Emojis" : colorBlindMode === "cards" ? "Cards" : "Letters"}
+                      </span>
+                    </div>
+                    <Switch
+                      value={colorBlindEnabled}
+                      onValueChange={setColorBlindEnabled}
                       circleSize={18}
                       barHeight={22}
                       backgroundActive={colors.accent}
