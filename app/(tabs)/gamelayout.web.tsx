@@ -8,10 +8,10 @@ import { BlurView } from "expo-blur"
 import { useRouter } from "expo-router"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import {
-  Dimensions,
-  Image,
-  Pressable, // Keeps Pressable for unified event handling or allows simple onClick
-  StyleSheet,
+    Dimensions,
+    Image,
+    Pressable, // Keeps Pressable for unified event handling or allows simple onClick
+    StyleSheet,
 } from "react-native"
 // react-native-svg works on web, usually maps to <svg>, but we can also use native <svg> if RN-SVG gives trouble. 
 // However, sticking to RN-SVG is usually fine on web if setup correctly. The user snippet used Svg, let's stick to it or standard svg if safer.
@@ -340,15 +340,50 @@ function GameTutorialOverlay(props: {
         pointerEvents: blocksInteraction ? "auto" : "none",
       }}
     >
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: blocksInteraction ? "rgba(0,0,0,0.58)" : "rgba(0,0,0,0.35)",
-          backdropFilter: "blur(2px)",
-          pointerEvents: blocksInteraction ? "auto" : "none",
-        }}
-      />
+      {highlight ? (
+        <svg
+          style={{
+            position: "fixed",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 1,
+            pointerEvents: "none",
+          }}
+        >
+          <defs>
+            <mask id="spotlight-mask-game">
+              <rect width="100%" height="100%" fill="white" />
+              <rect
+                x={highlight.left}
+                y={highlight.top}
+                width={highlight.width}
+                height={highlight.height}
+                rx="22"
+                fill="black"
+              />
+            </mask>
+          </defs>
+          <rect
+            width="100%"
+            height="100%"
+            fill={blocksInteraction ? "rgba(0,0,0,0.58)" : "rgba(0,0,0,0.35)"}
+            mask="url(#spotlight-mask-game)"
+            style={{ backdropFilter: "blur(2px)" }}
+          />
+        </svg>
+      ) : (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: blocksInteraction ? "rgba(0,0,0,0.58)" : "rgba(0,0,0,0.35)",
+            backdropFilter: "blur(2px)",
+            pointerEvents: blocksInteraction ? "auto" : "none",
+            zIndex: 1,
+          }}
+        />
+      )}
 
       {highlight ? (
         <div
@@ -362,6 +397,7 @@ function GameTutorialOverlay(props: {
             boxShadow: `0 0 0 2px ${accentColor}, 0 16px 40px rgba(0,0,0,0.35)`,
             background: "rgba(255,255,255,0.02)",
             pointerEvents: "none",
+            zIndex: 2,
           }}
         />
       ) : null}
@@ -380,6 +416,7 @@ function GameTutorialOverlay(props: {
           border: "1px solid rgba(0,0,0,0.10)",
           color: "#111111",
           pointerEvents: "auto",
+          zIndex: 3,
         }}
       >
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
