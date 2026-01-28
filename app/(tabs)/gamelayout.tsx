@@ -13,6 +13,7 @@ import {
   PanResponder,
   PanResponderGestureState,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -464,6 +465,8 @@ export default function GameLayout() {
   const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings();
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const settingsCardHeight = Math.min(windowHeight * 0.78, windowHeight - insets.top - insets.bottom - 48);
 
   const [score, setScore] = useState(0);
   const [hints, setHints] = useState(2);
@@ -1325,9 +1328,8 @@ export default function GameLayout() {
                     ? ['rgba(0, 0, 23, 1)', 'rgba(0, 0, 116, 1)'] // Dark gradient
                     : ['#FFFFFF', '#FFFFFF'] // Light theme pure white
                 }
-                style={[styles.settingsCard, { padding: 20, borderRadius: 20 }]}
+                style={[styles.settingsCard, { padding: 20, borderRadius: 20, height: settingsCardHeight }]}
               >
-                {/* Header */}
                 <View style={styles.headerRow}>
                   <View style={styles.headerSpacer} />
                   <Text
@@ -1343,173 +1345,176 @@ export default function GameLayout() {
                   </Pressable>
                 </View>
 
-                {/* Profile */}
-                <View style={styles.profileSection}>
-                  <Image
-                    source={profileImage ? { uri: profileImage } : require('../../assets/images/profile_ph.png')}
-                    style={styles.profileImage}
-                  />
-                  <View style={styles.profileTextContainer}>
-                    <Text
-                      style={[
-                        styles.profileName,
-                        { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
-                      ]}
-                    >
-                      {userName}
-                    </Text>
-                    <Pressable
-                      onPress={() => {
-                        setSettingsVisible(false);
-                        setTimeout(() => router.push('/profile'), 50);
-                      }}
-                    >
-                      <Text style={styles.profileLink}>Edit Profile</Text>
-                    </Pressable>
+                <ScrollView
+                  style={styles.settingsScroll}
+                  contentContainerStyle={styles.settingsScrollContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.profileSection}>
+                    <Image
+                      source={profileImage ? { uri: profileImage } : require('../../assets/images/profile_ph.png')}
+                      style={styles.profileImage}
+                    />
+                    <View style={styles.profileTextContainer}>
+                      <Text
+                        style={[
+                          styles.profileName,
+                          { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                        ]}
+                      >
+                        {userName}
+                      </Text>
+                      <Pressable
+                        onPress={() => {
+                          setSettingsVisible(false);
+                          setTimeout(() => router.push('/profile'), 50);
+                        }}
+                      >
+                        <Text style={styles.profileLink}>Edit Profile</Text>
+                      </Pressable>
+                    </View>
                   </View>
-                </View>
 
-                {/* Toggles */}
-                <View style={styles.optionRow}>
-                  <Text
-                    style={[
-                      styles.optionLabel,
-                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
-                    ]}
-                  >
-                    Sound Effects
-                  </Text>
-                  <Switch
-                    value={soundEnabled}
-                    onValueChange={setSoundEnabled}
-                    disabled={false}
-                    activeText=""
-                    inActiveText=""
-                    circleSize={18}
-                    barHeight={22}
-                    circleBorderWidth={0}
-                    backgroundActive="#0060FF"
-                    backgroundInactive="#ccc"
-                    circleActiveColor="#FFFFFF"
-                    circleInActiveColor="#FFFFFF"
-                    changeValueImmediately={true}
-                    switchWidthMultiplier={2.5}
-                  />
-                </View>
-
-                <View style={styles.optionRow}>
-                  <Text
-                    style={[
-                      styles.optionLabel,
-                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
-                    ]}
-                  >
-                    Haptic Feedback
-                  </Text>
-                  <Switch
-                    value={hapticsEnabled}
-                    onValueChange={setHapticsEnabled}
-                    disabled={false}
-                    activeText=""
-                    inActiveText=""
-                    circleSize={18}
-                    barHeight={22}
-                    circleBorderWidth={0}
-                    backgroundActive="#0060FF"
-                    backgroundInactive="#ccc"
-                    circleActiveColor="#FFFFFF"
-                    circleInActiveColor="#FFFFFF"
-                    changeValueImmediately={true}
-                    switchWidthMultiplier={2.5}
-                  />
-                </View>
-
-                <View style={styles.optionRow}>
-                  <View style={{ flexDirection: 'column' }}>
+                  <View style={styles.optionRow}>
                     <Text
                       style={[
                         styles.optionLabel,
                         { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
                       ]}
                     >
-                      Color Blind Mode
+                      Sound Effects
                     </Text>
-                    <Text style={{ fontSize: 12, marginTop: 4, color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)' }}>
-                      Preference: {colorBlindMode === 'symbols' ? 'Symbols' : colorBlindMode === 'emojis' ? 'Emojis' : colorBlindMode === 'cards' ? 'Cards' : 'Letters'}
-                    </Text>
+                    <Switch
+                      value={soundEnabled}
+                      onValueChange={setSoundEnabled}
+                      disabled={false}
+                      activeText=""
+                      inActiveText=""
+                      circleSize={18}
+                      barHeight={22}
+                      circleBorderWidth={0}
+                      backgroundActive="#0060FF"
+                      backgroundInactive="#ccc"
+                      circleActiveColor="#FFFFFF"
+                      circleInActiveColor="#FFFFFF"
+                      changeValueImmediately={true}
+                      switchWidthMultiplier={2.5}
+                    />
                   </View>
-                  <Switch
-                    value={colorBlindEnabled}
-                    onValueChange={setColorBlindEnabled}
-                    disabled={false}
-                    activeText=""
-                    inActiveText=""
-                    circleSize={18}
-                    barHeight={22}
-                    circleBorderWidth={0}
-                    backgroundActive="#0060FF"
-                    backgroundInactive="#ccc"
-                    circleActiveColor="#FFFFFF"
-                    circleInActiveColor="#FFFFFF"
-                    changeValueImmediately={true}
-                    switchWidthMultiplier={2.5}
-                  />
-                </View>
 
-                <View style={styles.optionRow}>
-                  <Text
-                    style={[
-                      styles.optionLabel,
-                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
-                    ]}
-                  >
-                    Dark Mode
-                  </Text>
-                  <Switch
-                    value={darkModeEnabled}
-                    onValueChange={() => {
-                      toggleTheme(); // ✅ Toggle context theme
-                      setDarkModeEnabled(prev => !prev); // Sync switch state
-                    }}
-                    disabled={false}
-                    activeText=""
-                    inActiveText=""
-                    circleSize={18}
-                    barHeight={22}
-                    circleBorderWidth={0}
-                    backgroundActive="#0060FF"
-                    backgroundInactive="#E5E5E5"
-                    circleActiveColor="#FFFFFF"
-                    circleInActiveColor="#FFFFFF"
-                    changeValueImmediately={true}
-                    switchWidthMultiplier={2.5}
-                  />
-                </View>
+                  <View style={styles.optionRow}>
+                    <Text
+                      style={[
+                        styles.optionLabel,
+                        { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                      ]}
+                    >
+                      Haptic Feedback
+                    </Text>
+                    <Switch
+                      value={hapticsEnabled}
+                      onValueChange={setHapticsEnabled}
+                      disabled={false}
+                      activeText=""
+                      inActiveText=""
+                      circleSize={18}
+                      barHeight={22}
+                      circleBorderWidth={0}
+                      backgroundActive="#0060FF"
+                      backgroundInactive="#ccc"
+                      circleActiveColor="#FFFFFF"
+                      circleInActiveColor="#FFFFFF"
+                      changeValueImmediately={true}
+                      switchWidthMultiplier={2.5}
+                    />
+                  </View>
 
-                {/* Links */}
-                <Pressable style={styles.linkRow}>
-                  <Text
-                    style={[
-                      styles.linkText,
-                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
-                    ]}
-                  >
-                    Privacy Policy
-                  </Text>
-                  <Ionicons name="chevron-forward" size={20} color="#0060FF" />
-                </Pressable>
+                  <View style={styles.optionRow}>
+                    <View style={{ flexDirection: 'column', flex: 1, paddingRight: 14 }}>
+                      <Text
+                        style={[
+                          styles.optionLabel,
+                          { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                        ]}
+                      >
+                        Color Blind Mode
+                      </Text>
+                      <Text style={{ fontSize: 12, marginTop: 4, color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)' }}>
+                        Preference: {colorBlindMode === 'symbols' ? 'Symbols' : colorBlindMode === 'emojis' ? 'Emojis' : colorBlindMode === 'cards' ? 'Cards' : 'Letters'}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={colorBlindEnabled}
+                      onValueChange={setColorBlindEnabled}
+                      disabled={false}
+                      activeText=""
+                      inActiveText=""
+                      circleSize={18}
+                      barHeight={22}
+                      circleBorderWidth={0}
+                      backgroundActive="#0060FF"
+                      backgroundInactive="#ccc"
+                      circleActiveColor="#FFFFFF"
+                      circleInActiveColor="#FFFFFF"
+                      changeValueImmediately={true}
+                      switchWidthMultiplier={2.5}
+                    />
+                  </View>
 
-                <Pressable style={[styles.linkRow, { borderBottomWidth: 0 }]}>
-                  <Text
-                    style={[
-                      styles.linkText,
-                      { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
-                    ]}
-                  >
-                    Terms & Conditions
-                  </Text>
-                  <Ionicons name="chevron-forward" size={20} color="#0060FF" />
-                </Pressable>
+                  <View style={styles.optionRow}>
+                    <Text
+                      style={[
+                        styles.optionLabel,
+                        { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                      ]}
+                    >
+                      Dark Mode
+                    </Text>
+                    <Switch
+                      value={darkModeEnabled}
+                      onValueChange={() => {
+                        toggleTheme();
+                        setDarkModeEnabled(prev => !prev);
+                      }}
+                      disabled={false}
+                      activeText=""
+                      inActiveText=""
+                      circleSize={18}
+                      barHeight={22}
+                      circleBorderWidth={0}
+                      backgroundActive="#0060FF"
+                      backgroundInactive="#E5E5E5"
+                      circleActiveColor="#FFFFFF"
+                      circleInActiveColor="#FFFFFF"
+                      changeValueImmediately={true}
+                      switchWidthMultiplier={2.5}
+                    />
+                  </View>
+
+                  <Pressable style={styles.linkRow}>
+                    <Text
+                      style={[
+                        styles.linkText,
+                        { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                      ]}
+                    >
+                      Privacy Policy
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color="#0060FF" />
+                  </Pressable>
+
+                  <Pressable style={[styles.linkRow, { borderBottomWidth: 0 }]}>
+                    <Text
+                      style={[
+                        styles.linkText,
+                        { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                      ]}
+                    >
+                      Terms & Conditions
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color="#0060FF" />
+                  </Pressable>
+                </ScrollView>
               </LinearGradient>
             </View>
 
@@ -1608,7 +1613,7 @@ const styles = StyleSheet.create({
 
   // ⚙️ Settings Styles
   settingsOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
-  settingsCard: { width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, height: '53.65%' },
+  settingsCard: { width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10, overflow: 'hidden' },
   headerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   headerSpacer: {
     flex: 1,
@@ -1630,6 +1635,8 @@ const styles = StyleSheet.create({
   optionLabel: { fontSize: 16, color: '#000', fontWeight: '500' },
   linkRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
   linkText: { color: '#000', fontSize: 16, fontWeight: '500' },
+  settingsScroll: { flex: 1 },
+  settingsScrollContent: { paddingBottom: 6 },
   pauseOverlay: {
     flex: 1,
     justifyContent: 'center',
