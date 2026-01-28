@@ -7,15 +7,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Animated,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
-    useWindowDimensions,
+  Animated,
+  InteractionManager,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -306,14 +307,38 @@ export default function MainScreen() {
     [],
   );
 
-  const singleRef = useRef<View>(null);
-  const multiRef = useRef<View>(null);
-  const practiceRef = useRef<View>(null);
-  const settingsRef = useRef<View>(null);
+  const singleRef = useRef<any>(null);
+  const multiRef = useRef<any>(null);
+  const practiceRef = useRef<any>(null);
+  const settingsRef = useRef<any>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const tileGridYRef = useRef<number>(0);
+  const tileYRef = useRef<{ single?: number; multi?: number; practice?: number; settings?: number }>({});
 
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const [tourRect, setTourRect] = useState<MeasuredRect>(null);
+
+  const measureTourTarget = useCallback((target: TourStep['target']) => {
+    if (!target) {
+      setTourRect(null);
+      return;
+    }
+
+    const ref =
+      target === 'single'
+        ? singleRef
+        : target === 'multi'
+          ? multiRef
+          : target === 'practice'
+            ? practiceRef
+            : settingsRef;
+
+    ref.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+      if (w > 0 && h > 0) setTourRect({ x, y, width: w, height: h });
+      else setTourRect(null);
+    });
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -365,29 +390,31 @@ export default function MainScreen() {
       return;
     }
 
-    const ref =
-      target === 'single'
-        ? singleRef
-        : target === 'multi'
-          ? multiRef
-          : target === 'practice'
-            ? practiceRef
-            : settingsRef;
-
-    const measure = () => {
-      ref.current?.measureInWindow((x, y, w, h) => {
-        if (w > 0 && h > 0) setTourRect({ x, y, width: w, height: h });
-        else setTourRect(null);
-      });
+    const scrollToTarget = () => {
+      const y = tileYRef.current[target];
+      if (typeof y !== 'number') return;
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: false });
     };
 
-    const t1 = setTimeout(() => requestAnimationFrame(measure), 60);
-    const t2 = setTimeout(measure, 240);
+    let cancelled = false;
+    const afterInteractions = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
+      scrollToTarget();
+      const t1 = setTimeout(() => requestAnimationFrame(() => measureTourTarget(target)), 140);
+      const t2 = setTimeout(() => measureTourTarget(target), 520);
+      cleanupTimers = () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    });
+
+    let cleanupTimers = () => {};
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
+      cancelled = true;
+      cleanupTimers();
+      afterInteractions.cancel();
     };
-  }, [steps, tourOpen, tourStepIndex]);
+  }, [measureTourTarget, steps, tourOpen, tourStepIndex]);
 
   const showToast = useCallback(
     (message: string) => {
@@ -465,6 +492,7 @@ export default function MainScreen() {
 
       <SafeAreaView edges={['left', 'right', 'bottom']} style={{ flex: 1 }}>
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[
             styles.scrollContent,
             {
@@ -502,7 +530,11 @@ export default function MainScreen() {
                 </Pressable>
 
                 <Pressable
-                  onPress={openTour}
+                  onPress={() => {
+                    showToast('Under progress');
+                    // openTour();
+                    void openTour;
+                  }}
                   style={({ pressed }) => [
                     styles.iconButton,
                     {
@@ -548,9 +580,24 @@ export default function MainScreen() {
             </Text>
           </View>
 
-          <View style={styles.tileGrid}>
-            <View ref={singleRef} style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}>
+          <View
+            style={styles.tileGrid}
+            onLayout={(e) => {
+              tileGridYRef.current = e.nativeEvent.layout.y;
+            }}
+          >
+
+            <View
+              style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
+              onLayout={(e) => {
+                tileYRef.current.single = tileGridYRef.current + e.nativeEvent.layout.y;
+                if (tourOpen && steps[tourStepIndex]?.target === 'single') {
+                  requestAnimationFrame(() => measureTourTarget('single'));
+                }
+              }}
+            >
               <MenuTile
+                ref={singleRef}
                 title="Single Player"
                 subtitle="Start a new game"
                 badge="Play"
@@ -560,8 +607,17 @@ export default function MainScreen() {
               />
             </View>
 
-            <View ref={multiRef} style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}>
+            <View
+              style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
+              onLayout={(e) => {
+                tileYRef.current.multi = tileGridYRef.current + e.nativeEvent.layout.y;
+                if (tourOpen && steps[tourStepIndex]?.target === 'multi') {
+                  requestAnimationFrame(() => measureTourTarget('multi'));
+                }
+              }}
+            >
               <MenuTile
+                ref={multiRef}
                 title="Multiplayer"
                 subtitle="Play with friends"
                 badge="Soon"
@@ -571,8 +627,17 @@ export default function MainScreen() {
               />
             </View>
 
-            <View ref={practiceRef} style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}>
+            <View
+              style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
+              onLayout={(e) => {
+                tileYRef.current.practice = tileGridYRef.current + e.nativeEvent.layout.y;
+                if (tourOpen && steps[tourStepIndex]?.target === 'practice') {
+                  requestAnimationFrame(() => measureTourTarget('practice'));
+                }
+              }}
+            >
               <MenuTile
+                ref={practiceRef}
                 title="Practice Mode"
                 subtitle="Warm up and explore"
                 badge="Soon"
@@ -582,8 +647,17 @@ export default function MainScreen() {
               />
             </View>
 
-            <View ref={settingsRef} style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}>
+            <View
+              style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
+              onLayout={(e) => {
+                tileYRef.current.settings = tileGridYRef.current + e.nativeEvent.layout.y;
+                if (tourOpen && steps[tourStepIndex]?.target === 'settings') {
+                  requestAnimationFrame(() => measureTourTarget('settings'));
+                }
+              }}
+            >
               <MenuTile
+                ref={settingsRef}
                 title="Settings"
                 subtitle="Profile and preferences"
                 badge="Open"
@@ -618,14 +692,14 @@ export default function MainScreen() {
   );
 }
 
-function MenuTile(props: {
+const MenuTile = React.forwardRef<any, {
   title: string;
   subtitle: string;
   badge: string;
   icon: keyof typeof Ionicons.glyphMap;
   colors: readonly [string, string];
   onPress: () => void;
-}) {
+}>((props, ref) => {
   const sparkle = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -643,6 +717,8 @@ function MenuTile(props: {
 
   return (
     <Pressable
+      ref={ref}
+      collapsable={false}
       onPress={props.onPress}
       style={({ pressed }) => [
         styles.tilePressable,
@@ -689,7 +765,9 @@ function MenuTile(props: {
       </LinearGradient>
     </Pressable>
   );
-}
+});
+
+MenuTile.displayName = 'MenuTile';
 
 const styles = StyleSheet.create({
   scrollContent: {
