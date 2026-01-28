@@ -6,18 +6,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Animated,
-    GestureResponderEvent,
-    Image,
-    PanResponder,
-    PanResponderGestureState,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    useWindowDimensions
+  Animated,
+  GestureResponderEvent,
+  Image,
+  Modal,
+  PanResponder,
+  PanResponderGestureState,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 import { Switch } from 'react-native-switch';
 
@@ -73,6 +74,8 @@ const DraggableBlock = ({
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const [isDragging, setIsDragging] = useState(false);
   const token = colorBlindEnabled ? getColorBlindToken(colorBlindMode, index) : null;
+  const lastDragCellRef = useRef<{ row: number | null; col: number | null }>({ row: null, col: null });
+  const dragTargetOffsetY = 64;
 
   const latest = useRef({
     boardLayout,
@@ -131,6 +134,7 @@ const DraggableBlock = ({
       onStartShouldSetPanResponder: () => latest.current.blockCount > 0,
       onPanResponderGrant: () => {
         setIsDragging(true);
+        lastDragCellRef.current = { row: null, col: null };
         latest.current.onPickup();
       },
       onPanResponderMove: (e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
@@ -141,7 +145,11 @@ const DraggableBlock = ({
 
         const touchX = (e.nativeEvent as any).pageX ?? gestureState.moveX;
         const touchY = (e.nativeEvent as any).pageY ?? gestureState.moveY;
-        const { row, col } = getCellFromPoint(touchX, touchY, layout);
+        const { row, col } = getCellFromPoint(touchX, touchY - dragTargetOffsetY, layout);
+
+        const last = lastDragCellRef.current;
+        if (last.row === row && last.col === col) return;
+        lastDragCellRef.current = { row, col };
         latest.current.onDragUpdate(row, col);
       },
       onPanResponderRelease: (e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
@@ -153,19 +161,21 @@ const DraggableBlock = ({
           const measuredLayout = await latest.current.measureBoardLayout();
           const layoutToUse = measuredLayout ?? latest.current.boardLayout;
           if (!layoutToUse) return;
-          const { row, col } = getCellFromPoint(dropX, dropY, layoutToUse);
+          const { row, col } = getCellFromPoint(dropX, dropY - dragTargetOffsetY, layoutToUse);
           if (row !== null && col !== null) {
             latest.current.onDrop(row, col, index);
           }
         })();
 
+        lastDragCellRef.current = { row: null, col: null };
         latest.current.onDragUpdate(null, null);
-        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
       },
       onPanResponderTerminate: () => {
         setIsDragging(false);
+        lastDragCellRef.current = { row: null, col: null };
         latest.current.onDragUpdate(null, null);
-        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
+        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
       }
     })
   ).current;
@@ -215,8 +225,8 @@ const DraggableBlock = ({
   );
 };
 
-type GameTutorialMode = 'modal' | 'coach';
 type GameTutorialPhase = 'ui' | 'placeFirst' | 'makeScore' | 'complete';
+type GameTutorialMode = 'modal' | 'coach';
 
 type GameTutorialTarget =
   | 'score'
@@ -332,8 +342,8 @@ function GameTutorialOverlayNative(props: {
   onSkip: () => void;
   onDone: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   if (!props.open || !props.step) return null;
-
   const blockInteraction = props.step.mode === 'modal';
   const showBack = props.step.showBack ?? false;
   const showPrimary = props.step.showPrimary ?? true;
@@ -341,108 +351,110 @@ function GameTutorialOverlayNative(props: {
   const primaryLabel = props.step.primaryLabel ?? (isLast ? 'Continue' : 'Next');
 
   return (
-    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      <SpotlightMask rect={props.rect} blockInteraction={blockInteraction} />
+    <Modal visible={props.open} transparent animationType="fade" onRequestClose={props.onSkip}>
+      <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+        <SpotlightMask rect={props.rect} blockInteraction={blockInteraction} />
 
-      <View
-        pointerEvents="auto"
-        style={{
-          position: 'absolute',
-          left: 16,
-          right: 16,
-          bottom: 22,
-          borderRadius: 18,
-          padding: 16,
-          backgroundColor: props.isDark ? 'rgba(10,10,28,0.96)' : 'rgba(255,255,255,0.97)',
-          borderWidth: 1,
-          borderColor: props.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)',
-          shadowColor: '#000',
-          shadowOpacity: 0.35,
-          shadowRadius: 22,
-          shadowOffset: { width: 0, height: 18 },
-          elevation: 12,
-        }}
-      >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
-          <Text style={{ fontFamily: 'Geist-Bold', fontSize: 15, color: props.isDark ? '#FFFFFF' : '#111111' }}>
-            {props.step.title}
+        <View
+          pointerEvents="auto"
+          style={{
+            position: 'absolute',
+            left: 16,
+            right: 16,
+            bottom: insets.bottom + 22,
+            borderRadius: 18,
+            padding: 16,
+            backgroundColor: props.isDark ? 'rgba(10,10,28,0.96)' : 'rgba(255,255,255,0.97)',
+            borderWidth: 1,
+            borderColor: props.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)',
+            shadowColor: '#000',
+            shadowOpacity: 0.35,
+            shadowRadius: 22,
+            shadowOffset: { width: 0, height: 18 },
+            elevation: 12,
+          }}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+            <Text style={{ fontFamily: 'Geist-Bold', fontSize: 15, color: props.isDark ? '#FFFFFF' : '#111111' }}>
+              {props.step.title}
+            </Text>
+            {props.stepsCount > 0 ? (
+              <Text style={{ fontFamily: 'Geist-Regular', fontSize: 12, color: props.isDark ? 'rgba(255,255,255,0.65)' : 'rgba(17,17,17,0.55)' }}>
+                {Math.min(props.stepIndex + 1, props.stepsCount)}/{props.stepsCount}
+              </Text>
+            ) : null}
+          </View>
+
+          <Text style={{ marginTop: 8, fontFamily: 'Geist-Regular', fontSize: 13, lineHeight: 18, color: props.isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.78)' }}>
+            {props.step.description}
           </Text>
-          {props.stepsCount > 0 ? (
-            <Text style={{ fontFamily: 'Geist-Regular', fontSize: 12, color: props.isDark ? 'rgba(255,255,255,0.65)' : 'rgba(17,17,17,0.55)' }}>
-              {Math.min(props.stepIndex + 1, props.stepsCount)}/{props.stepsCount}
-            </Text>
-          ) : null}
-        </View>
 
-        <Text style={{ marginTop: 8, fontFamily: 'Geist-Regular', fontSize: 13, lineHeight: 18, color: props.isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.78)' }}>
-          {props.step.description}
-        </Text>
+          <View style={{ marginTop: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <Pressable
+              onPress={props.onSkip}
+              accessibilityRole="button"
+              accessibilityLabel="Skip tutorial"
+              style={({ pressed }) => ({
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: props.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)',
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: 'Geist-Regular', fontSize: 13, color: props.isDark ? '#FFFFFF' : '#111111' }}>
+                Skip
+              </Text>
+            </Pressable>
 
-        <View style={{ marginTop: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-          <Pressable
-            onPress={props.onSkip}
-            accessibilityRole="button"
-            accessibilityLabel="Skip tutorial"
-            style={({ pressed }) => ({
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: props.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)',
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <Text style={{ fontFamily: 'Geist-Regular', fontSize: 13, color: props.isDark ? '#FFFFFF' : '#111111' }}>
-              Skip
-            </Text>
-          </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {showBack ? (
+                <Pressable
+                  onPress={props.onBack}
+                  disabled={props.stepIndex <= 0}
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous step"
+                  style={({ pressed }) => ({
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: props.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)',
+                    opacity: props.stepIndex <= 0 ? 0.5 : pressed ? 0.8 : 1,
+                  })}
+                >
+                  <Text style={{ fontFamily: 'Geist-Regular', fontSize: 13, color: props.isDark ? '#FFFFFF' : '#111111' }}>
+                    Back
+                  </Text>
+                </Pressable>
+              ) : null}
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {showBack ? (
-              <Pressable
-                onPress={props.onBack}
-                disabled={props.stepIndex <= 0}
-                accessibilityRole="button"
-                accessibilityLabel="Previous step"
-                style={({ pressed }) => ({
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: props.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)',
-                  opacity: props.stepIndex <= 0 ? 0.5 : pressed ? 0.8 : 1,
-                })}
-              >
-                <Text style={{ fontFamily: 'Geist-Regular', fontSize: 13, color: props.isDark ? '#FFFFFF' : '#111111' }}>
-                  Back
-                </Text>
-              </Pressable>
-            ) : null}
-
-            {showPrimary ? (
-              <Pressable
-                onPress={isLast ? props.onDone : props.onNext}
-                accessibilityRole="button"
-                accessibilityLabel={isLast ? 'Finish tutorial' : 'Next step'}
-                style={({ pressed }) => ({
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
-                  backgroundColor: props.accentColor,
-                  borderWidth: 1,
-                  borderColor: props.accentColor,
-                  opacity: pressed ? 0.88 : 1,
-                })}
-              >
-                <Text style={{ fontFamily: 'Geist-Bold', fontSize: 13, color: '#FFFFFF' }}>
-                  {primaryLabel}
-                </Text>
-              </Pressable>
-            ) : null}
+              {showPrimary ? (
+                <Pressable
+                  onPress={isLast ? props.onDone : props.onNext}
+                  accessibilityRole="button"
+                  accessibilityLabel={isLast ? 'Finish tutorial' : 'Next step'}
+                  style={({ pressed }) => ({
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    borderRadius: 12,
+                    backgroundColor: props.accentColor,
+                    borderWidth: 1,
+                    borderColor: props.accentColor,
+                    opacity: pressed ? 0.88 : 1,
+                  })}
+                >
+                  <Text style={{ fontFamily: 'Geist-Bold', fontSize: 13, color: '#FFFFFF' }}>
+                    {primaryLabel}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         </View>
       </View>
-    </View>
+    </Modal>
   );
 }
 
@@ -451,6 +463,7 @@ export default function GameLayout() {
   const { theme, toggleTheme, colors } = useThemeContext();
   const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings();
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound();
+  const insets = useSafeAreaInsets();
 
   const [score, setScore] = useState(0);
   const [hints, setHints] = useState(2);
@@ -476,6 +489,37 @@ export default function GameLayout() {
   const [darkModeEnabled, setDarkModeEnabled] = useState(theme === 'dark');
   const [userName, setUserName] = useState('User');
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+
+    toastOpacity.stopAnimation();
+    toastOpacity.setValue(0);
+
+    Animated.timing(toastOpacity, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+
+    toastTimeoutRef.current = setTimeout(() => {
+      Animated.timing(toastOpacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }).start(() => setToastMessage(null));
+    }, 1600);
+  }, [toastOpacity]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
 
   const triggerHaptic = useCallback((kind: 'pickup' | 'drop' | 'error' | 'success') => {
     if (!hapticsEnabled) return;
@@ -502,6 +546,7 @@ export default function GameLayout() {
         target: null,
         mode: 'modal',
         showBack: true,
+        zIndex: 1000,
       },
       {
         title: 'Score',
@@ -509,6 +554,7 @@ export default function GameLayout() {
         target: 'score',
         mode: 'modal',
         showBack: true,
+        zIndex: 1000,
       },
       {
         title: 'Timer',
@@ -516,6 +562,7 @@ export default function GameLayout() {
         target: 'timer',
         mode: 'modal',
         showBack: true,
+        zIndex: 1000,
       },
       {
         title: 'Hints',
@@ -523,6 +570,7 @@ export default function GameLayout() {
         target: 'hints',
         mode: 'modal',
         showBack: true,
+        zIndex: 1000,
       },
       {
         title: 'Blocks',
@@ -530,6 +578,7 @@ export default function GameLayout() {
         target: 'blocks',
         mode: 'modal',
         showBack: true,
+        zIndex: 1000,
       },
       {
         title: 'Game Board',
@@ -537,6 +586,7 @@ export default function GameLayout() {
         target: 'board',
         mode: 'modal',
         showBack: true,
+        zIndex: 1000,
       },
       {
         title: 'Controls',
@@ -545,6 +595,7 @@ export default function GameLayout() {
         mode: 'modal',
         showBack: true,
         primaryLabel: 'Start Tutorial',
+        zIndex: 1000,
       },
     ],
     [],
@@ -1089,15 +1140,13 @@ export default function GameLayout() {
         if (!isTimerRunning) setIsTimerRunning(true);
       }}
       onDragUpdate={(row: number | null, col: number | null) => {
-        if (row !== null && col !== null) {
-          if (gridState[row][col] === null) {
-            setDragOverCell({ row, col });
-          } else {
-            setDragOverCell(null);
-          }
-        } else {
-          setDragOverCell(null);
-        }
+        setDragOverCell((prev) => {
+          if (row === null || col === null) return prev ? null : prev;
+          const isEmpty = gridStateRef.current[row]?.[col] === null;
+          if (!isEmpty) return prev ? null : prev;
+          if (prev?.row === row && prev?.col === col) return prev;
+          return { row, col };
+        });
       }}
     />
   ));
@@ -1118,6 +1167,7 @@ export default function GameLayout() {
 
       <View
         ref={scoreBoxRef}
+        collapsable={false}
         style={[
           styles.rectangleLeft,
           {
@@ -1142,6 +1192,7 @@ export default function GameLayout() {
 
       <Pressable
         ref={hintsBoxRef as any}
+        collapsable={false}
         onPress={findHint}
         style={[
           styles.rectangleRight,
@@ -1165,7 +1216,7 @@ export default function GameLayout() {
         </Text>
       </Pressable>
 
-      <View ref={timerBoxRef} style={styles.timerContainer}>
+      <View ref={timerBoxRef} collapsable={false} style={styles.timerContainer}>
         <Svg height="40" width="300">
           <Defs>
             <SvgLinearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
@@ -1188,6 +1239,7 @@ export default function GameLayout() {
 
       <View
         ref={boardRef}
+        collapsable={false}
       onLayout={() => {
         boardRef.current?.measureInWindow((x, y, width, height) => {
           setBoardLayout({ x, y, width, height });
@@ -1210,6 +1262,7 @@ export default function GameLayout() {
 
       <View
         ref={blocksBoxRef}
+        collapsable={false}
         style={[
           styles.colorBlocksContainer,
           { backgroundColor: theme === 'dark' ? 'rgba(25,25,91,0.7)' : '#E4EBF0' },
@@ -1219,31 +1272,37 @@ export default function GameLayout() {
       </View>
 
       <View style={styles.controlsRow}>
-        <Pressable ref={playBtnRef as any} onPress={() => console.log('Play')}>
+        <Pressable ref={playBtnRef as any} collapsable={false} onPress={() => console.log('Play')}>
           <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.gradientButton}>
             <Ionicons name="play" size={20} color="#1a63cc" />
           </LinearGradient>
         </Pressable>
 
-        <Pressable ref={pauseBtnRef as any} onPress={() => setPause(true)}>
+        <Pressable ref={pauseBtnRef as any} collapsable={false} onPress={() => setPause(true)}>
           <LinearGradient colors={['#ffee60', '#ffa40b']} style={styles.gradientButton}>
             <Ionicons name="pause" size={20} color="#de5f07" />
           </LinearGradient>
         </Pressable>
 
-        <Pressable ref={profileBtnRef as any} onPress={() => router.push('/profile')}>
+        <Pressable ref={profileBtnRef as any} collapsable={false} onPress={() => router.push('/profile')}>
           <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.gradientButton}>
             <Ionicons name="list" size={20} color="#1a63cc" />
           </LinearGradient>
         </Pressable>
 
-        <Pressable ref={settingsBtnRef as any} onPress={() => setSettingsVisible(true)}>
+        <Pressable ref={settingsBtnRef as any} collapsable={false} onPress={() => setSettingsVisible(true)}>
           <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.gradientButton}>
             <Ionicons name="settings" size={20} color="#1a63cc" />
           </LinearGradient>
         </Pressable>
 
-        <Pressable onPress={openTutorial}>
+        <Pressable
+          onPress={() => {
+            showToast('Under progress');
+            // openTutorial();
+            void openTutorial;
+          }}
+        >
           <LinearGradient colors={['#111111', '#3C3C3C']} style={styles.gradientButton}>
             <Ionicons name="help-circle-outline" size={20} color="#FFFFFF" />
           </LinearGradient>
@@ -1497,6 +1556,21 @@ export default function GameLayout() {
           closeTutorial();
         }}
       />
+
+      {toastMessage ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.toastContainer,
+            {
+              opacity: toastOpacity,
+              bottom: insets.bottom + 22,
+            },
+          ]}
+        >
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </Animated.View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1617,5 +1691,25 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 10,
+  },
+  toastContainer: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(17,17,17,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10000,
+  },
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontFamily: 'Geist-Regular',
+    textAlign: 'center',
   },
 });
