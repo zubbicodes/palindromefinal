@@ -9,7 +9,6 @@ import {
   Animated,
   GestureResponderEvent,
   Image,
-  Modal,
   PanResponder,
   PanResponderGestureState,
   Pressable,
@@ -20,6 +19,7 @@ import {
   useWindowDimensions
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SpotlightTourProvider, type TourState, type TourStep } from 'react-native-spotlight-tour';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 import { Switch } from 'react-native-switch';
 
@@ -76,7 +76,7 @@ const DraggableBlock = ({
   const [isDragging, setIsDragging] = useState(false);
   const token = colorBlindEnabled ? getColorBlindToken(colorBlindMode, index) : null;
   const lastDragCellRef = useRef<{ row: number | null; col: number | null }>({ row: null, col: null });
-  const dragTargetOffsetY = 64;
+  const dragTargetOffsetY = 50;
 
   const latest = useRef({
     boardLayout,
@@ -226,237 +226,202 @@ const DraggableBlock = ({
   );
 };
 
-type GameTutorialPhase = 'ui' | 'placeFirst' | 'makeScore' | 'complete';
-type GameTutorialMode = 'modal' | 'coach';
-
-type GameTutorialTarget =
-  | 'score'
-  | 'timer'
-  | 'hints'
-  | 'blocks'
-  | 'board'
-  | 'play'
-  | 'pause'
-  | 'profile'
-  | 'settings'
-  | null;
-
-type GameTutorialStep = {
-  title: string;
-  description: string;
-  target: GameTutorialTarget;
-  mode: GameTutorialMode;
-  showBack?: boolean;
-  showPrimary?: boolean;
-  primaryLabel?: string;
-};
-
-type MeasuredRect = { x: number; y: number; width: number; height: number } | null;
-
 const GAME_TUTORIAL_SEEN_KEY = 'palindrome_game_tutorial_v1_seen';
 
-function SpotlightMask(props: {
-  rect: MeasuredRect;
-  blockInteraction: boolean;
+function TourCard(props: {
+  title: string;
+  description: string;
+  stepIndex: number;
+  stepsCount: number;
+  isDark: boolean;
+  accentColor: string;
+  isFirst: boolean;
+  isLast: boolean;
+  onSkip: () => void;
+  onBack: () => void;
+  onNext: () => void;
 }) {
-  const { width, height } = useWindowDimensions();
-
-  if (!props.rect) {
-    return (
-      <View
-        pointerEvents={props.blockInteraction ? 'auto' : 'none'}
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: props.blockInteraction ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.3)' },
-        ]}
-      />
-    );
-  }
-
-  // Padding logic
-  const padding = 8;
-  const safeX = Math.max(0, props.rect.x - padding);
-  const safeY = Math.max(0, props.rect.y - padding);
-  const safeW = Math.min(width - safeX, props.rect.width + padding * 2);
-  const safeH = Math.min(height - safeY, props.rect.height + padding * 2);
-
-  const maskColor = props.blockInteraction ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.35)';
-  const pointerEvents = props.blockInteraction ? 'auto' : 'none';
-
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {/* Top */}
-      <View pointerEvents={pointerEvents} style={{ position: 'absolute', top: 0, left: 0, width: width, height: safeY, backgroundColor: maskColor }} />
-      {/* Bottom */}
-      <View pointerEvents={pointerEvents} style={{ position: 'absolute', top: safeY + safeH, left: 0, width: width, height: height - (safeY + safeH), backgroundColor: maskColor }} />
-      {/* Left */}
-      <View pointerEvents={pointerEvents} style={{ position: 'absolute', top: safeY, left: 0, width: safeX, height: safeH, backgroundColor: maskColor }} />
-      {/* Right */}
-      <View pointerEvents={pointerEvents} style={{ position: 'absolute', top: safeY, left: safeX + safeW, right: 0, height: safeH, backgroundColor: maskColor }} />
-      
-      {/* Blocker for the hole if interaction is blocked */}
-      {props.blockInteraction && (
-        <View
-          pointerEvents="auto"
+    <View
+      style={{
+        width: 360,
+        maxWidth: '100%',
+        borderRadius: 18,
+        padding: 16,
+        backgroundColor: props.isDark ? 'rgba(10,10,28,0.96)' : 'rgba(255,255,255,0.97)',
+        borderWidth: 1,
+        borderColor: props.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)',
+        shadowColor: '#000',
+        shadowOpacity: 0.35,
+        shadowRadius: 22,
+        shadowOffset: { width: 0, height: 18 },
+        elevation: 12,
+      }}
+    >
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+        <Text style={{ fontFamily: 'Geist-Bold', fontSize: 15, color: props.isDark ? '#FFFFFF' : '#111111' }}>
+          {props.title}
+        </Text>
+        <Text
           style={{
-            position: 'absolute',
-            top: safeY,
-            left: safeX,
-            width: safeW,
-            height: safeH,
+            fontFamily: 'Geist-Regular',
+            fontSize: 12,
+            color: props.isDark ? 'rgba(255,255,255,0.65)' : 'rgba(17,17,17,0.55)',
           }}
-        />
-      )}
+        >
+          {Math.min(props.stepIndex + 1, props.stepsCount)}/{props.stepsCount}
+        </Text>
+      </View>
 
-      {/* Border */}
-      <View
-        pointerEvents="none"
+      <Text
         style={{
-          position: 'absolute',
-          top: safeY,
-          left: safeX,
-          width: safeW,
-          height: safeH,
-          borderRadius: 12,
-          borderWidth: 2,
-          borderColor: 'rgba(255,255,255,0.3)',
-          shadowColor: '#FFF',
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.2,
-          shadowRadius: 10,
+          marginTop: 8,
+          fontFamily: 'Geist-Regular',
+          fontSize: 13,
+          lineHeight: 18,
+          color: props.isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.78)',
         }}
-      />
+      >
+        {props.description}
+      </Text>
+
+      <View style={{ marginTop: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <Pressable
+          onPress={props.onSkip}
+          accessibilityRole="button"
+          accessibilityLabel="Skip tutorial"
+          style={({ pressed }) => ({
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: props.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)',
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Text style={{ fontFamily: 'Geist-Regular', fontSize: 13, color: props.isDark ? '#FFFFFF' : '#111111' }}>
+            Skip
+          </Text>
+        </Pressable>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Pressable
+            onPress={props.onBack}
+            disabled={props.isFirst}
+            accessibilityRole="button"
+            accessibilityLabel="Previous step"
+            style={({ pressed }) => ({
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: props.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)',
+              opacity: props.isFirst ? 0.5 : pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Geist-Regular', fontSize: 13, color: props.isDark ? '#FFFFFF' : '#111111' }}>
+              Back
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={props.onNext}
+            accessibilityRole="button"
+            accessibilityLabel={props.isLast ? 'Finish tutorial' : 'Next step'}
+            style={({ pressed }) => ({
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              backgroundColor: props.accentColor,
+              borderWidth: 1,
+              borderColor: props.accentColor,
+              opacity: pressed ? 0.88 : 1,
+            })}
+          >
+            <Text style={{ fontFamily: 'Geist-Bold', fontSize: 13, color: '#FFFFFF' }}>
+              {props.isLast ? 'Got it' : 'Next'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
-function GameTutorialOverlayNative(props: {
-  open: boolean;
-  step: GameTutorialStep | null;
-  stepIndex: number;
-  stepsCount: number;
-  rect: MeasuredRect;
-  isDark: boolean;
-  accentColor: string;
-  onBack: () => void;
-  onNext: () => void;
-  onSkip: () => void;
-  onDone: () => void;
+function GameTourSpotSync(props: {
+  tour: any;
+  topInset: number;
+  scoreBoxRef: React.RefObject<View | null>;
+  timerBoxRef: React.RefObject<View | null>;
+  hintsBoxRef: React.RefObject<View | null>;
+  blocksBoxRef: React.RefObject<View | null>;
+  boardRef: React.RefObject<View | null>;
+  controlsRowRef: React.RefObject<View | null>;
 }) {
-  const insets = useSafeAreaInsets();
-  if (!props.open || !props.step) return null;
-  const blockInteraction = props.step.mode === 'modal';
-  const showBack = props.step.showBack ?? false;
-  const showPrimary = props.step.showPrimary ?? true;
-  const isLast = props.stepIndex >= props.stepsCount - 1;
-  const primaryLabel = props.step.primaryLabel ?? (isLast ? 'Continue' : 'Next');
+  const { current, status, changeSpot } = props.tour ?? {};
+  const { scoreBoxRef, timerBoxRef, hintsBoxRef, blocksBoxRef, boardRef, controlsRowRef } = props;
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const yOffset = props.topInset;
 
-  return (
-    <Modal visible={props.open} transparent animationType="fade" onRequestClose={props.onSkip}>
-      <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-        <SpotlightMask rect={props.rect} blockInteraction={blockInteraction} />
+  useEffect(() => {
+    if (status !== 'running') return;
+    if (typeof current !== 'number') return;
 
-        <View
-          pointerEvents="auto"
-          style={{
-            position: 'absolute',
-            left: 16,
-            right: 16,
-            bottom: insets.bottom + 22,
-            borderRadius: 18,
-            padding: 16,
-            backgroundColor: props.isDark ? 'rgba(10,10,28,0.96)' : 'rgba(255,255,255,0.97)',
-            borderWidth: 1,
-            borderColor: props.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)',
-            shadowColor: '#000',
-            shadowOpacity: 0.35,
-            shadowRadius: 22,
-            shadowOffset: { width: 0, height: 18 },
-            elevation: 12,
-          }}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
-            <Text style={{ fontFamily: 'Geist-Bold', fontSize: 15, color: props.isDark ? '#FFFFFF' : '#111111' }}>
-              {props.step.title}
-            </Text>
-            {props.stepsCount > 0 ? (
-              <Text style={{ fontFamily: 'Geist-Regular', fontSize: 12, color: props.isDark ? 'rgba(255,255,255,0.65)' : 'rgba(17,17,17,0.55)' }}>
-                {Math.min(props.stepIndex + 1, props.stepsCount)}/{props.stepsCount}
-              </Text>
-            ) : null}
-          </View>
+    let cancelled = false;
 
-          <Text style={{ marginTop: 8, fontFamily: 'Geist-Regular', fontSize: 13, lineHeight: 18, color: props.isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.78)' }}>
-            {props.step.description}
-          </Text>
+    const measure = (node: any) => {
+      return new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
+        if (!node?.measureInWindow) return resolve(null);
+        node.measureInWindow((x: number, y: number, width: number, height: number) => {
+          if (width > 0 && height > 0) resolve({ x, y, width, height });
+          else resolve(null);
+        });
+      });
+    };
 
-          <View style={{ marginTop: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-            <Pressable
-              onPress={props.onSkip}
-              accessibilityRole="button"
-              accessibilityLabel="Skip tutorial"
-              style={({ pressed }) => ({
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: props.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)',
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Text style={{ fontFamily: 'Geist-Regular', fontSize: 13, color: props.isDark ? '#FFFFFF' : '#111111' }}>
-                Skip
-              </Text>
-            </Pressable>
+    const run = async () => {
+      const getRef = () =>
+        current === 0
+          ? scoreBoxRef
+          : current === 1
+            ? timerBoxRef
+            : current === 2
+              ? hintsBoxRef
+              : current === 3
+                ? blocksBoxRef
+                : current === 4
+                  ? boardRef
+                  : controlsRowRef;
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              {showBack ? (
-                <Pressable
-                  onPress={props.onBack}
-                  disabled={props.stepIndex <= 0}
-                  accessibilityRole="button"
-                  accessibilityLabel="Previous step"
-                  style={({ pressed }) => ({
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: props.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)',
-                    opacity: props.stepIndex <= 0 ? 0.5 : pressed ? 0.8 : 1,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Geist-Regular', fontSize: 13, color: props.isDark ? '#FFFFFF' : '#111111' }}>
-                    Back
-                  </Text>
-                </Pressable>
-              ) : null}
+      let didSet = false;
+      const delays = [0, 40, 90, 160, 260, 420];
+      for (const d of delays) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, d)));
+        if (cancelled) return;
+        const ref = getRef();
+        const node = (ref as any)?.current as any;
+        const rect = await measure(node);
+        if (!rect) continue;
+        changeSpot({ ...rect, y: rect.y + yOffset });
+        didSet = true;
+        break;
+      }
 
-              {showPrimary ? (
-                <Pressable
-                  onPress={isLast ? props.onDone : props.onNext}
-                  accessibilityRole="button"
-                  accessibilityLabel={isLast ? 'Finish tutorial' : 'Next step'}
-                  style={({ pressed }) => ({
-                    paddingVertical: 10,
-                    paddingHorizontal: 14,
-                    borderRadius: 12,
-                    backgroundColor: props.accentColor,
-                    borderWidth: 1,
-                    borderColor: props.accentColor,
-                    opacity: pressed ? 0.88 : 1,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Geist-Bold', fontSize: 13, color: '#FFFFFF' }}>
-                    {primaryLabel}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
+      if (!didSet && typeof changeSpot === 'function') {
+        const x = Math.max(0, windowWidth / 2 - 2);
+        const y = Math.max(0, windowHeight / 2 - 2 + yOffset);
+        changeSpot({ x, y, width: 4, height: 4 });
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [blocksBoxRef, boardRef, changeSpot, controlsRowRef, current, hintsBoxRef, scoreBoxRef, status, timerBoxRef, windowHeight, windowWidth, yOffset]);
+
+  return null;
 }
 
 export default function GameLayout() {
@@ -474,10 +439,7 @@ export default function GameLayout() {
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([]);
   const [pause, setPause] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
-  const [tutorialOpen, setTutorialOpen] = useState(false);
-  const [tutorialPhase, setTutorialPhase] = useState<GameTutorialPhase>('ui');
-  const [tutorialUiIndex, setTutorialUiIndex] = useState(0);
-  const [tutorialRect, setTutorialRect] = useState<MeasuredRect>(null);
+  const tourRef = useRef<any>(null);
 
   const scoreBoxRef = useRef<View | null>(null);
   const hintsBoxRef = useRef<View | null>(null);
@@ -487,42 +449,12 @@ export default function GameLayout() {
   const pauseBtnRef = useRef<View | null>(null);
   const profileBtnRef = useRef<View | null>(null);
   const settingsBtnRef = useRef<View | null>(null);
+  const controlsRowRef = useRef<View | null>(null);
 
   // ✅ Local state sync with context
   const [darkModeEnabled, setDarkModeEnabled] = useState(theme === 'dark');
   const [userName, setUserName] = useState('User');
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const toastOpacity = useRef(new Animated.Value(0)).current;
-  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showToast = useCallback((message: string) => {
-    setToastMessage(message);
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-
-    toastOpacity.stopAnimation();
-    toastOpacity.setValue(0);
-
-    Animated.timing(toastOpacity, {
-      toValue: 1,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-
-    toastTimeoutRef.current = setTimeout(() => {
-      Animated.timing(toastOpacity, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }).start(() => setToastMessage(null));
-    }, 1600);
-  }, [toastOpacity]);
-
-  useEffect(() => {
-    return () => {
-      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    };
-  }, []);
 
   const triggerHaptic = useCallback((kind: 'pickup' | 'drop' | 'error' | 'success') => {
     if (!hapticsEnabled) return;
@@ -541,116 +473,77 @@ export default function GameLayout() {
     }
   }, [hapticsEnabled]);
 
-  const uiSteps = useMemo<GameTutorialStep[]>(
-    () => [
-      {
-        title: 'Welcome to Palindrome',
-        description: 'Quick tour of the screen, then we’ll practice one move together.',
-        target: null,
-        mode: 'modal',
-        showBack: true,
-        zIndex: 1000,
-      },
-      {
+  const markTourSeen = useCallback(() => {
+    void AsyncStorage.setItem(GAME_TUTORIAL_SEEN_KEY, '1');
+  }, []);
+
+  const openTutorial = useCallback(() => {
+    tourRef.current?.start?.();
+  }, []);
+
+  const tourSteps = useMemo<TourStep[]>(() => {
+    const stepsCount = 6;
+
+    const step = (cfg: { title: string; description: string }): TourStep => {
+      return {
+        arrow: false,
+        shape: { type: 'rectangle', padding: 10 },
+        render: ({ current, isFirst, isLast, next, previous, stop }) => (
+          <TourCard
+            title={cfg.title}
+            description={cfg.description}
+            stepIndex={current}
+            stepsCount={stepsCount}
+            isDark={theme === 'dark'}
+            accentColor={colors.accent}
+            isFirst={isFirst}
+            isLast={isLast}
+            onSkip={stop}
+            onBack={previous}
+            onNext={isLast ? stop : next}
+          />
+        ),
+      };
+    };
+
+    return [
+      step({
         title: 'Score',
         description: 'Your score increases when you create palindromes. Longer lines score higher.',
-        target: 'score',
-        mode: 'modal',
-        showBack: true,
-        zIndex: 1000,
-      },
-      {
+      }),
+      step({
         title: 'Timer',
         description: 'The timer starts with your first move. Use it to track your pace.',
-        target: 'timer',
-        mode: 'modal',
-        showBack: true,
-        zIndex: 1000,
-      },
-      {
+      }),
+      step({
         title: 'Hints',
         description: 'Use hints to highlight a strong move on the board when you get stuck.',
-        target: 'hints',
-        mode: 'modal',
-        showBack: true,
-        zIndex: 1000,
-      },
-      {
+      }),
+      step({
         title: 'Blocks',
         description: 'Drag a colored block from here onto an empty cell.',
-        target: 'blocks',
-        mode: 'modal',
-        showBack: true,
-        zIndex: 1000,
-      },
-      {
+      }),
+      step({
         title: 'Game Board',
         description: 'Place blocks to form palindromes in a row or column (3+ blocks).',
-        target: 'board',
-        mode: 'modal',
-        showBack: true,
-        zIndex: 1000,
-      },
-      {
+      }),
+      step({
         title: 'Controls',
         description: 'Play resumes, Pause stops the timer, Settings manages preferences.',
-        target: 'play',
-        mode: 'modal',
-        showBack: true,
-        primaryLabel: 'Start Tutorial',
-        zIndex: 1000,
-      },
-    ],
-    [],
-  );
+      }),
+    ];
+  }, [colors.accent, theme]);
 
   useEffect(() => {
     void (async () => {
       try {
         const seen = await AsyncStorage.getItem(GAME_TUTORIAL_SEEN_KEY);
         if (seen === '1') return;
-        setTimeout(() => {
-          setTutorialPhase('ui');
-          setTutorialUiIndex(0);
-          setTutorialOpen(true);
-        }, 450);
+        setTimeout(() => tourRef.current?.start?.(), 450);
       } catch {
         return;
       }
     })();
-  }, []);
-
-  const closeTutorial = useCallback(() => {
-    void AsyncStorage.setItem(GAME_TUTORIAL_SEEN_KEY, '1');
-    setTutorialOpen(false);
-  }, []);
-
-  const skipTutorial = useCallback(() => {
-    closeTutorial();
-  }, [closeTutorial]);
-
-  const backTutorial = useCallback(() => {
-    if (tutorialPhase !== 'ui') return;
-    setTutorialUiIndex((i) => Math.max(0, i - 1));
-  }, [tutorialPhase]);
-
-  const nextTutorial = useCallback(() => {
-    if (tutorialPhase !== 'ui') return;
-    setTutorialUiIndex((i) => {
-      const next = i + 1;
-      if (next >= uiSteps.length) {
-        setTutorialPhase('placeFirst');
-        return i;
-      }
-      return next;
-    });
-  }, [tutorialPhase, uiSteps.length]);
-
-  const openTutorial = useCallback(() => {
-    setTutorialRect(null);
-    setTutorialPhase('ui');
-    setTutorialUiIndex(0);
-    setTutorialOpen(true);
   }, []);
 
   // Game Logic State
@@ -665,12 +558,14 @@ export default function GameLayout() {
   const [, setSecondsElapsed] = useState(0);
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null);
   const [, setDraggedColor] = useState<number | null>(null);
+  const [wrongForcedTries, setWrongForcedTries] = useState(0);
 
   const [boardLayout, setBoardLayout] = useState<BoardLayout | null>(null);
   const boardRef = useRef<View | null>(null);
   const gridStateRef = useRef(gridState);
   const blockCountsRef = useRef(blockCounts);
   const hintsRef = useRef(hints);
+  const wrongForcedTriesRef = useRef(wrongForcedTries);
 
   useEffect(() => {
     gridStateRef.current = gridState;
@@ -683,6 +578,10 @@ export default function GameLayout() {
   useEffect(() => {
     hintsRef.current = hints;
   }, [hints]);
+
+  useEffect(() => {
+    wrongForcedTriesRef.current = wrongForcedTries;
+  }, [wrongForcedTries]);
 
   const measureBoardLayout = useCallback((): Promise<BoardLayout | null> => {
     return new Promise((resolve) => {
@@ -698,7 +597,7 @@ export default function GameLayout() {
   }, []);
 
   const center = Math.floor(gridSize / 2);
-  const word = 'PALINDROME';
+  const word = ' PALINDROME';
   const halfWord = Math.floor(word.length / 2);
 
   const spawnBulldogs = useCallback(() => {
@@ -727,7 +626,7 @@ export default function GameLayout() {
 
     // Pre-place 3 random colors matching web logic
     const indPositions = [
-      { row: 5, col: 3 },
+      { row: 6, col: 5 },
       { row: 5, col: 4 },
       { row: 5, col: 5 },
     ];
@@ -866,35 +765,34 @@ export default function GameLayout() {
     return scoreFound;
   };
 
-  const findHint = () => {
-    if (hintsRef.current <= 0) return;
+  const findFirstScoringMove = (minLength: number) => {
     const colorGradientsCount = 5;
-
-    const tryFindHint = (minLength: number) => {
-      for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-          if (gridStateRef.current[r][c] === null) {
-            for (let colorIdx = 0; colorIdx < colorGradientsCount; colorIdx++) {
-              if (blockCountsRef.current[colorIdx] > 0) {
-                const tempGrid = gridStateRef.current.map((rowArr) => [...rowArr]);
-                tempGrid[r][c] = colorIdx;
-                const sc = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength);
-                if (sc > 0) {
-                  setHints((prev) => prev - 1);
-                  setActiveHint({ row: r, col: c, colorIndex: colorIdx });
-                  setTimeout(() => setActiveHint(null), 3000);
-                  return true;
-                }
-              }
-            }
+    for (let r = 0; r < gridSize; r++) {
+      for (let c = 0; c < gridSize; c++) {
+        if (gridStateRef.current[r][c] !== null) continue;
+        for (let colorIdx = 0; colorIdx < colorGradientsCount; colorIdx++) {
+          if (blockCountsRef.current[colorIdx] <= 0) continue;
+          const tempGrid = gridStateRef.current.map((rowArr) => [...rowArr]);
+          tempGrid[r][c] = colorIdx;
+          const sc = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength);
+          if (sc > 0) {
+            return { row: r, col: c, colorIndex: colorIdx };
           }
         }
       }
-      return false;
-    };
+    }
+    return null;
+  };
 
-    if (tryFindHint(3)) return;
-    if (tryFindHint(2)) return;
+  const findHint = () => {
+    if (hintsRef.current <= 0) return;
+    const move = findFirstScoringMove(3) ?? findFirstScoringMove(2);
+    if (move) {
+      setHints((prev) => prev - 1);
+      setActiveHint(move);
+      setTimeout(() => setActiveHint(null), 3000);
+      return;
+    }
     playErrorSound();
     triggerHaptic('error');
   };
@@ -915,6 +813,35 @@ export default function GameLayout() {
       return;
     }
 
+    const forcedMove = findFirstScoringMove(3);
+    if (forcedMove) {
+      const tempGrid = gridStateRef.current.map((r) => [...r]);
+      tempGrid[row][col] = colorIndex;
+      const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, tempGrid, true, 3);
+
+      if (attemptedScore <= 0) {
+        const nextWrongTries = wrongForcedTriesRef.current + 1;
+        const nextValue = nextWrongTries >= 3 ? 0 : nextWrongTries;
+        wrongForcedTriesRef.current = nextValue;
+        setWrongForcedTries(nextValue);
+
+        playErrorSound();
+        triggerHaptic('error');
+
+        if (nextWrongTries >= 3) {
+          if (hintsRef.current > 0) {
+            setHints((prev) => Math.max(0, prev - 1));
+          }
+          setActiveHint(forcedMove);
+          setTimeout(() => setActiveHint(null), 3000);
+        }
+        return;
+      }
+    } else if (wrongForcedTriesRef.current !== 0) {
+      wrongForcedTriesRef.current = 0;
+      setWrongForcedTries(0);
+    }
+
     const newGrid = gridStateRef.current.map((r) => [...r]);
     newGrid[row][col] = colorIndex;
     setGridState(newGrid);
@@ -929,13 +856,9 @@ export default function GameLayout() {
     triggerHaptic('drop');
     const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid);
     if (scoreFound > 0) setScore((prev) => prev + scoreFound);
-
-    if (tutorialOpen) {
-      if (tutorialPhase === 'placeFirst') {
-        setTutorialPhase('makeScore');
-      } else if (tutorialPhase === 'makeScore' && scoreFound > 0) {
-        setTutorialPhase('complete');
-      }
+    if (wrongForcedTriesRef.current !== 0) {
+      wrongForcedTriesRef.current = 0;
+      setWrongForcedTries(0);
     }
   };
 
@@ -1041,91 +964,6 @@ export default function GameLayout() {
     </View>
   ));
 
-  const tutorialStep = useMemo<GameTutorialStep | null>(() => {
-    if (tutorialPhase === 'ui') return uiSteps[tutorialUiIndex] ?? null;
-    if (tutorialPhase === 'placeFirst') {
-      return {
-        title: 'Your First Move',
-        description: 'Drag any block onto an empty cell on the board.',
-        target: 'blocks',
-        mode: 'coach',
-        showBack: false,
-        showPrimary: false,
-      };
-    }
-    if (tutorialPhase === 'makeScore') {
-      return {
-        title: 'Make Your First Score',
-        description: 'Keep placing blocks until you create a palindrome (3+ in a row or column).',
-        target: 'board',
-        mode: 'coach',
-        showBack: false,
-        showPrimary: false,
-      };
-    }
-    return {
-      title: 'Great Job',
-      description: 'You scored your first palindrome. You’re ready to play.',
-      target: 'score',
-      mode: 'modal',
-      showBack: false,
-      showPrimary: true,
-      primaryLabel: 'Continue',
-    };
-  }, [tutorialPhase, tutorialUiIndex, uiSteps]);
-
-  const tutorialStepsCount = tutorialPhase === 'ui' ? uiSteps.length : 1;
-  const tutorialStepIndex = tutorialPhase === 'ui' ? tutorialUiIndex : 0;
-
-  useEffect(() => {
-    if (!tutorialOpen || !tutorialStep) {
-      setTutorialRect(null);
-      return;
-    }
-
-    const target = tutorialStep.target;
-    const ref =
-      target === 'score'
-        ? scoreBoxRef
-        : target === 'timer'
-          ? timerBoxRef
-          : target === 'hints'
-            ? hintsBoxRef
-            : target === 'blocks'
-              ? blocksBoxRef
-              : target === 'board'
-                ? boardRef
-                : target === 'play'
-                  ? playBtnRef
-                  : target === 'pause'
-                    ? pauseBtnRef
-                    : target === 'profile'
-                      ? profileBtnRef
-                      : target === 'settings'
-                        ? settingsBtnRef
-                        : null;
-
-    const measure = () => {
-      const node = ref?.current as any;
-      if (!node?.measureInWindow) {
-        setTutorialRect(null);
-        return;
-      }
-      node.measureInWindow((x: number, y: number, w: number, h: number) => {
-        if (w > 0 && h > 0) setTutorialRect({ x, y, width: w, height: h });
-        else setTutorialRect(null);
-      });
-    };
-
-    const t1 = setTimeout(() => requestAnimationFrame(measure), 60);
-    const t2 = setTimeout(measure, 240);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [tutorialOpen, tutorialStep]);
-
-
   const blocks = COLOR_GRADIENTS.map((gradient, index) => (
     <DraggableBlock
       key={index}
@@ -1155,7 +993,29 @@ export default function GameLayout() {
   ));
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SpotlightTourProvider
+      ref={tourRef}
+      steps={tourSteps}
+      overlayColor={'#000000'}
+      overlayOpacity={0.72}
+      arrow={false}
+      shape={{ type: 'rectangle', padding: 10 }}
+      onBackdropPress={() => {}}
+      onStop={(_values: TourState) => markTourSeen()}
+    >
+    {(tour) => (
+      <>
+        <GameTourSpotSync
+          tour={tour}
+          topInset={insets.top}
+          scoreBoxRef={scoreBoxRef}
+          timerBoxRef={timerBoxRef}
+          hintsBoxRef={hintsBoxRef}
+          blocksBoxRef={blocksBoxRef}
+          boardRef={boardRef}
+          controlsRowRef={controlsRowRef}
+        />
+        <SafeAreaView style={styles.container}>
       <LinearGradient
         colors={
           theme === 'dark'
@@ -1243,13 +1103,13 @@ export default function GameLayout() {
       <View
         ref={boardRef}
         collapsable={false}
-      onLayout={() => {
-        boardRef.current?.measureInWindow((x, y, width, height) => {
-          setBoardLayout({ x, y, width, height });
-        });
-      }}
-      style={[
-        styles.board,
+        onLayout={() => {
+          boardRef.current?.measureInWindow((x, y, width, height) => {
+            setBoardLayout({ x, y, width, height });
+          });
+        }}
+        style={[
+          styles.board,
           { backgroundColor: theme === 'dark' ? 'rgba(25,25,91,0.7)' : '#E4EBF0' },
         ]}
       >
@@ -1274,7 +1134,7 @@ export default function GameLayout() {
         <View style={styles.colorBlocksRow}>{blocks}</View>
       </View>
 
-      <View style={styles.controlsRow}>
+      <View ref={controlsRowRef} collapsable={false} style={styles.controlsRow}>
         <Pressable ref={playBtnRef as any} collapsable={false} onPress={() => console.log('Play')}>
           <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.gradientButton}>
             <Ionicons name="play" size={20} color="#1a63cc" />
@@ -1300,11 +1160,7 @@ export default function GameLayout() {
         </Pressable>
 
         <Pressable
-          onPress={() => {
-            showToast('Under progress');
-            // openTutorial();
-            void openTutorial;
-          }}
+          onPress={openTutorial}
         >
           <LinearGradient colors={['#111111', '#3C3C3C']} style={styles.gradientButton}>
             <Ionicons name="help-circle-outline" size={20} color="#FFFFFF" />
@@ -1541,42 +1397,10 @@ export default function GameLayout() {
           </View>
         </View>
       )}
-
-      <GameTutorialOverlayNative
-        open={tutorialOpen}
-        step={tutorialOpen ? tutorialStep : null}
-        stepIndex={tutorialStepIndex}
-        stepsCount={tutorialStepsCount}
-        rect={tutorialRect}
-        isDark={theme === 'dark'}
-        accentColor={colors.accent}
-        onBack={backTutorial}
-        onNext={nextTutorial}
-        onSkip={skipTutorial}
-        onDone={() => {
-          if (tutorialPhase === 'ui') {
-            setTutorialPhase('placeFirst');
-            return;
-          }
-          closeTutorial();
-        }}
-      />
-
-      {toastMessage ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.toastContainer,
-            {
-              opacity: toastOpacity,
-              bottom: insets.bottom + 22,
-            },
-          ]}
-        >
-          <Text style={styles.toastText}>{toastMessage}</Text>
-        </Animated.View>
-      ) : null}
     </SafeAreaView>
+      </>
+    )}
+    </SpotlightTourProvider>
   );
 }
 

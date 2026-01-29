@@ -9,7 +9,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   InteractionManager,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -19,144 +18,28 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-
-type TourStep = {
-  title: string;
-  description: string;
-  target: 'single' | 'multi' | 'practice' | 'settings' | null;
-};
-
-type MeasuredRect = { x: number; y: number; width: number; height: number } | null;
+import { SpotlightTourProvider, type TourState, type TourStep } from 'react-native-spotlight-tour';
 
 const TOUR_SEEN_KEY = 'palindrome_ui_tour_v1_seen';
 
-function clamp(v: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function SpotlightMask(props: { rect: MeasuredRect }) {
-  const { width, height } = useWindowDimensions();
-
-  if (!props.rect) {
-    return <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />;
-  }
-
-  // Add padding around the target
-  const padding = 8;
-  const safeX = Math.max(0, props.rect.x - padding);
-  const safeY = Math.max(0, props.rect.y - padding);
-  const safeW = Math.min(width - safeX, props.rect.width + padding * 2);
-  const safeH = Math.min(height - safeY, props.rect.height + padding * 2);
-
-  const maskColor = 'rgba(0,0,0,0.75)'; // Slightly darker for better contrast
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Top */}
-      <View style={{ position: 'absolute', top: 0, left: 0, width: width, height: safeY, backgroundColor: maskColor }} />
-      {/* Bottom */}
-      <View style={{ position: 'absolute', top: safeY + safeH, left: 0, width: width, height: height - (safeY + safeH), backgroundColor: maskColor }} />
-      {/* Left */}
-      <View style={{ position: 'absolute', top: safeY, left: 0, width: safeX, height: safeH, backgroundColor: maskColor }} />
-      {/* Right */}
-      <View style={{ position: 'absolute', top: safeY, left: safeX + safeW, right: 0, height: safeH, backgroundColor: maskColor }} />
-      
-      {/* Optional: A subtle glow or border around the target to make it "pop" */}
-      <View
-        style={{
-          position: 'absolute',
-          top: safeY,
-          left: safeX,
-          width: safeW,
-          height: safeH,
-          borderRadius: 12,
-          borderWidth: 2,
-          borderColor: 'rgba(255,255,255,0.3)',
-          shadowColor: '#FFF',
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.2,
-          shadowRadius: 10,
-        }}
-      />
-    </View>
-  );
-}
-
-function TourOverlayNative(props: {
-  open: boolean;
-  stepIndex: number;
-  steps: TourStep[];
-  rect: MeasuredRect;
-  isDark: boolean;
-  accentColor: string;
-  onBack: () => void;
-  onNext: () => void;
-  onSkip: () => void;
-  onDone: () => void;
-}) {
-  const step = props.steps[props.stepIndex];
-  if (!props.open || !step) return null;
-
-  const isLast = props.stepIndex === props.steps.length - 1;
-
-  return (
-    <Modal visible={props.open} transparent animationType="fade" onRequestClose={props.onSkip}>
-      <View style={StyleSheet.absoluteFill}>
-        <SpotlightMask rect={props.rect} />
-
-        <TourTooltip
-          step={step}
-          stepIndex={props.stepIndex}
-          stepsCount={props.steps.length}
-          rect={props.rect}
-          isDark={props.isDark}
-          accentColor={props.accentColor}
-          onBack={props.onBack}
-          onNext={props.onNext}
-          onSkip={props.onSkip}
-          onDone={props.onDone}
-          isLast={isLast}
-        />
-      </View>
-    </Modal>
-  );
-}
-
-function TourTooltip(props: {
-  step: TourStep;
+function TourCard(props: {
+  title: string;
+  description: string;
   stepIndex: number;
   stepsCount: number;
-  rect: MeasuredRect;
   isDark: boolean;
   accentColor: string;
+  isFirst: boolean;
   isLast: boolean;
+  onSkip: () => void;
   onBack: () => void;
   onNext: () => void;
-  onSkip: () => void;
-  onDone: () => void;
 }) {
-  const { width: viewportW, height: viewportH } = useWindowDimensions();
-  const tooltipW = Math.min(360, viewportW - 32);
-  const tooltipH = 190;
-
-  const baseLeft = props.rect ? props.rect.x + props.rect.width / 2 - tooltipW / 2 : viewportW / 2 - tooltipW / 2;
-  const preferTop = props.rect ? props.rect.y > viewportH * 0.6 : false;
-  const baseTop = props.rect
-    ? preferTop
-      ? props.rect.y - tooltipH - 18
-      : props.rect.y + props.rect.height + 18
-    : viewportH / 2 - tooltipH / 2;
-
-  const left = clamp(baseLeft, 16, viewportW - tooltipW - 16);
-  const top = clamp(baseTop, 16, viewportH - tooltipH - 16);
-
   return (
     <View
       style={{
-        position: 'absolute',
-        left,
-        top,
-        width: tooltipW,
+        width: 360,
+        maxWidth: '100%',
         borderRadius: 18,
         padding: 16,
         backgroundColor: props.isDark ? 'rgba(10,10,28,0.96)' : 'rgba(255,255,255,0.97)',
@@ -171,15 +54,29 @@ function TourTooltip(props: {
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
         <Text style={{ fontFamily: 'Geist-Bold', fontSize: 15, color: props.isDark ? '#FFFFFF' : '#111111' }}>
-          {props.step.title}
+          {props.title}
         </Text>
-        <Text style={{ fontFamily: 'Geist-Regular', fontSize: 12, color: props.isDark ? 'rgba(255,255,255,0.65)' : 'rgba(17,17,17,0.55)' }}>
-          {props.stepIndex + 1}/{props.stepsCount}
+        <Text
+          style={{
+            fontFamily: 'Geist-Regular',
+            fontSize: 12,
+            color: props.isDark ? 'rgba(255,255,255,0.65)' : 'rgba(17,17,17,0.55)',
+          }}
+        >
+          {Math.min(props.stepIndex + 1, props.stepsCount)}/{props.stepsCount}
         </Text>
       </View>
 
-      <Text style={{ marginTop: 8, fontFamily: 'Geist-Regular', fontSize: 13, lineHeight: 18, color: props.isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.78)' }}>
-        {props.step.description}
+      <Text
+        style={{
+          marginTop: 8,
+          fontFamily: 'Geist-Regular',
+          fontSize: 13,
+          lineHeight: 18,
+          color: props.isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.78)',
+        }}
+      >
+        {props.description}
       </Text>
 
       <View style={{ marginTop: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
@@ -204,7 +101,7 @@ function TourTooltip(props: {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Pressable
             onPress={props.onBack}
-            disabled={props.stepIndex === 0}
+            disabled={props.isFirst}
             accessibilityRole="button"
             accessibilityLabel="Previous step"
             style={({ pressed }) => ({
@@ -213,7 +110,7 @@ function TourTooltip(props: {
               borderRadius: 12,
               borderWidth: 1,
               borderColor: props.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)',
-              opacity: props.stepIndex === 0 ? 0.5 : pressed ? 0.8 : 1,
+              opacity: props.isFirst ? 0.5 : pressed ? 0.8 : 1,
             })}
           >
             <Text style={{ fontFamily: 'Geist-Regular', fontSize: 13, color: props.isDark ? '#FFFFFF' : '#111111' }}>
@@ -222,7 +119,7 @@ function TourTooltip(props: {
           </Pressable>
 
           <Pressable
-            onPress={props.isLast ? props.onDone : props.onNext}
+            onPress={props.onNext}
             accessibilityRole="button"
             accessibilityLabel={props.isLast ? 'Finish tour' : 'Next step'}
             style={({ pressed }) => ({
@@ -245,6 +142,85 @@ function TourTooltip(props: {
   );
 }
 
+function MainTourSpotSync(props: {
+  tour: any;
+  scrollToTile: (key: 'single' | 'multi' | 'practice' | 'settings') => Promise<void>;
+  topInset: number;
+  topbarRef: React.RefObject<View | null>;
+  singleRef: React.RefObject<any>;
+  multiRef: React.RefObject<any>;
+  practiceRef: React.RefObject<any>;
+  settingsRef: React.RefObject<any>;
+}) {
+  const { current, status, changeSpot } = props.tour ?? {};
+  const { scrollToTile, topbarRef, singleRef, multiRef, practiceRef, settingsRef } = props;
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const yOffset = props.topInset;
+
+  useEffect(() => {
+    if (status !== 'running') return;
+    if (typeof current !== 'number') return;
+
+    let cancelled = false;
+
+    const measure = (node: any) => {
+      return new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
+        if (!node?.measureInWindow) return resolve(null);
+        node.measureInWindow((x: number, y: number, width: number, height: number) => {
+          if (width > 0 && height > 0) resolve({ x, y, width, height });
+          else resolve(null);
+        });
+      });
+    };
+
+    const run = async () => {
+      const idx = current;
+      if (idx === 1) await scrollToTile('single');
+      if (idx === 2) await scrollToTile('multi');
+      if (idx === 3) await scrollToTile('practice');
+      if (idx === 4) await scrollToTile('settings');
+
+      const ref =
+        idx === 0
+          ? topbarRef
+          : idx === 1
+            ? singleRef
+            : idx === 2
+              ? multiRef
+              : idx === 3
+                ? practiceRef
+                : settingsRef;
+
+      let didSet = false;
+      const delays = [0, 40, 90, 160, 260, 420];
+      for (const d of delays) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, d)));
+        if (cancelled) return;
+        const node = (ref as any)?.current as any;
+        const rect = await measure(node);
+        if (!rect) continue;
+        changeSpot({ ...rect, y: rect.y + yOffset });
+        didSet = true;
+        break;
+      }
+
+      if (!didSet && typeof changeSpot === 'function') {
+        const x = Math.max(0, windowWidth / 2 - 2);
+        const y = Math.max(0, windowHeight / 2 - 2 + yOffset);
+        changeSpot({ x, y, width: 4, height: 8 });
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [changeSpot, current, multiRef, practiceRef, scrollToTile, settingsRef, singleRef, status, topbarRef, windowHeight, windowWidth, yOffset]);
+
+  return null;
+}
+
 export default function MainScreen() {
   const router = useRouter();
   const { theme, toggleTheme, colors } = useThemeContext();
@@ -256,6 +232,12 @@ export default function MainScreen() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tourRef = useRef<any>(null);
+  const topbarRef = useRef<View | null>(null);
+  const singleRef = useRef<any>(null);
+  const multiRef = useRef<any>(null);
+  const practiceRef = useRef<any>(null);
+  const settingsRef = useRef<any>(null);
 
   const columns = width >= 360 ? 2 : 1;
   const isCompact = width < 420;
@@ -276,76 +258,89 @@ export default function MainScreen() {
     return () => anim.stop();
   }, [float]);
 
-  const steps: TourStep[] = useMemo(
-    () => [
-      {
-        title: 'Quick Tour',
-        description: 'Here’s a short walkthrough of the main options. You’ll only see this once.',
-        target: null,
-      },
-      {
-        title: 'Single Player',
-        description: 'Start a new match and play at your own pace. This is the best place to begin.',
-        target: 'single',
-      },
-      {
-        title: 'Multiplayer',
-        description: 'Play with friends when Multiplayer is available. For now, you’ll see “Coming Soon”.',
-        target: 'multi',
-      },
-      {
-        title: 'Practice Mode',
-        description: 'A relaxed mode for learning patterns and warming up. This is also landing soon.',
-        target: 'practice',
-      },
-      {
-        title: 'Settings & Profile',
-        description: 'Update your profile and preferences.',
-        target: 'settings',
-      },
-    ],
-    [],
-  );
-
-  const singleRef = useRef<any>(null);
-  const multiRef = useRef<any>(null);
-  const practiceRef = useRef<any>(null);
-  const settingsRef = useRef<any>(null);
   const scrollRef = useRef<ScrollView>(null);
   const tileGridYRef = useRef<number>(0);
   const tileYRef = useRef<{ single?: number; multi?: number; practice?: number; settings?: number }>({});
 
-  const [tourOpen, setTourOpen] = useState(false);
-  const [tourStepIndex, setTourStepIndex] = useState(0);
-  const [tourRect, setTourRect] = useState<MeasuredRect>(null);
+  const markTourSeen = useCallback(() => {
+    void AsyncStorage.setItem(TOUR_SEEN_KEY, '1');
+  }, []);
 
-  const measureTourTarget = useCallback((target: TourStep['target']) => {
-    if (!target) {
-      setTourRect(null);
-      return;
-    }
-
-    const ref =
-      target === 'single'
-        ? singleRef
-        : target === 'multi'
-          ? multiRef
-          : target === 'practice'
-            ? practiceRef
-            : settingsRef;
-
-    ref.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-      if (w > 0 && h > 0) setTourRect({ x, y, width: w, height: h });
-      else setTourRect(null);
+  const scrollToTile = useCallback((key: 'single' | 'multi' | 'practice' | 'settings') => {
+    const y = tileYRef.current[key];
+    if (typeof y !== 'number') return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: false });
+      InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => setTimeout(resolve, 140));
+      });
     });
   }, []);
+
+  const tourSteps = useMemo<TourStep[]>(() => {
+    const stepsCount = 5;
+
+    const step = (cfg: {
+      title: string;
+      description: string;
+      before?: () => Promise<void> | void;
+    }): TourStep => {
+      return {
+        arrow: false,
+        shape: { type: 'rectangle', padding: 10 },
+        before: cfg.before,
+        render: ({ current, isFirst, isLast, next, previous, stop }) => (
+          <TourCard
+            title={cfg.title}
+            description={cfg.description}
+            stepIndex={current}
+            stepsCount={stepsCount}
+            isDark={isDark}
+            accentColor={colors.accent}
+            isFirst={isFirst}
+            isLast={isLast}
+            onSkip={stop}
+            onBack={previous}
+            onNext={isLast ? stop : next}
+          />
+        ),
+      };
+    };
+
+    return [
+      step({
+        title: 'Quick Tour',
+        description: 'Here’s a short walkthrough of the main options. You’ll only see this once.',
+      }),
+      step({
+        title: 'Single Player',
+        description: 'Start a new match and play at your own pace. This is the best place to begin.',
+        before: () => scrollToTile('single'),
+      }),
+      step({
+        title: 'Multiplayer',
+        description: 'Play with friends when Multiplayer is available. For now, you’ll see “Coming Soon”.',
+        before: () => scrollToTile('multi'),
+      }),
+      step({
+        title: 'Practice Mode',
+        description: 'A relaxed mode for learning patterns and warming up. This is also landing soon.',
+        before: () => scrollToTile('practice'),
+      }),
+      step({
+        title: 'Settings & Profile',
+        description: 'Update your profile and preferences.',
+        before: () => scrollToTile('settings'),
+      }),
+    ];
+  }, [colors.accent, isDark, scrollToTile]);
 
   useEffect(() => {
     void (async () => {
       try {
         const seen = await AsyncStorage.getItem(TOUR_SEEN_KEY);
         if (seen === '1') return;
-        setTimeout(() => setTourOpen(true), 450);
+        setTimeout(() => tourRef.current?.start?.(), 450);
       } catch {
         return;
       }
@@ -353,68 +348,8 @@ export default function MainScreen() {
   }, []);
 
   const openTour = useCallback(() => {
-    setTourRect(null);
-    setTourStepIndex(0);
-    setTourOpen(true);
+    tourRef.current?.start?.();
   }, []);
-
-  const finishTour = useCallback(() => {
-    void AsyncStorage.setItem(TOUR_SEEN_KEY, '1');
-    setTourOpen(false);
-  }, []);
-
-  const nextTour = useCallback(() => {
-    setTourStepIndex((i) => {
-      const next = i + 1;
-      if (next >= steps.length) {
-        finishTour();
-        return i;
-      }
-      return next;
-    });
-  }, [finishTour, steps.length]);
-
-  const backTour = useCallback(() => {
-    setTourStepIndex((i) => Math.max(0, i - 1));
-  }, []);
-
-  const skipTour = useCallback(() => {
-    finishTour();
-  }, [finishTour]);
-
-  useEffect(() => {
-    if (!tourOpen) return;
-    const target = steps[tourStepIndex]?.target ?? null;
-    if (!target) {
-      setTourRect(null);
-      return;
-    }
-
-    const scrollToTarget = () => {
-      const y = tileYRef.current[target];
-      if (typeof y !== 'number') return;
-      scrollRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: false });
-    };
-
-    let cancelled = false;
-    const afterInteractions = InteractionManager.runAfterInteractions(() => {
-      if (cancelled) return;
-      scrollToTarget();
-      const t1 = setTimeout(() => requestAnimationFrame(() => measureTourTarget(target)), 140);
-      const t2 = setTimeout(() => measureTourTarget(target), 520);
-      cleanupTimers = () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-      };
-    });
-
-    let cleanupTimers = () => {};
-    return () => {
-      cancelled = true;
-      cleanupTimers();
-      afterInteractions.cancel();
-    };
-  }, [measureTourTarget, steps, tourOpen, tourStepIndex]);
 
   const showToast = useCallback(
     (message: string) => {
@@ -477,96 +412,118 @@ export default function MainScreen() {
   const orbCOffset = float.interpolate({ inputRange: [0, 1], outputRange: [0, -18] });
 
   return (
-    <LinearGradient colors={backgroundColors} style={{ flex: 1 }}>
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <Animated.View style={[styles.orb, styles.orbA, { transform: [{ translateY: orbAOffset }] }]}>
-          <LinearGradient colors={['rgba(142,217,252,0.55)', 'rgba(60,141,234,0.0)']} style={styles.orbFill} />
-        </Animated.View>
-        <Animated.View style={[styles.orb, styles.orbB, { transform: [{ translateY: orbBOffset }] }]}>
-          <LinearGradient colors={['rgba(255,238,96,0.55)', 'rgba(255,164,11,0.0)']} style={styles.orbFill} />
-        </Animated.View>
-        <Animated.View style={[styles.orb, styles.orbC, { transform: [{ translateY: orbCOffset }] }]}>
-          <LinearGradient colors={['rgba(195,93,217,0.42)', 'rgba(195,93,217,0.0)']} style={styles.orbFill} />
-        </Animated.View>
-      </View>
-
-      <SafeAreaView edges={['left', 'right', 'bottom']} style={{ flex: 1 }}>
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingHorizontal: isCompact ? 14 : 16,
-              paddingTop: insets.top + (isCompact ? 12 : 16),
-              paddingBottom: 28,
-            },
-          ]}
-        >
-          <View style={[styles.topbarWrap, { borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)' }]}>
-            <BlurView intensity={20} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-            <View style={styles.topbarRow}>
-              <View style={styles.brandWrap}>
-                <Text style={[styles.brand, { color: isDark ? '#FFFFFF' : '#0060FF' }]}>PALINDROME®</Text>
-                <Text style={[styles.welcome, { color: isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.62)' }]}>
-                  Welcome, {displayName}
-                </Text>
-              </View>
-
-              <View style={styles.actionsRow}>
-                <Pressable
-                  onPress={toggleTheme}
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
-                      borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
-                      opacity: pressed ? 0.78 : 1,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Toggle theme"
-                >
-                  <Ionicons name={isDark ? 'sunny' : 'moon'} size={19} color={isDark ? '#FFFFFF' : '#0060FF'} />
-                </Pressable>
-
-                <Pressable
-                  onPress={() => {
-                    showToast('Under progress');
-                    // openTour();
-                    void openTour;
-                  }}
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
-                      borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
-                      opacity: pressed ? 0.78 : 1,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open UI tour"
-                >
-                  <Ionicons name="help-circle-outline" size={19} color={isDark ? '#FFFFFF' : '#0060FF'} />
-                </Pressable>
-
-                <Pressable
-                  onPress={handleSignOut}
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
-                      borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
-                      opacity: pressed ? 0.78 : 1,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Sign out"
-                >
-                  <Ionicons name="log-out-outline" size={19} color={isDark ? '#FFFFFF' : '#111111'} />
-                </Pressable>
-              </View>
-            </View>
+    <SpotlightTourProvider
+      ref={tourRef}
+      steps={tourSteps}
+      overlayColor={'#000000'}
+      overlayOpacity={0.72}
+      arrow={false}
+      shape={{ type: 'rectangle', padding: 10 }}
+      onBackdropPress={() => {}}
+      onStop={(_values: TourState) => markTourSeen()}
+    >
+      {(tour) => (
+        <>
+          <MainTourSpotSync
+            tour={tour}
+            scrollToTile={scrollToTile}
+            topInset={insets.top}
+            topbarRef={topbarRef}
+            singleRef={singleRef}
+            multiRef={multiRef}
+            practiceRef={practiceRef}
+            settingsRef={settingsRef}
+          />
+          <LinearGradient colors={backgroundColors} style={{ flex: 1 }}>
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <Animated.View style={[styles.orb, styles.orbA, { transform: [{ translateY: orbAOffset }] }]}>
+              <LinearGradient colors={['rgba(142,217,252,0.55)', 'rgba(60,141,234,0.0)']} style={styles.orbFill} />
+            </Animated.View>
+            <Animated.View style={[styles.orb, styles.orbB, { transform: [{ translateY: orbBOffset }] }]}>
+              <LinearGradient colors={['rgba(255,238,96,0.55)', 'rgba(255,164,11,0.0)']} style={styles.orbFill} />
+            </Animated.View>
+            <Animated.View style={[styles.orb, styles.orbC, { transform: [{ translateY: orbCOffset }] }]}>
+              <LinearGradient colors={['rgba(195,93,217,0.42)', 'rgba(195,93,217,0.0)']} style={styles.orbFill} />
+            </Animated.View>
           </View>
+
+          <SafeAreaView edges={['left', 'right', 'bottom']} style={{ flex: 1 }}>
+            <ScrollView
+              ref={scrollRef}
+              contentContainerStyle={[
+                styles.scrollContent,
+                {
+                  paddingHorizontal: isCompact ? 14 : 16,
+                  paddingTop: insets.top + (isCompact ? 12 : 16),
+                  paddingBottom: 28,
+                },
+              ]}
+            >
+              <View
+                ref={topbarRef}
+                collapsable={false}
+                style={[styles.topbarWrap, { borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)' }]}
+              >
+                <BlurView intensity={20} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+                <View style={styles.topbarRow}>
+                  <View style={styles.brandWrap}>
+                    <Text style={[styles.brand, { color: isDark ? '#FFFFFF' : '#0060FF' }]}>PALINDROME®</Text>
+                    <Text style={[styles.welcome, { color: isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.62)' }]}>
+                      Welcome, {displayName}
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionsRow}>
+                    <Pressable
+                      onPress={toggleTheme}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        {
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
+                          borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
+                          opacity: pressed ? 0.78 : 1,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Toggle theme"
+                    >
+                      <Ionicons name={isDark ? 'sunny' : 'moon'} size={19} color={isDark ? '#FFFFFF' : '#0060FF'} />
+                    </Pressable>
+
+                    <Pressable
+                      onPress={openTour}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        {
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
+                          borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
+                          opacity: pressed ? 0.78 : 1,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open UI tour"
+                    >
+                      <Ionicons name="help-circle-outline" size={19} color={isDark ? '#FFFFFF' : '#0060FF'} />
+                    </Pressable>
+
+                    <Pressable
+                      onPress={handleSignOut}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        {
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
+                          borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
+                          opacity: pressed ? 0.78 : 1,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Sign out"
+                    >
+                      <Ionicons name="log-out-outline" size={19} color={isDark ? '#FFFFFF' : '#111111'} />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
 
           <View style={{ marginTop: 14 }}>
             <Text style={[styles.heroTitle, { color: isDark ? '#FFFFFF' : '#0A0F2D' }]}>Choose Your Mode</Text>
@@ -591,9 +548,6 @@ export default function MainScreen() {
               style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
               onLayout={(e) => {
                 tileYRef.current.single = tileGridYRef.current + e.nativeEvent.layout.y;
-                if (tourOpen && steps[tourStepIndex]?.target === 'single') {
-                  requestAnimationFrame(() => measureTourTarget('single'));
-                }
               }}
             >
               <MenuTile
@@ -611,9 +565,6 @@ export default function MainScreen() {
               style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
               onLayout={(e) => {
                 tileYRef.current.multi = tileGridYRef.current + e.nativeEvent.layout.y;
-                if (tourOpen && steps[tourStepIndex]?.target === 'multi') {
-                  requestAnimationFrame(() => measureTourTarget('multi'));
-                }
               }}
             >
               <MenuTile
@@ -631,9 +582,6 @@ export default function MainScreen() {
               style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
               onLayout={(e) => {
                 tileYRef.current.practice = tileGridYRef.current + e.nativeEvent.layout.y;
-                if (tourOpen && steps[tourStepIndex]?.target === 'practice') {
-                  requestAnimationFrame(() => measureTourTarget('practice'));
-                }
               }}
             >
               <MenuTile
@@ -651,9 +599,6 @@ export default function MainScreen() {
               style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
               onLayout={(e) => {
                 tileYRef.current.settings = tileGridYRef.current + e.nativeEvent.layout.y;
-                if (tourOpen && steps[tourStepIndex]?.target === 'settings') {
-                  requestAnimationFrame(() => measureTourTarget('settings'));
-                }
               }}
             >
               <MenuTile
@@ -674,21 +619,11 @@ export default function MainScreen() {
             <Text style={styles.toastText}>{toastMessage}</Text>
           </Animated.View>
         ) : null}
-
-        <TourOverlayNative
-          open={tourOpen}
-          stepIndex={tourStepIndex}
-          steps={steps}
-          rect={tourRect}
-          isDark={isDark}
-          accentColor={colors.accent}
-          onBack={backTour}
-          onNext={nextTour}
-          onSkip={skipTour}
-          onDone={finishTour}
-        />
       </SafeAreaView>
     </LinearGradient>
+    </>
+  )}
+    </SpotlightTourProvider>
   );
 }
 
