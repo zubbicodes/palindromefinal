@@ -704,6 +704,8 @@ export default function GameLayoutWeb() {
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null)
   const [, setDraggedColor] = useState<number | null>(null)
   const [activeHint, setActiveHint] = useState<{ row: number; col: number; colorIndex: number } | null>(null)
+  const [wrongForcedTries, setWrongForcedTries] = useState(0)
+  const wrongForcedTriesRef = useRef(0)
 
   // Feedback State
   const [feedback, setFeedback] = useState<{ text: string, color: string, id: number } | null>(null)
@@ -721,6 +723,10 @@ export default function GameLayoutWeb() {
 
   const boardRef = useRef<HTMLDivElement>(null)
   const [, setBoardLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  
+  useEffect(() => {
+    wrongForcedTriesRef.current = wrongForcedTries
+  }, [wrongForcedTries])
 
   const center = Math.floor(gridSize / 2)
   const word = " PALINDROME"
@@ -904,6 +910,35 @@ export default function GameLayoutWeb() {
       return false
     }
 
+    const forcedMove = findFirstScoringMove(3, gridState, blockCounts)
+    if (forcedMove) {
+      const tempGrid = gridState.map((r) => [...r])
+      tempGrid[row][col] = colorIndex
+      const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, tempGrid, true, 3)
+
+      if (attemptedScore <= 0) {
+        const nextWrongTries = wrongForcedTriesRef.current + 1
+        const nextValue = nextWrongTries >= 3 ? 0 : nextWrongTries
+        wrongForcedTriesRef.current = nextValue
+        setWrongForcedTries(nextValue)
+
+        playErrorSound()
+        triggerHaptic([0, 30, 20, 30])
+
+        if (nextWrongTries >= 3) {
+          if (hints > 0) {
+            setHints((prev) => Math.max(0, prev - 1))
+          }
+          setActiveHint(forcedMove)
+          setTimeout(() => setActiveHint(null), 3000)
+        }
+        return false
+      }
+    } else if (wrongForcedTriesRef.current !== 0) {
+      wrongForcedTriesRef.current = 0
+      setWrongForcedTries(0)
+    }
+
     const newGrid = gridState.map((r) => [...r])
     newGrid[row][col] = colorIndex
 
@@ -922,6 +957,10 @@ export default function GameLayoutWeb() {
     const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid)
     if (scoreFound > 0) {
       setScore(prev => prev + scoreFound)
+    }
+    if (wrongForcedTriesRef.current !== 0) {
+      wrongForcedTriesRef.current = 0
+      setWrongForcedTries(0)
     }
 
     if (tutorialOpen) {
@@ -1013,44 +1052,33 @@ export default function GameLayoutWeb() {
     return scoreFound
   }
 
-  const findHint = () => {
-    if (hints <= 0) return
-
-    const tryFindHint = (minLength: number) => {
-      for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-          if (gridState[r][c] === null) {
-            // Try each available color
-            for (let colorIdx = 0; colorIdx < colorGradients.length; colorIdx++) {
-              if (blockCounts[colorIdx] > 0) {
-                // Simulate
-                const tempGrid = gridState.map((row) => [...row])
-                tempGrid[r][c] = colorIdx
-                const score = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength)
-
-                // For hints, we accept score > 0 (palindrome) OR just meeting minLength condition if we are in fallback
-                // checkAndProcessPalindromes returns score only if palindrome.
-                // If minLength=2, "Red, Red" is a palindrome. So score will be > 0.
-                if (score > 0) {
-                  // Found a hint!
-                  setHints((prev) => prev - 1)
-                  setActiveHint({ row: r, col: c, colorIndex: colorIdx })
-                  setTimeout(() => setActiveHint(null), 3000)
-                  return true
-                }
-              }
-            }
+  const findFirstScoringMove = (minLength: number, grid: (number | null)[][], counts: number[]) => {
+    for (let r = 0; r < gridSize; r++) {
+      for (let c = 0; c < gridSize; c++) {
+        if (grid[r][c] !== null) continue
+        for (let colorIdx = 0; colorIdx < colorGradients.length; colorIdx++) {
+          if (counts[colorIdx] <= 0) continue
+          const tempGrid = grid.map((rowArr) => [...rowArr])
+          tempGrid[r][c] = colorIdx
+          const sc = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength)
+          if (sc > 0) {
+            return { row: r, col: c, colorIndex: colorIdx }
           }
         }
       }
-      return false
     }
+    return null
+  }
 
-    // Pass 1: Look for Palindromes (length >= 3)
-    if (tryFindHint(3)) return
-
-    // Pass 2: Look for Pairs (length >= 2, build-up)
-    if (tryFindHint(2)) return
+  const findHint = () => {
+    if (hints <= 0) return
+    const move = findFirstScoringMove(3, gridState, blockCounts) ?? findFirstScoringMove(2, gridState, blockCounts)
+    if (move) {
+      setHints((prev) => prev - 1)
+      setActiveHint(move)
+      setTimeout(() => setActiveHint(null), 3000)
+      return
+    }
 
     // No hint found
     playErrorSound()

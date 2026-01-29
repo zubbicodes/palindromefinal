@@ -558,12 +558,14 @@ export default function GameLayout() {
   const [, setSecondsElapsed] = useState(0);
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null);
   const [, setDraggedColor] = useState<number | null>(null);
+  const [wrongForcedTries, setWrongForcedTries] = useState(0);
 
   const [boardLayout, setBoardLayout] = useState<BoardLayout | null>(null);
   const boardRef = useRef<View | null>(null);
   const gridStateRef = useRef(gridState);
   const blockCountsRef = useRef(blockCounts);
   const hintsRef = useRef(hints);
+  const wrongForcedTriesRef = useRef(wrongForcedTries);
 
   useEffect(() => {
     gridStateRef.current = gridState;
@@ -576,6 +578,10 @@ export default function GameLayout() {
   useEffect(() => {
     hintsRef.current = hints;
   }, [hints]);
+
+  useEffect(() => {
+    wrongForcedTriesRef.current = wrongForcedTries;
+  }, [wrongForcedTries]);
 
   const measureBoardLayout = useCallback((): Promise<BoardLayout | null> => {
     return new Promise((resolve) => {
@@ -759,35 +765,34 @@ export default function GameLayout() {
     return scoreFound;
   };
 
-  const findHint = () => {
-    if (hintsRef.current <= 0) return;
+  const findFirstScoringMove = (minLength: number) => {
     const colorGradientsCount = 5;
-
-    const tryFindHint = (minLength: number) => {
-      for (let r = 0; r < gridSize; r++) {
-        for (let c = 0; c < gridSize; c++) {
-          if (gridStateRef.current[r][c] === null) {
-            for (let colorIdx = 0; colorIdx < colorGradientsCount; colorIdx++) {
-              if (blockCountsRef.current[colorIdx] > 0) {
-                const tempGrid = gridStateRef.current.map((rowArr) => [...rowArr]);
-                tempGrid[r][c] = colorIdx;
-                const sc = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength);
-                if (sc > 0) {
-                  setHints((prev) => prev - 1);
-                  setActiveHint({ row: r, col: c, colorIndex: colorIdx });
-                  setTimeout(() => setActiveHint(null), 3000);
-                  return true;
-                }
-              }
-            }
+    for (let r = 0; r < gridSize; r++) {
+      for (let c = 0; c < gridSize; c++) {
+        if (gridStateRef.current[r][c] !== null) continue;
+        for (let colorIdx = 0; colorIdx < colorGradientsCount; colorIdx++) {
+          if (blockCountsRef.current[colorIdx] <= 0) continue;
+          const tempGrid = gridStateRef.current.map((rowArr) => [...rowArr]);
+          tempGrid[r][c] = colorIdx;
+          const sc = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength);
+          if (sc > 0) {
+            return { row: r, col: c, colorIndex: colorIdx };
           }
         }
       }
-      return false;
-    };
+    }
+    return null;
+  };
 
-    if (tryFindHint(3)) return;
-    if (tryFindHint(2)) return;
+  const findHint = () => {
+    if (hintsRef.current <= 0) return;
+    const move = findFirstScoringMove(3) ?? findFirstScoringMove(2);
+    if (move) {
+      setHints((prev) => prev - 1);
+      setActiveHint(move);
+      setTimeout(() => setActiveHint(null), 3000);
+      return;
+    }
     playErrorSound();
     triggerHaptic('error');
   };
@@ -808,6 +813,35 @@ export default function GameLayout() {
       return;
     }
 
+    const forcedMove = findFirstScoringMove(3);
+    if (forcedMove) {
+      const tempGrid = gridStateRef.current.map((r) => [...r]);
+      tempGrid[row][col] = colorIndex;
+      const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, tempGrid, true, 3);
+
+      if (attemptedScore <= 0) {
+        const nextWrongTries = wrongForcedTriesRef.current + 1;
+        const nextValue = nextWrongTries >= 3 ? 0 : nextWrongTries;
+        wrongForcedTriesRef.current = nextValue;
+        setWrongForcedTries(nextValue);
+
+        playErrorSound();
+        triggerHaptic('error');
+
+        if (nextWrongTries >= 3) {
+          if (hintsRef.current > 0) {
+            setHints((prev) => Math.max(0, prev - 1));
+          }
+          setActiveHint(forcedMove);
+          setTimeout(() => setActiveHint(null), 3000);
+        }
+        return;
+      }
+    } else if (wrongForcedTriesRef.current !== 0) {
+      wrongForcedTriesRef.current = 0;
+      setWrongForcedTries(0);
+    }
+
     const newGrid = gridStateRef.current.map((r) => [...r]);
     newGrid[row][col] = colorIndex;
     setGridState(newGrid);
@@ -822,6 +856,10 @@ export default function GameLayout() {
     triggerHaptic('drop');
     const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid);
     if (scoreFound > 0) setScore((prev) => prev + scoreFound);
+    if (wrongForcedTriesRef.current !== 0) {
+      wrongForcedTriesRef.current = 0;
+      setWrongForcedTries(0);
+    }
   };
 
 
