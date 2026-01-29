@@ -84,12 +84,18 @@ function TourOverlay(props: {
       }
       update();
       setTimeout(update, 260);
+      setTimeout(update, 600);
     });
+
+    const interval = window.setInterval(update, 160);
+    const killInterval = window.setTimeout(() => window.clearInterval(interval), 1400);
 
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, { passive: true });
     return () => {
       cancelAnimationFrame(raf);
+      window.clearInterval(interval);
+      window.clearTimeout(killInterval);
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update);
     };
@@ -111,6 +117,7 @@ function TourOverlay(props: {
   const isLast = stepIndex === steps.length - 1;
   const viewportW = typeof window === 'undefined' ? 1024 : window.innerWidth;
   const viewportH = typeof window === 'undefined' ? 768 : window.innerHeight;
+  const smallScreen = viewportW < 420 || viewportH < 520;
 
   const highlightPad = 10;
   const highlight = rect
@@ -122,7 +129,7 @@ function TourOverlay(props: {
       }
     : null;
 
-  const tooltipW = Math.min(380, viewportW - 32);
+  const tooltipW = smallScreen ? Math.max(240, viewportW - 32) : Math.min(380, viewportW - 32);
   const tooltipH = 180;
 
   const baseLeft = highlight ? highlight.left + highlight.width / 2 - tooltipW / 2 : viewportW / 2 - tooltipW / 2;
@@ -133,8 +140,8 @@ function TourOverlay(props: {
       : highlight.top + highlight.height + 18
     : viewportH / 2 - tooltipH / 2;
 
-  const tooltipLeft = clamp(baseLeft, 16, viewportW - tooltipW - 16);
-  const tooltipTop = clamp(baseTop, 16, viewportH - tooltipH - 16);
+  const tooltipLeft = smallScreen ? 16 : clamp(baseLeft, 16, viewportW - tooltipW - 16);
+  const tooltipTop = smallScreen ? Math.max(16, viewportH - tooltipH - 16) : clamp(baseTop, 16, viewportH - tooltipH - 16);
 
   return (
     <div

@@ -8,10 +8,10 @@ import { BlurView } from "expo-blur"
 import { useRouter } from "expo-router"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import {
-    Dimensions,
-    Image,
-    Pressable, // Keeps Pressable for unified event handling or allows simple onClick
-    StyleSheet,
+  Dimensions,
+  Image,
+  Pressable, // Keeps Pressable for unified event handling or allows simple onClick
+  StyleSheet,
 } from "react-native"
 // react-native-svg works on web, usually maps to <svg>, but we can also use native <svg> if RN-SVG gives trouble. 
 // However, sticking to RN-SVG is usually fine on web if setup correctly. The user snippet used Svg, let's stick to it or standard svg if safer.
@@ -318,12 +318,18 @@ function GameTutorialOverlay(props: {
       }
       update()
       setTimeout(update, 240)
+      setTimeout(update, 600)
     })
+
+    const interval = window.setInterval(update, 160)
+    const killInterval = window.setTimeout(() => window.clearInterval(interval), 1400)
 
     window.addEventListener("resize", update)
     window.addEventListener("scroll", update, { passive: true })
     return () => {
       cancelAnimationFrame(raf)
+      window.clearInterval(interval)
+      window.clearTimeout(killInterval)
       window.removeEventListener("resize", update)
       window.removeEventListener("scroll", update)
     }
@@ -345,6 +351,7 @@ function GameTutorialOverlay(props: {
   const isLast = stepIndex >= stepsCount - 1
   const viewportW = typeof window === "undefined" ? 1024 : window.innerWidth
   const viewportH = typeof window === "undefined" ? 768 : window.innerHeight
+  const smallScreen = viewportW < 420 || viewportH < 520
 
   const highlightPad = 10
   const highlight = rect
@@ -356,7 +363,7 @@ function GameTutorialOverlay(props: {
       }
     : null
 
-  const tooltipW = Math.min(420, viewportW - 32)
+  const tooltipW = smallScreen ? Math.max(240, viewportW - 32) : Math.min(420, viewportW - 32)
   const tooltipH = 190
 
   const baseLeft = highlight ? highlight.left + highlight.width / 2 - tooltipW / 2 : viewportW / 2 - tooltipW / 2
@@ -367,8 +374,8 @@ function GameTutorialOverlay(props: {
       : highlight.top + highlight.height + 18
     : viewportH / 2 - tooltipH / 2
 
-  const tooltipLeft = clamp(baseLeft, 16, viewportW - tooltipW - 16)
-  const tooltipTop = clamp(baseTop, 16, viewportH - tooltipH - 16)
+  const tooltipLeft = smallScreen ? 16 : clamp(baseLeft, 16, viewportW - tooltipW - 16)
+  const tooltipTop = smallScreen ? Math.max(16, viewportH - tooltipH - 16) : clamp(baseTop, 16, viewportH - tooltipH - 16)
 
   const blocksInteraction = step.mode === "modal"
   const showBack = step.showBack ?? false
@@ -716,7 +723,7 @@ export default function GameLayoutWeb() {
   const [, setBoardLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
 
   const center = Math.floor(gridSize / 2)
-  const word = "PALINDROME"
+  const word = " PALINDROME"
   const halfWord = Math.floor(word.length / 2)
 
   const layoutConfig = getLayoutConfig()
@@ -754,7 +761,7 @@ export default function GameLayoutWeb() {
 
     // Pre-place 3 random colors on horizontal 'I', 'N', 'D' (coordinates (5,3), (5,4), (5,5))
     const indPositions = [
-      { row: 5, col: 3 },
+      { row: 6, col: 5 },
       { row: 5, col: 4 },
       { row: 5, col: 5 },
     ]
