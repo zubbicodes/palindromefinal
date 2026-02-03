@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Switch } from 'react-native-switch';
 
 const { width } = Dimensions.get('window');
@@ -43,6 +44,7 @@ export default function ProfileScreen() {
   const { theme } = useThemeContext();
   const isDark = theme === 'dark';
   const { colorBlindEnabled, colorBlindMode, setColorBlindEnabled, setColorBlindMode } = useSettings();
+  const insets = useSafeAreaInsets();
 
   const [avatar, setAvatar] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -161,15 +163,16 @@ export default function ProfileScreen() {
     >
       <ScrollView contentContainerStyle={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
           <Image
             source={require('../../assets/images/bg.png')}
             style={styles.headerImage}
+            resizeMode="cover"
           />
           
           {/* Back Button */}
           <TouchableOpacity 
-            style={styles.backButton} 
+            style={[styles.backButton, { top: insets.top + 12 }]} 
             onPress={() => {
               if (router.canGoBack()) {
                 router.back();
@@ -455,8 +458,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: 360,
-    height: 210,
+    width: '100%',
+    height: '100%',
   },
   backButton: {
     position: 'absolute',
@@ -472,7 +475,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '500',
     fontFamily: 'Geist-Bold',
-    marginTop: -40,
+    marginTop: 0,
   },
   semicircle: {
     position: 'absolute',

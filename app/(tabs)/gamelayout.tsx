@@ -226,6 +226,49 @@ const DraggableBlock = ({
   );
 };
 
+const PaletteBlock = ({
+  index,
+  gradient,
+  blockCount,
+  selected,
+  onPress,
+}: {
+  index: number;
+  gradient: readonly [string, string];
+  blockCount: number;
+  selected: boolean;
+  onPress: () => void;
+}) => {
+  const { colorBlindEnabled, colorBlindMode } = useSettings();
+  const token = colorBlindEnabled ? getColorBlindToken(colorBlindMode, index) : null;
+  const disabled = blockCount <= 0;
+
+  return (
+    <Pressable onPress={onPress} disabled={disabled} style={styles.colorBlockWrapper}>
+      <View
+        style={[
+          styles.colorBlock,
+          {
+            opacity: disabled ? 0.5 : 1,
+            borderWidth: selected ? 2 : 0,
+            borderColor: selected ? '#4A9EFF' : 'transparent',
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientColorBlock}
+        >
+          {token ? <Text style={styles.colorBlindBlockToken}>{token}</Text> : null}
+          <Text style={styles.blockText}>{blockCount}</Text>
+        </LinearGradient>
+      </View>
+    </Pressable>
+  );
+};
+
 const GAME_TUTORIAL_SEEN_KEY = 'palindrome_game_tutorial_v1_seen';
 
 function TourCard(props: {
@@ -427,7 +470,7 @@ function GameTourSpotSync(props: {
 export default function GameLayout() {
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme, colors } = useThemeContext();
-  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings();
+  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, interactionMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled, setInteractionMode } = useSettings();
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -455,6 +498,9 @@ export default function GameLayout() {
   const [darkModeEnabled, setDarkModeEnabled] = useState(theme === 'dark');
   const [userName, setUserName] = useState('User');
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [pickTargetCell, setPickTargetCell] = useState<{ row: number; col: number } | null>(null);
+  const [pickSelectedColor, setPickSelectedColor] = useState<number | null>(null);
+  const noHintsAnim = useRef(new Animated.Value(0)).current;
 
   const triggerHaptic = useCallback((kind: 'pickup' | 'drop' | 'error' | 'success') => {
     if (!hapticsEnabled) return;
@@ -476,6 +522,16 @@ export default function GameLayout() {
   const markTourSeen = useCallback(() => {
     void AsyncStorage.setItem(GAME_TUTORIAL_SEEN_KEY, '1');
   }, []);
+
+  const flashNoHintsFace = useCallback(() => {
+    noHintsAnim.stopAnimation();
+    noHintsAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(noHintsAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.delay(1000),
+      Animated.timing(noHintsAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]).start();
+  }, [noHintsAnim]);
 
   const openTutorial = useCallback(() => {
     tourRef.current?.start?.();
@@ -582,6 +638,13 @@ export default function GameLayout() {
   useEffect(() => {
     wrongForcedTriesRef.current = wrongForcedTries;
   }, [wrongForcedTries]);
+
+  useEffect(() => {
+    setPickTargetCell(null);
+    setPickSelectedColor(null);
+    setDragOverCell(null);
+    setDraggedColor(null);
+  }, [interactionMode]);
 
   const measureBoardLayout = useCallback((): Promise<BoardLayout | null> => {
     return new Promise((resolve) => {
@@ -804,13 +867,13 @@ export default function GameLayout() {
     if (gridStateRef.current[row][col] !== null) {
       playErrorSound();
       triggerHaptic('error');
-      return;
+      return false;
     }
 
     if (blockCountsRef.current[colorIndex] <= 0) {
       playErrorSound();
       triggerHaptic('error');
-      return;
+      return false;
     }
 
     const forcedMove = findFirstScoringMove(3);
@@ -831,11 +894,13 @@ export default function GameLayout() {
         if (nextWrongTries >= 3) {
           if (hintsRef.current > 0) {
             setHints((prev) => Math.max(0, prev - 1));
+            setActiveHint(forcedMove);
+            setTimeout(() => setActiveHint(null), 3000);
+          } else {
+            flashNoHintsFace();
           }
-          setActiveHint(forcedMove);
-          setTimeout(() => setActiveHint(null), 3000);
         }
-        return;
+        return false;
       }
     } else if (wrongForcedTriesRef.current !== 0) {
       wrongForcedTriesRef.current = 0;
@@ -860,6 +925,27 @@ export default function GameLayout() {
       wrongForcedTriesRef.current = 0;
       setWrongForcedTries(0);
     }
+    return true;
+  };
+
+  const handlePickColor = (colorIndex: number) => {
+    if (interactionMode !== 'pick') return;
+    if (!pickTargetCell) {
+      playErrorSound();
+      triggerHaptic('error');
+      return;
+    }
+
+    setPickSelectedColor(colorIndex);
+    playPickupSound();
+    triggerHaptic('pickup');
+    if (!isTimerRunning) setIsTimerRunning(true);
+
+    const didPlace = handleDrop(pickTargetCell.row, pickTargetCell.col, colorIndex);
+    if (didPlace) {
+      setPickTargetCell(null);
+    }
+    setTimeout(() => setPickSelectedColor(null), 150);
   };
 
 
@@ -891,6 +977,11 @@ export default function GameLayout() {
                 borderWidth: 2,
               }
               ,
+              (interactionMode === 'pick' && pickTargetCell?.row === row && pickTargetCell?.col === col) && {
+                backgroundColor: theme === 'dark' ? 'rgba(100, 200, 255, 0.25)' : 'rgba(100, 200, 255, 0.18)',
+                borderColor: '#4A9EFF',
+                borderWidth: 2,
+              },
               (activeHint?.row === row && activeHint?.col === col) && {
                 backgroundColor: theme === 'dark' ? 'rgba(100, 200, 255, 0.4)' : 'rgba(100, 200, 255, 0.3)',
                 borderColor: '#FFD700',
@@ -903,6 +994,19 @@ export default function GameLayout() {
               },
             ]}
             onPress={() => {
+              if (interactionMode === 'pick') {
+                if (gridStateRef.current[row][col] !== null) {
+                  playErrorSound();
+                  triggerHaptic('error');
+                  return;
+                }
+                setPickTargetCell((prev) => {
+                  if (prev?.row === row && prev?.col === col) return null;
+                  return { row, col };
+                });
+                triggerHaptic('pickup');
+                return;
+              }
               if (isBulldog) {
                 setScore(prev => prev + 5);
                 spawnBulldogs();
@@ -965,31 +1069,42 @@ export default function GameLayout() {
   ));
 
   const blocks = COLOR_GRADIENTS.map((gradient, index) => (
-    <DraggableBlock
-      key={index}
-      index={index}
-      gradient={gradient}
-      blockCount={blockCounts[index]}
-      boardLayout={boardLayout}
-      measureBoardLayout={measureBoardLayout}
-      gridSize={gridSize}
-      onDrop={handleDrop}
-      onPickup={() => {
-        playPickupSound();
-        triggerHaptic('pickup');
-        setDraggedColor(index);
-        if (!isTimerRunning) setIsTimerRunning(true);
-      }}
-      onDragUpdate={(row: number | null, col: number | null) => {
-        setDragOverCell((prev) => {
-          if (row === null || col === null) return prev ? null : prev;
-          const isEmpty = gridStateRef.current[row]?.[col] === null;
-          if (!isEmpty) return prev ? null : prev;
-          if (prev?.row === row && prev?.col === col) return prev;
-          return { row, col };
-        });
-      }}
-    />
+    interactionMode === 'pick' ? (
+      <PaletteBlock
+        key={index}
+        index={index}
+        gradient={gradient}
+        blockCount={blockCounts[index]}
+        selected={pickSelectedColor === index}
+        onPress={() => handlePickColor(index)}
+      />
+    ) : (
+      <DraggableBlock
+        key={index}
+        index={index}
+        gradient={gradient}
+        blockCount={blockCounts[index]}
+        boardLayout={boardLayout}
+        measureBoardLayout={measureBoardLayout}
+        gridSize={gridSize}
+        onDrop={handleDrop}
+        onPickup={() => {
+          playPickupSound();
+          triggerHaptic('pickup');
+          setDraggedColor(index);
+          if (!isTimerRunning) setIsTimerRunning(true);
+        }}
+        onDragUpdate={(row: number | null, col: number | null) => {
+          setDragOverCell((prev) => {
+            if (row === null || col === null) return prev ? null : prev;
+            const isEmpty = gridStateRef.current[row]?.[col] === null;
+            if (!isEmpty) return prev ? null : prev;
+            if (prev?.row === row && prev?.col === col) return prev;
+            return { row, col };
+          });
+        }}
+      />
+    )
   ));
 
   return (
@@ -1069,14 +1184,34 @@ export default function GameLayout() {
         <Text style={[styles.rectangleLabel, { color: theme === 'dark' ? '#FFFFFF' : '#4C575F' }]}>
           Hints
         </Text>
-        <Text
-          style={[
-            styles.rectangleValue,
-            { color: '#C35DD9' },
-          ]}
-        >
-          {hints}
-        </Text>
+        <View style={{ position: 'relative', height: 28, justifyContent: 'center', alignItems: 'center' }}>
+          <Animated.Text
+            style={[
+              styles.rectangleValue,
+              {
+                color: '#C35DD9',
+                position: 'absolute',
+                opacity: noHintsAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+                transform: [{ scale: noHintsAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.98] }) }],
+              },
+            ]}
+          >
+            {hints}
+          </Animated.Text>
+          <Animated.Text
+            style={[
+              styles.rectangleValue,
+              {
+                color: '#C35DD9',
+                position: 'absolute',
+                opacity: noHintsAnim,
+                transform: [{ scale: noHintsAnim.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) }],
+              },
+            ]}
+          >
+            (¬_¬)
+          </Animated.Text>
+        </View>
       </Pressable>
 
       <View ref={timerBoxRef} collapsable={false} style={styles.timerContainer}>
@@ -1270,6 +1405,38 @@ export default function GameLayout() {
                     <Switch
                       value={hapticsEnabled}
                       onValueChange={setHapticsEnabled}
+                      disabled={false}
+                      activeText=""
+                      inActiveText=""
+                      circleSize={18}
+                      barHeight={22}
+                      circleBorderWidth={0}
+                      backgroundActive="#0060FF"
+                      backgroundInactive="#ccc"
+                      circleActiveColor="#FFFFFF"
+                      circleInActiveColor="#FFFFFF"
+                      changeValueImmediately={true}
+                      switchWidthMultiplier={2.5}
+                    />
+                  </View>
+
+                  <View style={styles.optionRow}>
+                    <View style={{ flexDirection: 'column', flex: 1, paddingRight: 14 }}>
+                      <Text
+                        style={[
+                          styles.optionLabel,
+                          { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                        ]}
+                      >
+                        Interaction Mode
+                      </Text>
+                      <Text style={{ fontSize: 12, marginTop: 4, color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)' }}>
+                        {interactionMode === 'pick' ? 'Pick and Drop' : 'Drag and Drop'}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={interactionMode === 'pick'}
+                      onValueChange={(v) => setInteractionMode(v ? 'pick' : 'drag')}
                       disabled={false}
                       activeText=""
                       inActiveText=""
