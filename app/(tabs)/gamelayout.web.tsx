@@ -565,6 +565,8 @@ export default function GameLayoutWeb() {
   const [tutorialOpen, setTutorialOpen] = useState(false)
   const [tutorialPhase, setTutorialPhase] = useState<GameTutorialPhase>("ui")
   const [tutorialUiIndex, setTutorialUiIndex] = useState(0)
+  const [noHintsFaceVisible, setNoHintsFaceVisible] = useState(false)
+  const noHintsFaceTimerRef = useRef<any>(null)
 
   const triggerHaptic = useCallback((pattern: number | number[]) => {
     if (!hapticsEnabled) return
@@ -572,6 +574,27 @@ export default function GameLayoutWeb() {
     if (!("vibrate" in navigator)) return
     navigator.vibrate(pattern)
   }, [hapticsEnabled])
+
+  const flashNoHintsFace = useCallback(() => {
+    if (noHintsFaceTimerRef.current) {
+      clearTimeout(noHintsFaceTimerRef.current)
+      noHintsFaceTimerRef.current = null
+    }
+    setNoHintsFaceVisible(true)
+    noHintsFaceTimerRef.current = setTimeout(() => {
+      setNoHintsFaceVisible(false)
+      noHintsFaceTimerRef.current = null
+    }, 1200)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (noHintsFaceTimerRef.current) {
+        clearTimeout(noHintsFaceTimerRef.current)
+        noHintsFaceTimerRef.current = null
+      }
+    }
+  }, [])
 
   const uiSteps: GameTutorialStep[] = [
     {
@@ -928,9 +951,11 @@ export default function GameLayoutWeb() {
         if (nextWrongTries >= 3) {
           if (hints > 0) {
             setHints((prev) => Math.max(0, prev - 1))
+            setActiveHint(forcedMove)
+            setTimeout(() => setActiveHint(null), 3000)
+          } else {
+            flashNoHintsFace()
           }
-          setActiveHint(forcedMove)
-          setTimeout(() => setActiveHint(null), 3000)
         }
         return false
       }
@@ -1272,7 +1297,32 @@ export default function GameLayoutWeb() {
             onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
           >
             <span style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: colors.secondaryText, fontFamily: "system-ui", marginBottom: 5 }}>Hints</span>
-            <span style={{ fontSize: 32, fontWeight: "700", color: "#C35DD9", fontFamily: "system-ui" }}>{hints}</span>
+            <div style={{ position: "relative", height: 38, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{
+                position: "absolute",
+                fontSize: 32,
+                fontWeight: "700",
+                color: "#C35DD9",
+                fontFamily: "system-ui",
+                opacity: noHintsFaceVisible ? 0 : 1,
+                transform: noHintsFaceVisible ? "scale(0.98)" : "scale(1)",
+                transition: "opacity 200ms ease, transform 200ms ease",
+              }}>
+                {hints}
+              </span>
+              <span style={{
+                position: "absolute",
+                fontSize: 32,
+                fontWeight: "700",
+                color: "#C35DD9",
+                fontFamily: "system-ui",
+                opacity: noHintsFaceVisible ? 1 : 0,
+                transform: noHintsFaceVisible ? "scale(1)" : "scale(0.98)",
+                transition: "opacity 200ms ease, transform 200ms ease",
+              }}>
+                (¬_¬)
+              </span>
+            </div>
           </div>
         </div>
 
