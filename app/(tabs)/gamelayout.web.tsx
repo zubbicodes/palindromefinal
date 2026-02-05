@@ -5,7 +5,7 @@ import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { Ionicons } from "@expo/vector-icons"
 import { BlurView } from "expo-blur"
-import { useRouter } from "expo-router"
+import { useRouter, useLocalSearchParams } from "expo-router"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import {
   Dimensions,
@@ -18,6 +18,8 @@ import {
 // User snippet had Svg imports, let's keep them if they work, but standard SVG is safer for "pure web".
 // Actually user snippet imports Svg from react-native-svg. I will try to use it, or fallback to standard svg if I can match styles.
 import { authService } from "@/authService"
+import { createInitialState } from "@/lib/gameEngine"
+import { getMatch, subscribeToMatch, submitScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from "react-native-svg"
 import { Switch } from "react-native-switch"
 
@@ -548,6 +550,9 @@ function GameTutorialOverlay(props: {
 
 export default function GameLayoutWeb() {
   const router = useRouter()
+  const { matchId: routeMatchId } = useLocalSearchParams<{ matchId?: string }>()
+  const matchId = typeof routeMatchId === "string" ? routeMatchId : undefined
+
   const { theme, colors, toggleTheme } = useThemeContext()
   const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings()
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound()
@@ -567,6 +572,14 @@ export default function GameLayoutWeb() {
   const [tutorialUiIndex, setTutorialUiIndex] = useState(0)
   const [noHintsFaceVisible, setNoHintsFaceVisible] = useState(false)
   const noHintsFaceTimerRef = useRef<any>(null)
+
+  const [opponentScore, setOpponentScore] = useState<number | null>(null)
+  const [opponentName, setOpponentName] = useState<string>("Opponent")
+  const [multiplayerTimeLimit, setMultiplayerTimeLimit] = useState<number | null>(null)
+  const [multiplayerStartedAt, setMultiplayerStartedAt] = useState<string | null>(null)
+  const [scoreSubmitted, setScoreSubmitted] = useState(false)
+  const multiplayerInitDone = useRef(false)
+  const scoreRef = useRef(score)
 
   const triggerHaptic = useCallback((pattern: number | number[]) => {
     if (!hapticsEnabled) return
@@ -751,6 +764,10 @@ export default function GameLayoutWeb() {
     wrongForcedTriesRef.current = wrongForcedTries
   }, [wrongForcedTries])
 
+  useEffect(() => {
+    scoreRef.current = score
+  }, [score])
+
   const center = Math.floor(gridSize / 2)
   const word = " PALINDROME"
   const halfWord = Math.floor(word.length / 2)
@@ -822,8 +839,72 @@ export default function GameLayoutWeb() {
   }, [spawnBulldogs, gridSize])
 
   useEffect(() => {
+    if (matchId) return
     initializeGame()
-  }, [initializeGame])
+  }, [initializeGame, matchId])
+
+  useEffect(() => {
+    if (!matchId || multiplayerInitDone.current) return
+    let cancelled = false
+    ;(async () => {
+      const m = await getMatch(matchId)
+      if (cancelled || !m) return
+      multiplayerInitDone.current = true
+      setMultiplayerTimeLimit(m.time_limit_seconds)
+      setMultiplayerStartedAt(m.started_at ?? null)
+      const initialState = createInitialState(m.seed)
+      setGridState(initialState.grid.map((r) => [...r]))
+      setBlockCounts([...initialState.blockCounts])
+      setBulldogPositions([...initialState.bulldogPositions])
+      setScore(initialState.score)
+      const user = await authService.getSessionUser()
+      const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id)
+      if (other) setOpponentScore(other.score ?? 0)
+    })()
+    return () => { cancelled = true }
+  }, [matchId])
+
+  useEffect(() => {
+    if (!matchId) return
+    const unsub = subscribeToMatch(matchId, (m) => {
+      void authService.getSessionUser().then(async (user) => {
+        const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id)
+        if (other) {
+          setOpponentScore(other.score ?? 0)
+          const profile = await authService.getProfile(other.user_id)
+          if (profile?.full_name) setOpponentName(profile.full_name)
+          if (m.status === "finished") {
+            router.replace({ pathname: "/matchresult", params: { matchId: m.id } })
+          }
+        }
+      })
+    })
+    return unsub
+  }, [matchId, router])
+
+  useEffect(() => {
+    if (!matchId || !multiplayerStartedAt || multiplayerTimeLimit == null || scoreSubmitted) return
+    const started = new Date(multiplayerStartedAt).getTime()
+    const endAt = started + multiplayerTimeLimit * 1000
+
+    const tick = () => {
+      const now = Date.now()
+      const remaining = Math.max(0, Math.ceil((endAt - now) / 1000))
+      const mins = Math.floor(remaining / 60).toString().padStart(2, "0")
+      const secs = (remaining % 60).toString().padStart(2, "0")
+      setTime(`${mins}:${secs}`)
+      if (remaining <= 0) {
+        setScoreSubmitted(true)
+        authService.getSessionUser().then((user) => {
+          if (user) submitScore(matchId, user.id, scoreRef.current)
+        })
+      }
+    }
+
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => clearInterval(interval)
+  }, [matchId, multiplayerStartedAt, multiplayerTimeLimit, scoreSubmitted])
 
 
 
@@ -1227,6 +1308,24 @@ export default function GameLayoutWeb() {
                 fontFamily: "system-ui"
               }}>{userName}</span>
           </div>
+
+          {matchId ? (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              padding: "10px 16px",
+              backgroundColor: theme === "dark" ? "rgba(25,25,91,0.5)" : "rgba(229,236,241,0.6)",
+              borderRadius: 12,
+              borderWidth: 1,
+              borderStyle: "solid",
+              borderColor: theme === "dark" ? "rgba(255,255,255,0.15)" : "#C7D5DF",
+            }}>
+              <span style={{ fontSize: 13, color: colors.secondaryText, fontFamily: "system-ui" }}>{opponentName}</span>
+              <span style={{ fontSize: 18, fontWeight: "700", color: colors.accent, fontFamily: "system-ui" }}>{opponentScore ?? "—"}</span>
+            </div>
+          ) : null}
 
           <div id="tour-game-status-score" style={{
             display: "flex",

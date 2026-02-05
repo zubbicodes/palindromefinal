@@ -399,6 +399,10 @@ export default function MainScreen() {
     router.push('/gamelayout');
   }, [router]);
 
+  const handleMultiplayer = useCallback(() => {
+    router.push('/multiplayer');
+  }, [router]);
+
   const handleComingSoon = useCallback(() => {
     showToast('Coming Soon');
   }, [showToast]);
@@ -571,10 +575,10 @@ export default function MainScreen() {
                 ref={multiRef}
                 title="Multiplayer"
                 subtitle="Play with friends"
-                badge="Soon"
+                badge="Play"
                 icon="people"
                 colors={['#ffee60', '#ffa40b']}
-                onPress={handleComingSoon}
+                onPress={handleMultiplayer}
               />
             </View>
 
