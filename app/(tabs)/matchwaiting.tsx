@@ -1,6 +1,6 @@
 import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
-import { leaveMatch, subscribeToMatch, type Match } from '@/lib/matchmaking';
+import { getMatch, leaveMatch, subscribeToMatch, type Match } from '@/lib/matchmaking';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,8 +19,11 @@ export default function MatchWaitingScreen() {
   const { theme, colors } = useThemeContext();
   const isDark = theme === 'dark';
   const router = useRouter();
-  const { matchId, inviteCode } = useLocalSearchParams<{ matchId: string; inviteCode?: string }>();
+  const params = useLocalSearchParams<{ matchId: string; inviteCode?: string }>();
+  const matchId = typeof params.matchId === 'string' ? params.matchId : Array.isArray(params.matchId) ? params.matchId[0] : undefined;
+  const inviteCodeParam = typeof params.inviteCode === 'string' ? params.inviteCode : Array.isArray(params.inviteCode) ? params.inviteCode[0] : undefined;
   const [match, setMatch] = useState<Match | null>(null);
+  const [inviteCodeFromMatch, setInviteCodeFromMatch] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [leaving, setLeaving] = useState(false);
   const unsubRef = useRef<(() => void) | null>(null);
@@ -31,10 +34,21 @@ export default function MatchWaitingScreen() {
       return;
     }
 
+    getMatch(matchId).then((m) => {
+      if (m) {
+        setMatch(m);
+        if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
+      }
+      setLoading(false);
+    });
+
     unsubRef.current = subscribeToMatch(matchId, (m) => {
       setMatch(m);
+      if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
       if (m.status === 'active') {
         router.replace({ pathname: '/gamelayout', params: { matchId: m.id } });
+      } else if (m.status === 'cancelled') {
+        router.replace('/multiplayer');
       }
     });
 
@@ -42,10 +56,6 @@ export default function MatchWaitingScreen() {
       unsubRef.current?.();
     };
   }, [matchId, router]);
-
-  useEffect(() => {
-    if (match !== null) setLoading(false);
-  }, [match]);
 
   const handleCancel = useCallback(async () => {
     if (!matchId) return;
@@ -76,7 +86,7 @@ export default function MatchWaitingScreen() {
     );
   }, [handleCancel]);
 
-  const displayCode = (inviteCode ?? match?.invite_code ?? '').toString().toUpperCase();
+  const displayCode = (inviteCodeParam ?? inviteCodeFromMatch ?? match?.invite_code ?? '').toString().toUpperCase();
   const text = isDark ? '#FFFFFF' : '#111111';
   const muted = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(17,17,17,0.6)';
 

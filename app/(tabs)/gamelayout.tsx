@@ -29,7 +29,7 @@ import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useThemeContext } from '@/context/ThemeContext';
 import { useSound } from '@/hooks/use-sound';
 import { createInitialState } from '@/lib/gameEngine';
-import { getMatch, subscribeToMatch, submitScore, type Match, type MatchPlayer } from '@/lib/matchmaking';
+import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, subscribeToMatch, submitScore, updateLiveScore, type Match, type MatchPlayer } from '@/lib/matchmaking';
 
 const COLOR_GRADIENTS = [
   ['#C40111', '#F01D2E'],
@@ -492,8 +492,11 @@ export default function GameLayout() {
   const [multiplayerMatch, setMultiplayerMatch] = useState<Match | null>(null);
   const [opponentScore, setOpponentScore] = useState<number | null>(null);
   const [opponentName, setOpponentName] = useState<string>('Opponent');
+  const [opponentAvatar, setOpponentAvatar] = useState<string | null>(null);
   const [multiplayerTimeLimit, setMultiplayerTimeLimit] = useState<number | null>(null);
-  const [multiplayerStartedAt, setMultiplayerStartedAt] = useState<string | null>(null);
+  const [multiplayerJoinedAt, setMultiplayerJoinedAt] = useState<number | null>(null);
+  const [multiplayerFirstMoveAt, setMultiplayerFirstMoveAt] = useState<number | null>(null);
+  const [firstMoveCountdown, setFirstMoveCountdown] = useState<number | null>(null);
   const [scoreSubmitted, setScoreSubmitted] = useState(false);
   const multiplayerInitDone = useRef(false);
 
@@ -636,6 +639,7 @@ export default function GameLayout() {
   const hintsRef = useRef(hints);
   const wrongForcedTriesRef = useRef(wrongForcedTries);
   const scoreRef = useRef(score);
+  const multiplayerFirstMoveAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     gridStateRef.current = gridState;
@@ -740,7 +744,7 @@ export default function GameLayout() {
       multiplayerInitDone.current = true;
       setMultiplayerMatch(m);
       setMultiplayerTimeLimit(m.time_limit_seconds);
-      setMultiplayerStartedAt(m.started_at ?? null);
+      setMultiplayerJoinedAt(Date.now());
       const initialState = createInitialState(m.seed);
       setGridState(initialState.grid.map(r => [...r]));
       setBlockCounts([...initialState.blockCounts]);
@@ -748,7 +752,12 @@ export default function GameLayout() {
       setScore(initialState.score);
       const user = await authService.getSessionUser();
       const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id);
-      if (other) setOpponentScore(other.score ?? 0);
+      if (other) {
+        setOpponentScore(other.score ?? 0);
+        const profile = await authService.getProfile(other.user_id);
+        if (profile?.full_name) setOpponentName(profile.full_name);
+        if (profile?.avatar_url) setOpponentAvatar(profile.avatar_url);
+      }
     })();
     return () => { cancelled = true; };
   }, [matchId]);
@@ -764,6 +773,7 @@ export default function GameLayout() {
           setOpponentScore(other.score ?? 0);
           const profile = await authService.getProfile(other.user_id);
           if (profile?.full_name) setOpponentName(profile.full_name);
+          if (profile?.avatar_url) setOpponentAvatar(profile.avatar_url);
           if (m.status === 'finished') {
             router.replace({ pathname: '/matchresult' as any, params: { matchId: m.id } });
           }
@@ -791,11 +801,34 @@ export default function GameLayout() {
     return () => clearInterval(interval);
   }, [matchId, isTimerRunning, pause]);
 
-  // Multiplayer: countdown from started_at + time_limit_seconds
+  // Multiplayer: first move countdown (15 sec) - forfeit if no move
   useEffect(() => {
-    if (!matchId || !multiplayerStartedAt || multiplayerTimeLimit == null || scoreSubmitted) return;
-    const started = new Date(multiplayerStartedAt).getTime();
-    const endAt = started + multiplayerTimeLimit * 1000;
+    if (!matchId || !multiplayerJoinedAt || multiplayerFirstMoveAt != null || scoreSubmitted) return;
+    const joinedAt = multiplayerJoinedAt;
+    const firstMoveDeadline = joinedAt + FIRST_MOVE_TIMEOUT_SECONDS * 1000;
+
+    const tick = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((firstMoveDeadline - now) / 1000));
+      setFirstMoveCountdown(remaining);
+      setTime(`0:${remaining.toString().padStart(2, '0')}`);
+      if (remaining <= 0) {
+        setScoreSubmitted(true);
+        authService.getSessionUser().then((user) => {
+          if (user) submitScore(matchId, user.id, 0);
+        });
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [matchId, multiplayerJoinedAt, multiplayerFirstMoveAt, scoreSubmitted]);
+
+  // Multiplayer: 5 min game timer - starts on first move
+  useEffect(() => {
+    if (!matchId || multiplayerFirstMoveAt == null || multiplayerTimeLimit == null || scoreSubmitted) return;
+    const endAt = multiplayerFirstMoveAt + multiplayerTimeLimit * 1000;
 
     const tick = () => {
       const now = Date.now();
@@ -814,7 +847,7 @@ export default function GameLayout() {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [matchId, multiplayerStartedAt, multiplayerTimeLimit, scoreSubmitted]);
+  }, [matchId, multiplayerFirstMoveAt, multiplayerTimeLimit, scoreSubmitted]);
 
   // Fetch/Refresh user profile
   useEffect(() => {
@@ -998,19 +1031,34 @@ export default function GameLayout() {
     newGrid[row][col] = colorIndex;
     setGridState(newGrid);
 
-    setBlockCounts((prev) => {
-      const next = [...prev];
-      next[colorIndex] = Math.max(0, next[colorIndex] - 1);
-      return next;
-    });
+    const nextBlockCounts = [...blockCountsRef.current];
+    nextBlockCounts[colorIndex] = Math.max(0, nextBlockCounts[colorIndex] - 1);
+    setBlockCounts(nextBlockCounts);
 
     playDropSound();
     triggerHaptic('drop');
     const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid);
+    const newScore = score + scoreFound;
     if (scoreFound > 0) setScore((prev) => prev + scoreFound);
+    if (matchId && scoreFound > 0 && !scoreSubmitted) {
+      authService.getSessionUser().then((user) => {
+        if (user) void updateLiveScore(matchId, user.id, newScore);
+      });
+    }
     if (wrongForcedTriesRef.current !== 0) {
       wrongForcedTriesRef.current = 0;
       setWrongForcedTries(0);
+    }
+    if (matchId && multiplayerFirstMoveAtRef.current == null) {
+      multiplayerFirstMoveAtRef.current = Date.now();
+      setMultiplayerFirstMoveAt(Date.now());
+      setFirstMoveCountdown(null);
+    }
+    if (matchId && nextBlockCounts.every((c) => c === 0) && !scoreSubmitted) {
+      setScoreSubmitted(true);
+      authService.getSessionUser().then((user) => {
+        if (user) submitScore(matchId, user.id, newScore);
+      });
     }
     return true;
   };
@@ -1230,6 +1278,17 @@ export default function GameLayout() {
         PALINDROME®
       </Text>
 
+      {matchId && scoreSubmitted && multiplayerMatch?.status !== 'finished' ? (
+        <View style={styles.waitingOverlay}>
+          <View style={[styles.waitingOverlayCard, { backgroundColor: theme === 'dark' ? 'rgba(25,25,91,0.95)' : 'rgba(255,255,255,0.95)' }]}>
+            <Text style={[styles.waitingOverlayTitle, { color: theme === 'dark' ? '#FFFFFF' : '#111111' }]}>Game over!</Text>
+            <Text style={[styles.waitingOverlaySubtitle, { color: theme === 'dark' ? 'rgba(255,255,255,0.7)' : 'rgba(17,17,17,0.7)' }]}>
+              Waiting for opponent to finish...
+            </Text>
+            <Text style={[styles.waitingOverlayScore, { color: colors.accent }]}>Your score: {score}</Text>
+          </View>
+        </View>
+      ) : null}
       {matchId ? (
         <View
           style={[
@@ -1240,12 +1299,18 @@ export default function GameLayout() {
             },
           ]}
         >
-          <Text style={[styles.opponentLabel, { color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : '#4C575F' }]}>
-            {opponentName}
-          </Text>
-          <Text style={[styles.opponentScore, { color: theme === 'dark' ? '#FFFFFF' : '#0060FF' }]}>
-            {opponentScore ?? '—'}
-          </Text>
+          <Image
+            source={opponentAvatar ? { uri: opponentAvatar } : require('../../assets/images/profile_ph.png')}
+            style={styles.opponentAvatar}
+          />
+          <View style={styles.opponentBarText}>
+            <Text style={[styles.opponentLabel, { color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : '#4C575F' }]}>
+              {opponentName}
+            </Text>
+            <Text style={[styles.opponentScore, { color: theme === 'dark' ? '#FFFFFF' : '#0060FF' }]}>
+              {opponentScore ?? '—'}
+            </Text>
+          </View>
         </View>
       ) : null}
 
@@ -1320,6 +1385,13 @@ export default function GameLayout() {
         </View>
       </Pressable>
 
+      {matchId && firstMoveCountdown != null ? (
+        <View style={[styles.firstMoveBanner, { backgroundColor: firstMoveCountdown <= 5 ? (theme === 'dark' ? 'rgba(220,38,38,0.9)' : 'rgba(239,68,68,0.9)') : (theme === 'dark' ? 'rgba(34,197,94,0.9)' : 'rgba(34,197,94,0.9)') }]}>
+          <Text style={styles.firstMoveBannerText}>
+            Make your first move! {firstMoveCountdown}s
+          </Text>
+        </View>
+      ) : null}
       <View ref={timerBoxRef} collapsable={false} style={styles.timerContainer}>
         <Svg height="40" width="300">
           <Defs>
@@ -1693,16 +1765,50 @@ const styles = StyleSheet.create({
     top: 88,
     left: 16,
     right: 16,
-    height: 36,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
   },
+  opponentAvatar: { width: 28, height: 28, borderRadius: 14 },
+  opponentBarText: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   opponentLabel: { fontSize: 13, fontFamily: 'Geist-Regular' },
   opponentScore: { fontSize: 18, fontFamily: 'Geist-Bold' },
+  firstMoveBanner: {
+    position: 'absolute',
+    top: 145,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  firstMoveBannerText: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  waitingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  waitingOverlayCard: {
+    padding: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    minWidth: 260,
+  },
+  waitingOverlayTitle: { fontFamily: 'Geist-Bold', fontSize: 18, marginBottom: 8 },
+  waitingOverlaySubtitle: { fontFamily: 'Geist-Regular', fontSize: 14, marginBottom: 12 },
+  waitingOverlayScore: { fontFamily: 'Geist-Bold', fontSize: 20 },
   timerContainer: { position: 'absolute', top: 160, alignSelf: 'center' },
   board: { position: 'relative', top: 200, width: 350, height: 376, backgroundColor: '#E4EBF0', borderRadius: 16, padding: 6, alignItems: 'center' },
   row: { flexDirection: 'row' },

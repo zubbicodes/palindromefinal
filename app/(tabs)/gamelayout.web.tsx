@@ -19,7 +19,7 @@ import {
 // Actually user snippet imports Svg from react-native-svg. I will try to use it, or fallback to standard svg if I can match styles.
 import { authService } from "@/authService"
 import { createInitialState } from "@/lib/gameEngine"
-import { getMatch, subscribeToMatch, submitScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
+import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, subscribeToMatch, submitScore, updateLiveScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from "react-native-svg"
 import { Switch } from "react-native-switch"
 
@@ -575,11 +575,16 @@ export default function GameLayoutWeb() {
 
   const [opponentScore, setOpponentScore] = useState<number | null>(null)
   const [opponentName, setOpponentName] = useState<string>("Opponent")
+  const [opponentAvatar, setOpponentAvatar] = useState<string | null>(null)
   const [multiplayerTimeLimit, setMultiplayerTimeLimit] = useState<number | null>(null)
-  const [multiplayerStartedAt, setMultiplayerStartedAt] = useState<string | null>(null)
+  const [multiplayerJoinedAt, setMultiplayerJoinedAt] = useState<number | null>(null)
+  const [multiplayerFirstMoveAt, setMultiplayerFirstMoveAt] = useState<number | null>(null)
+  const [firstMoveCountdown, setFirstMoveCountdown] = useState<number | null>(null)
   const [scoreSubmitted, setScoreSubmitted] = useState(false)
+  const [multiplayerMatch, setMultiplayerMatch] = useState<Match | null>(null)
   const multiplayerInitDone = useRef(false)
   const scoreRef = useRef(score)
+  const multiplayerFirstMoveAtRef = useRef<number | null>(null)
 
   const triggerHaptic = useCallback((pattern: number | number[]) => {
     if (!hapticsEnabled) return
@@ -850,8 +855,9 @@ export default function GameLayoutWeb() {
       const m = await getMatch(matchId)
       if (cancelled || !m) return
       multiplayerInitDone.current = true
+      setMultiplayerMatch(m)
       setMultiplayerTimeLimit(m.time_limit_seconds)
-      setMultiplayerStartedAt(m.started_at ?? null)
+      setMultiplayerJoinedAt(Date.now())
       const initialState = createInitialState(m.seed)
       setGridState(initialState.grid.map((r) => [...r]))
       setBlockCounts([...initialState.blockCounts])
@@ -859,7 +865,12 @@ export default function GameLayoutWeb() {
       setScore(initialState.score)
       const user = await authService.getSessionUser()
       const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id)
-      if (other) setOpponentScore(other.score ?? 0)
+      if (other) {
+        setOpponentScore(other.score ?? 0)
+        const profile = await authService.getProfile(other.user_id)
+        if (profile?.full_name) setOpponentName(profile.full_name)
+        if (profile?.avatar_url) setOpponentAvatar(profile.avatar_url)
+      }
     })()
     return () => { cancelled = true }
   }, [matchId])
@@ -867,12 +878,14 @@ export default function GameLayoutWeb() {
   useEffect(() => {
     if (!matchId) return
     const unsub = subscribeToMatch(matchId, (m) => {
+      setMultiplayerMatch(m)
       void authService.getSessionUser().then(async (user) => {
         const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id)
         if (other) {
           setOpponentScore(other.score ?? 0)
           const profile = await authService.getProfile(other.user_id)
           if (profile?.full_name) setOpponentName(profile.full_name)
+          if (profile?.avatar_url) setOpponentAvatar(profile.avatar_url)
           if (m.status === "finished") {
             router.replace({ pathname: "/matchresult", params: { matchId: m.id } })
           }
@@ -883,9 +896,31 @@ export default function GameLayoutWeb() {
   }, [matchId, router])
 
   useEffect(() => {
-    if (!matchId || !multiplayerStartedAt || multiplayerTimeLimit == null || scoreSubmitted) return
-    const started = new Date(multiplayerStartedAt).getTime()
-    const endAt = started + multiplayerTimeLimit * 1000
+    if (!matchId || !multiplayerJoinedAt || multiplayerFirstMoveAt != null || scoreSubmitted) return
+    const joinedAt = multiplayerJoinedAt
+    const firstMoveDeadline = joinedAt + FIRST_MOVE_TIMEOUT_SECONDS * 1000
+
+    const tick = () => {
+      const now = Date.now()
+      const remaining = Math.max(0, Math.ceil((firstMoveDeadline - now) / 1000))
+      setFirstMoveCountdown(remaining)
+      setTime(`0:${remaining.toString().padStart(2, "0")}`)
+      if (remaining <= 0) {
+        setScoreSubmitted(true)
+        authService.getSessionUser().then((user) => {
+          if (user) submitScore(matchId, user.id, 0)
+        })
+      }
+    }
+
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => clearInterval(interval)
+  }, [matchId, multiplayerJoinedAt, multiplayerFirstMoveAt, scoreSubmitted])
+
+  useEffect(() => {
+    if (!matchId || multiplayerFirstMoveAt == null || multiplayerTimeLimit == null || scoreSubmitted) return
+    const endAt = multiplayerFirstMoveAt + multiplayerTimeLimit * 1000
 
     const tick = () => {
       const now = Date.now()
@@ -904,7 +939,7 @@ export default function GameLayoutWeb() {
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [matchId, multiplayerStartedAt, multiplayerTimeLimit, scoreSubmitted])
+  }, [matchId, multiplayerFirstMoveAt, multiplayerTimeLimit, scoreSubmitted])
 
 
 
@@ -931,6 +966,7 @@ export default function GameLayoutWeb() {
   }, [])
 
   useEffect(() => {
+    if (matchId) return
     let interval: any
     if (isTimerRunning && !pause) {
       interval = setInterval(() => {
@@ -944,7 +980,7 @@ export default function GameLayoutWeb() {
       }, 1000)
     }
     return () => clearInterval(interval)
-  }, [isTimerRunning, pause])
+  }, [matchId, isTimerRunning, pause])
 
   const handleDragStart = (colorIndex: number) => {
     playPickupSound()
@@ -1050,11 +1086,9 @@ export default function GameLayoutWeb() {
 
     setGridState(newGrid)
 
-    setBlockCounts((prev) => {
-      const next = [...prev]
-      next[colorIndex] = Math.max(0, next[colorIndex] - 1)
-      return next
-    })
+    const nextBlockCounts = [...blockCounts]
+    nextBlockCounts[colorIndex] = Math.max(0, nextBlockCounts[colorIndex] - 1)
+    setBlockCounts(nextBlockCounts)
 
     playDropSound()
     triggerHaptic(14)
@@ -1063,6 +1097,12 @@ export default function GameLayoutWeb() {
     const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid)
     if (scoreFound > 0) {
       setScore(prev => prev + scoreFound)
+    }
+    const newScore = score + scoreFound
+    if (matchId && scoreFound > 0 && !scoreSubmitted) {
+      authService.getSessionUser().then((user) => {
+        if (user) void updateLiveScore(matchId, user.id, newScore)
+      })
     }
     if (wrongForcedTriesRef.current !== 0) {
       wrongForcedTriesRef.current = 0
@@ -1075,6 +1115,19 @@ export default function GameLayoutWeb() {
       } else if (tutorialPhase === "makeScore" && scoreFound > 0) {
         setTutorialPhase("complete")
       }
+    }
+
+    if (matchId && multiplayerFirstMoveAtRef.current == null) {
+      multiplayerFirstMoveAtRef.current = Date.now()
+      setMultiplayerFirstMoveAt(Date.now())
+      setFirstMoveCountdown(null)
+    }
+
+    if (matchId && nextBlockCounts.every((c) => c === 0) && !scoreSubmitted) {
+      setScoreSubmitted(true)
+      authService.getSessionUser().then((user) => {
+        if (user) submitScore(matchId, user.id, newScore)
+      })
     }
 
     return true
@@ -1243,6 +1296,36 @@ export default function GameLayoutWeb() {
 
   return (
     <div style={containerStyle}>
+        {matchId && scoreSubmitted && multiplayerMatch?.status !== "finished" ? (
+          <div style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 100,
+          }}>
+            <div style={{
+              padding: 24,
+              borderRadius: 16,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              minWidth: 260,
+              backgroundColor: theme === "dark" ? "rgba(25,25,91,0.95)" : "rgba(255,255,255,0.95)",
+              textAlign: "center",
+            }}>
+              <span style={{ fontFamily: "Geist-Bold", fontSize: 18, marginBottom: 8, color: theme === "dark" ? "#FFFFFF" : "#111111", display: "block" }}>Game over!</span>
+              <span style={{ fontFamily: "Geist-Regular", fontSize: 14, marginBottom: 12, color: theme === "dark" ? "rgba(255,255,255,0.7)" : "rgba(17,17,17,0.7)", display: "block" }}>
+                Waiting for opponent to finish...
+              </span>
+              <span style={{ fontFamily: "Geist-Bold", fontSize: 20, color: colors.accent }}>Your score: {score}</span>
+            </div>
+          </div>
+        ) : null}
         <style>{`
           @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
@@ -1313,7 +1396,7 @@ export default function GameLayoutWeb() {
             <div style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              gap: 10,
               width: "100%",
               padding: "10px 16px",
               backgroundColor: theme === "dark" ? "rgba(25,25,91,0.5)" : "rgba(229,236,241,0.6)",
@@ -1322,8 +1405,20 @@ export default function GameLayoutWeb() {
               borderStyle: "solid",
               borderColor: theme === "dark" ? "rgba(255,255,255,0.15)" : "#C7D5DF",
             }}>
-              <span style={{ fontSize: 13, color: colors.secondaryText, fontFamily: "system-ui" }}>{opponentName}</span>
-              <span style={{ fontSize: 18, fontWeight: "700", color: colors.accent, fontFamily: "system-ui" }}>{opponentScore ?? "—"}</span>
+              <Image
+                source={opponentAvatar ? { uri: opponentAvatar } : require("../../assets/images/profile_ph.png")}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  resizeMode: "contain",
+                }}
+                accessibilityLabel="Opponent"
+              />
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13, color: colors.secondaryText, fontFamily: "system-ui" }}>{opponentName}</span>
+                <span style={{ fontSize: 18, fontWeight: "700", color: colors.accent, fontFamily: "system-ui" }}>{opponentScore ?? "—"}</span>
+              </div>
             </div>
           ) : null}
 
@@ -1345,6 +1440,18 @@ export default function GameLayoutWeb() {
             <span style={{ fontSize: 42, fontWeight: "800", color: colors.accent, fontFamily: "system-ui" }}>{score}</span>
           </div>
 
+          {matchId && firstMoveCountdown != null ? (
+            <div style={{
+              padding: "8px 16px",
+              borderRadius: 12,
+              backgroundColor: firstMoveCountdown <= 5 ? "rgba(239,68,68,0.9)" : "rgba(34,197,94,0.9)",
+              marginBottom: 8,
+            }}>
+              <span style={{ fontFamily: "Geist-Bold", fontSize: 14, color: "#FFFFFF" }}>
+                Make your first move! {firstMoveCountdown}s
+              </span>
+            </div>
+          ) : null}
           <div id="tour-game-timer" style={{
              display: "flex",
              flexDirection: "column",
