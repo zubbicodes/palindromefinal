@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -28,6 +28,8 @@ import { authService } from '@/authService';
 import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useThemeContext } from '@/context/ThemeContext';
 import { useSound } from '@/hooks/use-sound';
+import { createInitialState } from '@/lib/gameEngine';
+import { getMatch, subscribeToMatch, submitScore, type Match, type MatchPlayer } from '@/lib/matchmaking';
 
 const COLOR_GRADIENTS = [
   ['#C40111', '#F01D2E'],
@@ -468,6 +470,9 @@ function GameTourSpotSync(props: {
 }
 
 export default function GameLayout() {
+  const { matchId: routeMatchId } = useLocalSearchParams<{ matchId?: string }>();
+  const matchId = typeof routeMatchId === 'string' ? routeMatchId : undefined;
+
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme, colors } = useThemeContext();
   const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, interactionMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled, setInteractionMode } = useSettings();
@@ -483,6 +488,14 @@ export default function GameLayout() {
   const [pause, setPause] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const tourRef = useRef<any>(null);
+
+  const [multiplayerMatch, setMultiplayerMatch] = useState<Match | null>(null);
+  const [opponentScore, setOpponentScore] = useState<number | null>(null);
+  const [opponentName, setOpponentName] = useState<string>('Opponent');
+  const [multiplayerTimeLimit, setMultiplayerTimeLimit] = useState<number | null>(null);
+  const [multiplayerStartedAt, setMultiplayerStartedAt] = useState<string | null>(null);
+  const [scoreSubmitted, setScoreSubmitted] = useState(false);
+  const multiplayerInitDone = useRef(false);
 
   const scoreBoxRef = useRef<View | null>(null);
   const hintsBoxRef = useRef<View | null>(null);
@@ -622,6 +635,7 @@ export default function GameLayout() {
   const blockCountsRef = useRef(blockCounts);
   const hintsRef = useRef(hints);
   const wrongForcedTriesRef = useRef(wrongForcedTries);
+  const scoreRef = useRef(score);
 
   useEffect(() => {
     gridStateRef.current = gridState;
@@ -638,6 +652,10 @@ export default function GameLayout() {
   useEffect(() => {
     wrongForcedTriesRef.current = wrongForcedTries;
   }, [wrongForcedTries]);
+
+  useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
 
   useEffect(() => {
     setPickTargetCell(null);
@@ -685,6 +703,7 @@ export default function GameLayout() {
   }, [center, gridSize, halfWord, word]);
 
   useEffect(() => {
+    if (matchId) return;
     spawnBulldogs();
 
     // Pre-place 3 random colors matching web logic
@@ -710,10 +729,53 @@ export default function GameLayout() {
       });
       return next;
     });
-  }, [spawnBulldogs]);
+  }, [spawnBulldogs, matchId]);
 
-  // Timer useEffect
   useEffect(() => {
+    if (!matchId || multiplayerInitDone.current) return;
+    let cancelled = false;
+    (async () => {
+      const m = await getMatch(matchId);
+      if (cancelled || !m) return;
+      multiplayerInitDone.current = true;
+      setMultiplayerMatch(m);
+      setMultiplayerTimeLimit(m.time_limit_seconds);
+      setMultiplayerStartedAt(m.started_at ?? null);
+      const initialState = createInitialState(m.seed);
+      setGridState(initialState.grid.map(r => [...r]));
+      setBlockCounts([...initialState.blockCounts]);
+      setBulldogPositions([...initialState.bulldogPositions]);
+      setScore(initialState.score);
+      const user = await authService.getSessionUser();
+      const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id);
+      if (other) setOpponentScore(other.score ?? 0);
+    })();
+    return () => { cancelled = true; };
+  }, [matchId]);
+
+  useEffect(() => {
+    if (!matchId) return;
+    const unsub = subscribeToMatch(matchId, (m) => {
+      setMultiplayerMatch(m);
+      const me = authService.getSessionUser();
+      void me.then(async (user) => {
+        const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id);
+        if (other) {
+          setOpponentScore(other.score ?? 0);
+          const profile = await authService.getProfile(other.user_id);
+          if (profile?.full_name) setOpponentName(profile.full_name);
+          if (m.status === 'finished') {
+            router.replace({ pathname: '/matchresult' as any, params: { matchId: m.id } });
+          }
+        }
+      });
+    });
+    return unsub;
+  }, [matchId, router]);
+
+  // Timer useEffect (single player: count up)
+  useEffect(() => {
+    if (matchId) return;
     let interval: any;
     if (isTimerRunning && !pause) {
       interval = setInterval(() => {
@@ -727,7 +789,32 @@ export default function GameLayout() {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isTimerRunning, pause]);
+  }, [matchId, isTimerRunning, pause]);
+
+  // Multiplayer: countdown from started_at + time_limit_seconds
+  useEffect(() => {
+    if (!matchId || !multiplayerStartedAt || multiplayerTimeLimit == null || scoreSubmitted) return;
+    const started = new Date(multiplayerStartedAt).getTime();
+    const endAt = started + multiplayerTimeLimit * 1000;
+
+    const tick = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((endAt - now) / 1000));
+      const mins = Math.floor(remaining / 60).toString().padStart(2, '0');
+      const secs = (remaining % 60).toString().padStart(2, '0');
+      setTime(`${mins}:${secs}`);
+      if (remaining <= 0) {
+        setScoreSubmitted(true);
+        authService.getSessionUser().then((user) => {
+          if (user) submitScore(matchId, user.id, scoreRef.current);
+        });
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [matchId, multiplayerStartedAt, multiplayerTimeLimit, scoreSubmitted]);
 
   // Fetch/Refresh user profile
   useEffect(() => {
@@ -1142,6 +1229,25 @@ export default function GameLayout() {
       <Text style={[styles.title, { color: theme === 'dark' ? '#FFFFFF' : '#0060FF' }]}>
         PALINDROME®
       </Text>
+
+      {matchId ? (
+        <View
+          style={[
+            styles.opponentBar,
+            {
+              backgroundColor: theme === 'dark' ? 'rgba(25,25,91,0.5)' : 'rgba(229,236,241,0.6)',
+              borderColor: theme === 'dark' ? 'rgba(255,255,255,0.15)' : '#C7D5DF',
+            },
+          ]}
+        >
+          <Text style={[styles.opponentLabel, { color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : '#4C575F' }]}>
+            {opponentName}
+          </Text>
+          <Text style={[styles.opponentScore, { color: theme === 'dark' ? '#FFFFFF' : '#0060FF' }]}>
+            {opponentScore ?? '—'}
+          </Text>
+        </View>
+      ) : null}
 
       <View
         ref={scoreBoxRef}
@@ -1582,6 +1688,21 @@ const styles = StyleSheet.create({
   rectangleRight: { position: 'absolute', top: 140, left: '45%', marginLeft: 137.5 - 104 / 2, width: 104, height: 64, backgroundColor: 'rgba(229,236,241,0.5)', borderWidth: 1, borderColor: '#C7D5DF', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   rectangleLabel: { fontSize: 14, color: '#4C575F' },
   rectangleValue: { fontSize: 24, fontWeight: '900', color: '#0060FF' },
+  opponentBar: {
+    position: 'absolute',
+    top: 88,
+    left: 16,
+    right: 16,
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  opponentLabel: { fontSize: 13, fontFamily: 'Geist-Regular' },
+  opponentScore: { fontSize: 18, fontFamily: 'Geist-Bold' },
   timerContainer: { position: 'absolute', top: 160, alignSelf: 'center' },
   board: { position: 'relative', top: 200, width: 350, height: 376, backgroundColor: '#E4EBF0', borderRadius: 16, padding: 6, alignItems: 'center' },
   row: { flexDirection: 'row' },

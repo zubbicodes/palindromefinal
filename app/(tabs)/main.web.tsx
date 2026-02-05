@@ -361,7 +361,7 @@ export default function MainWeb() {
       {
         title: 'Multiplayer',
         description:
-          'Play with friends when Multiplayer is available. For now, you’ll see “Coming Soon”.',
+          'Play with friends. Quick match with a random opponent or create a private game with an invite code.',
         targetId: toTileId('Multiplayer'),
       },
       {
@@ -432,7 +432,7 @@ export default function MainWeb() {
         subtitle: 'Play with friends',
         icon: 'people',
         gradient: ['#ffee60', '#ffa40b'],
-        onClick: showComingSoon,
+        onClick: () => router.push('/multiplayer'),
       },
       {
         title: 'Practice Mode',
@@ -449,7 +449,7 @@ export default function MainWeb() {
         onClick: () => router.push('/profile'),
       },
     ],
-    [showComingSoon],
+    [router],
   );
 
   const isCompact = windowWidth < 980;
@@ -727,7 +727,7 @@ export default function MainWeb() {
                   <div className="tile-icon">
                     <Ionicons name={t.icon} size={20} color="#FFFFFF" />
                   </div>
-                  {t.title === 'Single Player' ? (
+                  {t.title === 'Single Player' || t.title === 'Multiplayer' ? (
                     <div className="tile-badge">Play</div>
                   ) : t.title === 'Settings' ? (
                     <div className="tile-badge">Open</div>
