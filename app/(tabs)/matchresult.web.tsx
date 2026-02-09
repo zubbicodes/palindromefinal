@@ -31,6 +31,7 @@ export default function MatchResultWebScreen() {
   const [rematchRequest, setRematchRequest] = useState<RematchRequest | null>(null);
   const [requesterName, setRequesterName] = useState<string>('Opponent');
   const [declinedNotification, setDeclinedNotification] = useState(false);
+  const [rematchRequested, setRematchRequested] = useState(false);
 
   useEffect(() => {
     if (!matchId) {
@@ -92,6 +93,8 @@ export default function MatchResultWebScreen() {
       const result = await requestRematch(matchId, user.id);
       if (result.action === 'accepted' && result.match) {
         router.replace({ pathname: '/gamelayout', params: { matchId: result.match.id } });
+      } else if (result.action === 'requested') {
+        setRematchRequested(true);
       }
     } catch {
       // ignore
@@ -219,14 +222,26 @@ export default function MatchResultWebScreen() {
                   </div>
                 </div>
               )}
+              {rematchRequested && (
+                <div style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  marginBottom: 16,
+                  backgroundColor: 'rgba(34,197,94,0.9)',
+                }}>
+                  <Text style={{ fontFamily: 'Geist-Bold', fontSize: 14, color: '#FFFFFF', textAlign: 'center' }}>
+                    Waiting for opponent to accept...
+                  </Text>
+                </div>
+              )}
               <View style={styles.buttons}>
                 <Pressable
                   onPress={handleRematch}
-                  disabled={rematchLoading}
-                  style={[styles.primaryBtn, { opacity: rematchLoading ? 0.7 : 1 }]}
+                  disabled={rematchLoading || rematchRequested}
+                  style={[styles.primaryBtn, { opacity: rematchLoading || rematchRequested ? 0.7 : 1 }]}
                 >
                   <Text style={styles.primaryBtnText}>
-                    {rematchLoading ? '...' : 'Rematch'}
+                    {rematchLoading ? '...' : rematchRequested ? 'Waiting...' : 'Rematch'}
                   </Text>
                 </Pressable>
 

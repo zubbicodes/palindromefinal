@@ -37,6 +37,7 @@ export default function MatchResultScreen() {
   const [rematchRequest, setRematchRequest] = useState<RematchRequest | null>(null);
   const [requesterName, setRequesterName] = useState<string>('Opponent');
   const [declinedNotification, setDeclinedNotification] = useState(false);
+  const [rematchRequested, setRematchRequested] = useState(false);
 
   useEffect(() => {
     if (!matchId) {
@@ -98,8 +99,9 @@ export default function MatchResultScreen() {
       const result = await requestRematch(matchId, user.id);
       if (result.action === 'accepted' && result.match) {
         router.replace({ pathname: '/gamelayout', params: { matchId: result.match.id } });
+      } else if (result.action === 'requested') {
+        setRematchRequested(true);
       }
-      // If requested, we wait for opponent - they'll see the popup
     } catch {
       // ignore
     } finally {
@@ -141,6 +143,7 @@ export default function MatchResultScreen() {
 
   const text = isDark ? '#FFFFFF' : '#111111';
   const muted = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(17,17,17,0.6)';
+  const cardBg = isDark ? 'rgba(25,25,91,0.6)' : 'rgba(255,255,255,0.9)';
 
   return (
     <LinearGradient
@@ -217,13 +220,18 @@ export default function MatchResultScreen() {
                   </View>
                 </View>
               )}
+              {rematchRequested && (
+                <View style={[styles.toast, { backgroundColor: isDark ? 'rgba(34,197,94,0.9)' : 'rgba(34,197,94,0.9)' }]}>
+                  <Text style={styles.toastText}>Waiting for opponent to accept...</Text>
+                </View>
+              )}
               <View style={styles.buttons}>
                 <Pressable
                   onPress={handleRematch}
-                  disabled={rematchLoading}
+                  disabled={rematchLoading || rematchRequested}
                   style={({ pressed }) => [
                     styles.primaryBtn,
-                    { opacity: rematchLoading ? 0.7 : pressed ? 0.9 : 1 },
+                    { opacity: rematchLoading || rematchRequested ? 0.7 : pressed ? 0.9 : 1 },
                   ]}
                 >
                   <LinearGradient
@@ -233,7 +241,7 @@ export default function MatchResultScreen() {
                   {rematchLoading ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
-                    <Text style={styles.primaryBtnText}>Rematch</Text>
+                    <Text style={styles.primaryBtnText}>{rematchRequested ? 'Waiting...' : 'Rematch'}</Text>
                   )}
                 </Pressable>
 

@@ -45,7 +45,21 @@ export default function MatchWaitingWebScreen() {
       }
     });
 
+    const poll = setInterval(async () => {
+      const m = await getMatch(matchId);
+      if (m) {
+        setMatch(m);
+        if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
+        if (m.status === 'active') {
+          router.replace({ pathname: '/gamelayout', params: { matchId: m.id } });
+        } else if (m.status === 'cancelled') {
+          router.replace('/multiplayer');
+        }
+      }
+    }, 2500);
+
     return () => {
+      clearInterval(poll);
       unsubRef.current?.();
     };
   }, [matchId, router]);

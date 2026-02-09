@@ -52,61 +52,17 @@ function generateSeed(): string {
 }
 
 /**
- * Quick match: find an existing waiting match without invite code, or create one.
+ * Quick match: atomically find oldest waiting match and join, or create one.
+ * Uses RPC to prevent race when multiple players click Find Match at once.
  */
 export async function findOrCreateQuickMatch(userId: string): Promise<Match> {
   const supabase = getSupabaseClient();
-
-  const { data: existing } = await supabase
-    .from('matches')
-    .select('id, created_at, status, mode, seed, invite_code, time_limit_seconds, started_at, finished_at')
-    .eq('status', 'waiting')
-    .is('invite_code', null)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (existing) {
-    const { error: insertErr } = await supabase.from('match_players').insert({
-      match_id: existing.id,
-      user_id: userId,
-    });
-    if (insertErr) throw insertErr;
-
-    const { error: updateErr } = await supabase
-      .from('matches')
-      .update({
-        status: 'active',
-        started_at: new Date().toISOString(),
-      })
-      .eq('id', existing.id);
-    if (updateErr) throw updateErr;
-
-    return getMatchWithPlayers(existing.id);
-  }
-
-  const seed = generateSeed();
-  const { data: newMatch, error: matchErr } = await supabase
-    .from('matches')
-    .insert({
-      status: 'waiting',
-      mode: 'race',
-      seed,
-      invite_code: null,
-      time_limit_seconds: TIME_LIMIT_SECONDS,
-      created_by: userId,
-    })
-    .select('id, created_at, status, mode, seed, invite_code, time_limit_seconds, started_at, finished_at')
-    .single();
-  if (matchErr) throw matchErr;
-
-  const { error: playerErr } = await supabase.from('match_players').insert({
-    match_id: newMatch.id,
-    user_id: userId,
+  const { data, error } = await supabase.rpc('claim_quick_match', {
+    p_user_id: userId,
   });
-  if (playerErr) throw playerErr;
-
-  return getMatchWithPlayers(newMatch.id);
+  if (error) throw error;
+  if (!data?.id) throw new Error('Could not find or create match');
+  return getMatchWithPlayers(data.id);
 }
 
 /**
@@ -509,7 +465,7 @@ export async function declineRematch(requestId: string, userId: string): Promise
 
 /**
  * Subscribe to rematch request updates (for match result screen).
- * Callback receives new/updated requests for this match.
+ * Uses Realtime + polling fallback for reliability.
  */
 export function subscribeToRematchRequests(
   finishedMatchId: string,
@@ -517,6 +473,21 @@ export function subscribeToRematchRequests(
   callback: (request: RematchRequest) => void
 ): () => void {
   const supabase = getSupabaseClient();
+  const refetch = async () => {
+    const { data } = await supabase
+      .from('rematch_requests')
+      .select('id, match_id, from_user_id, to_user_id, status, created_match_id, created_at')
+      .eq('match_id', finishedMatchId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if (data?.length) {
+      for (const req of data) {
+        callback(req as RematchRequest);
+        break;
+      }
+    }
+  };
+
   const channel = supabase
     .channel(`rematch:${finishedMatchId}:${userId}`)
     .on(
@@ -527,19 +498,16 @@ export function subscribeToRematchRequests(
         table: 'rematch_requests',
         filter: `match_id=eq.${finishedMatchId}`,
       },
-      async () => {
-        const { data } = await supabase
-          .from('rematch_requests')
-          .select('id, match_id, from_user_id, to_user_id, status, created_match_id, created_at')
-          .eq('match_id', finishedMatchId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (data) callback(data as RematchRequest);
-      }
+      () => void refetch()
     )
     .subscribe();
-  return () => supabase.removeChannel(channel);
+
+  const poll = setInterval(refetch, 2500);
+
+  return () => {
+    clearInterval(poll);
+    supabase.removeChannel(channel);
+  };
 }
 
 /**
