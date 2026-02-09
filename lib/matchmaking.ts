@@ -6,7 +6,8 @@
 import { getSupabaseClient } from '@/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-const TIME_LIMIT_SECONDS = 180;
+const TIME_LIMIT_SECONDS = 300;
+export const FIRST_MOVE_TIMEOUT_SECONDS = 15;
 
 export interface MatchPlayer {
   id: string;
@@ -20,7 +21,7 @@ export interface MatchPlayer {
 export interface Match {
   id: string;
   created_at: string;
-  status: 'waiting' | 'active' | 'finished';
+  status: 'waiting' | 'active' | 'finished' | 'cancelled';
   mode: string;
   seed: string;
   invite_code: string | null;
@@ -51,59 +52,17 @@ function generateSeed(): string {
 }
 
 /**
- * Quick match: find an existing waiting match without invite code, or create one.
+ * Quick match: atomically find oldest waiting match and join, or create one.
+ * Uses RPC to prevent race when multiple players click Find Match at once.
  */
 export async function findOrCreateQuickMatch(userId: string): Promise<Match> {
   const supabase = getSupabaseClient();
-
-  const { data: existing } = await supabase
-    .from('matches')
-    .select('id, created_at, status, mode, seed, invite_code, time_limit_seconds, started_at, finished_at')
-    .eq('status', 'waiting')
-    .is('invite_code', null)
-    .limit(1)
-    .single();
-
-  if (existing) {
-    const { error: insertErr } = await supabase.from('match_players').insert({
-      match_id: existing.id,
-      user_id: userId,
-    });
-    if (insertErr) throw insertErr;
-
-    const { error: updateErr } = await supabase
-      .from('matches')
-      .update({
-        status: 'active',
-        started_at: new Date().toISOString(),
-      })
-      .eq('id', existing.id);
-    if (updateErr) throw updateErr;
-
-    return getMatchWithPlayers(existing.id);
-  }
-
-  const seed = generateSeed();
-  const { data: newMatch, error: matchErr } = await supabase
-    .from('matches')
-    .insert({
-      status: 'waiting',
-      mode: 'race',
-      seed,
-      invite_code: null,
-      time_limit_seconds: TIME_LIMIT_SECONDS,
-    })
-    .select('id, created_at, status, mode, seed, invite_code, time_limit_seconds, started_at, finished_at')
-    .single();
-  if (matchErr) throw matchErr;
-
-  const { error: playerErr } = await supabase.from('match_players').insert({
-    match_id: newMatch.id,
-    user_id: userId,
+  const { data, error } = await supabase.rpc('claim_quick_match', {
+    p_user_id: userId,
   });
-  if (playerErr) throw playerErr;
-
-  return getMatchWithPlayers(newMatch.id);
+  if (error) throw error;
+  if (!data?.id) throw new Error('Could not find or create match');
+  return getMatchWithPlayers(data.id);
 }
 
 /**
@@ -127,6 +86,7 @@ export async function createInviteMatch(
         seed,
         invite_code: code,
         time_limit_seconds: TIME_LIMIT_SECONDS,
+        created_by: userId,
       })
       .select('id, created_at, status, mode, seed, invite_code, time_limit_seconds, started_at, finished_at')
       .single();
@@ -287,6 +247,25 @@ export function subscribeToMatch(
 }
 
 /**
+ * Update live score during gameplay (before submit). Triggers realtime so opponent sees it.
+ * Only updates when submitted_at is null.
+ */
+export async function updateLiveScore(
+  matchId: string,
+  userId: string,
+  score: number
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('match_players')
+    .update({ score })
+    .eq('match_id', matchId)
+    .eq('user_id', userId)
+    .is('submitted_at', null);
+  if (error) throw error;
+}
+
+/**
  * Submit final score for the current user. Call when time is up or game ends.
  */
 export async function submitScore(
@@ -371,6 +350,166 @@ export async function leaveMatch(matchId: string, userId: string): Promise<void>
   if (error) throw error;
 }
 
+export interface RematchRequest {
+  id: string;
+  match_id: string;
+  from_user_id: string;
+  to_user_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_match_id: string | null;
+  created_at: string;
+}
+
+/**
+ * Request a rematch: either creates a request (opponent sees popup) or accepts existing request (both clicked).
+ */
+export async function requestRematch(
+  finishedMatchId: string,
+  userId: string
+): Promise<{ action: 'requested' | 'accepted'; match?: Match; request?: RematchRequest }> {
+  const supabase = getSupabaseClient();
+  const match = await getMatchWithPlayers(finishedMatchId);
+  if (!match?.match_players?.length) throw new Error('Invalid match');
+  const other = match.match_players.find((p) => p.user_id !== userId);
+  if (!other) throw new Error('No opponent in match');
+  const toUserId = other.user_id;
+
+  // Check if opponent already requested rematch (both clicked) - we accept their request
+  const { data: existing } = await supabase
+    .from('rematch_requests')
+    .select('id, match_id, from_user_id, to_user_id, status')
+    .eq('match_id', finishedMatchId)
+    .eq('from_user_id', toUserId)
+    .eq('to_user_id', userId)
+    .eq('status', 'pending')
+    .maybeSingle();
+
+  if (existing) {
+    return acceptRematch(existing.id, userId);
+  }
+
+  // Create our request
+  const { data: req, error } = await supabase
+    .from('rematch_requests')
+    .insert({
+      match_id: finishedMatchId,
+      from_user_id: userId,
+      to_user_id: toUserId,
+      status: 'pending',
+    })
+    .select('id, match_id, from_user_id, to_user_id, status, created_match_id, created_at')
+    .single();
+  if (error) throw error;
+  return { action: 'requested', request: req as RematchRequest };
+}
+
+/**
+ * Accept a rematch request: creates new match and adds both players.
+ */
+export async function acceptRematch(
+  requestId: string,
+  userId: string
+): Promise<{ action: 'accepted'; match: Match }> {
+  const supabase = getSupabaseClient();
+  const { data: req, error: fetchErr } = await supabase
+    .from('rematch_requests')
+    .select('id, match_id, from_user_id, to_user_id, status')
+    .eq('id', requestId)
+    .eq('to_user_id', userId)
+    .eq('status', 'pending')
+    .single();
+  if (fetchErr || !req) throw new Error('Invalid or expired rematch request');
+
+  const seed = generateSeed();
+  const { data: newMatch, error: matchErr } = await supabase
+    .from('matches')
+    .insert({
+      status: 'active',
+      mode: 'race',
+      seed,
+      invite_code: null,
+      time_limit_seconds: TIME_LIMIT_SECONDS,
+      started_at: new Date().toISOString(),
+      created_by: req.from_user_id,
+    })
+    .select('id, created_at, status, mode, seed, invite_code, time_limit_seconds, started_at, finished_at')
+    .single();
+  if (matchErr) throw matchErr;
+
+  await supabase.from('match_players').insert([
+    { match_id: newMatch.id, user_id: req.from_user_id },
+    { match_id: newMatch.id, user_id: req.to_user_id },
+  ]);
+
+  await supabase
+    .from('rematch_requests')
+    .update({ status: 'accepted', created_match_id: newMatch.id })
+    .eq('id', requestId);
+
+  return { action: 'accepted', match: await getMatchWithPlayers(newMatch.id) };
+}
+
+/**
+ * Decline a rematch request.
+ */
+export async function declineRematch(requestId: string, userId: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from('rematch_requests')
+    .update({ status: 'declined' })
+    .eq('id', requestId)
+    .eq('to_user_id', userId)
+    .eq('status', 'pending');
+  if (error) throw error;
+}
+
+/**
+ * Subscribe to rematch request updates (for match result screen).
+ * Uses Realtime + polling fallback for reliability.
+ */
+export function subscribeToRematchRequests(
+  finishedMatchId: string,
+  userId: string,
+  callback: (request: RematchRequest) => void
+): () => void {
+  const supabase = getSupabaseClient();
+  const refetch = async () => {
+    const { data } = await supabase
+      .from('rematch_requests')
+      .select('id, match_id, from_user_id, to_user_id, status, created_match_id, created_at')
+      .eq('match_id', finishedMatchId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if (data?.length) {
+      for (const req of data) {
+        callback(req as RematchRequest);
+        break;
+      }
+    }
+  };
+
+  const channel = supabase
+    .channel(`rematch:${finishedMatchId}:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'rematch_requests',
+        filter: `match_id=eq.${finishedMatchId}`,
+      },
+      () => void refetch()
+    )
+    .subscribe();
+
+  const poll = setInterval(refetch, 2500);
+
+  return () => {
+    clearInterval(poll);
+    supabase.removeChannel(channel);
+  };
+}
+
 /**
  * Fetch recent matches for the current user (for lobby "Recent" list).
  */
@@ -391,7 +530,7 @@ export async function getRecentMatches(userId: string, limit = 10): Promise<Matc
 
   for (const id of matchIds.slice(0, limit)) {
     const m = await getMatch(id);
-    if (m) results.push(m);
+    if (m && m.status !== 'cancelled') results.push(m);
   }
 
   results.sort(

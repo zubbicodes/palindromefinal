@@ -1,6 +1,6 @@
 import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
-import { leaveMatch, subscribeToMatch, type Match } from '@/lib/matchmaking';
+import { getMatch, leaveMatch, subscribeToMatch, type Match } from '@/lib/matchmaking';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,51 +19,77 @@ export default function MatchWaitingScreen() {
   const { theme, colors } = useThemeContext();
   const isDark = theme === 'dark';
   const router = useRouter();
-  const { matchId, inviteCode } = useLocalSearchParams<{ matchId: string; inviteCode?: string }>();
+  const params = useLocalSearchParams<{ matchId: string; inviteCode?: string; returnTo?: string }>();
+  const matchId = typeof params.matchId === 'string' ? params.matchId : Array.isArray(params.matchId) ? params.matchId[0] : undefined;
+  const inviteCodeParam = typeof params.inviteCode === 'string' ? params.inviteCode : Array.isArray(params.inviteCode) ? params.inviteCode[0] : undefined;
+  const returnTo = typeof params.returnTo === 'string' ? params.returnTo : Array.isArray(params.returnTo) ? params.returnTo[0] : undefined;
+  const backTarget = returnTo === 'friends' ? '/friends' : '/multiplayer';
   const [match, setMatch] = useState<Match | null>(null);
+  const [inviteCodeFromMatch, setInviteCodeFromMatch] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [leaving, setLeaving] = useState(false);
   const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!matchId) {
-      router.replace('/multiplayer');
+      router.replace(backTarget);
       return;
     }
 
+    getMatch(matchId).then((m) => {
+      if (m) {
+        setMatch(m);
+        if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
+      }
+      setLoading(false);
+    });
+
     unsubRef.current = subscribeToMatch(matchId, (m) => {
       setMatch(m);
+      if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
       if (m.status === 'active') {
-        router.replace({ pathname: '/gamelayout', params: { matchId: m.id } });
+        router.replace({ pathname: '/gamelayout', params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
+      } else if (m.status === 'cancelled') {
+        router.replace(backTarget);
       }
     });
 
+    const poll = setInterval(async () => {
+      const m = await getMatch(matchId);
+      if (m) {
+        setMatch(m);
+        if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
+        if (m.status === 'active') {
+          router.replace({ pathname: '/gamelayout', params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
+        } else if (m.status === 'cancelled') {
+          router.replace(backTarget);
+        }
+      }
+    }, 2500);
+
     return () => {
+      clearInterval(poll);
       unsubRef.current?.();
     };
-  }, [matchId, router]);
-
-  useEffect(() => {
-    if (match !== null) setLoading(false);
-  }, [match]);
+  }, [matchId, router, backTarget]);
 
   const handleCancel = useCallback(async () => {
     if (!matchId) return;
     const user = await authService.getSessionUser();
     if (!user) {
-      router.replace('/multiplayer');
+      router.replace(backTarget);
       return;
     }
     setLeaving(true);
     try {
       await leaveMatch(matchId, user.id);
-      router.replace('/multiplayer');
+      router.replace(backTarget);
     } catch {
       Alert.alert('Error', 'Could not leave match.');
     } finally {
       setLeaving(false);
     }
-  }, [matchId, router]);
+  }, [matchId, router, backTarget]);
 
   const goBack = useCallback(() => {
     Alert.alert(
@@ -76,7 +102,7 @@ export default function MatchWaitingScreen() {
     );
   }, [handleCancel]);
 
-  const displayCode = (inviteCode ?? match?.invite_code ?? '').toString().toUpperCase();
+  const displayCode = (inviteCodeParam ?? inviteCodeFromMatch ?? match?.invite_code ?? '').toString().toUpperCase();
   const text = isDark ? '#FFFFFF' : '#111111';
   const muted = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(17,17,17,0.6)';
 

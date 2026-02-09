@@ -325,11 +325,18 @@ export default function MainWeb() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
       const user = await authService.getSessionUser();
-      const name = user?.displayName?.trim() || user?.email?.split('@')[0]?.trim() || 'Player';
-      setDisplayName(name);
+      if (cancelled) return;
+      if (user) {
+        const name = user.displayName?.trim() || user.email?.split('@')[0]?.trim() || 'Player';
+        setDisplayName(name);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -337,8 +344,6 @@ export default function MainWeb() {
     const t = setTimeout(() => setToast(null), 1600);
     return () => clearTimeout(t);
   }, [toast]);
-
-  const showComingSoon = useCallback(() => setToast('Coming Soon'), []);
 
   const onSignOut = useCallback(async () => {
     await authService.signOut();
@@ -359,16 +364,16 @@ export default function MainWeb() {
         targetId: toTileId('Single Player'),
       },
       {
-        title: 'Multiplayer',
+        title: 'Play Online',
         description:
-          'Play with friends. Quick match with a random opponent or create a private game with an invite code.',
-        targetId: toTileId('Multiplayer'),
+          'Quick match with a random opponent or create a private game with an invite code.',
+        targetId: toTileId('Play Online'),
       },
       {
-        title: 'Practice Mode',
+        title: 'Play with Friends',
         description:
-          'A relaxed mode for learning patterns and warming up. This is also landing soon.',
-        targetId: toTileId('Practice Mode'),
+          'Lobby to add friends and challenge them to a match within your friend circle.',
+        targetId: toTileId('Play with Friends'),
       },
       {
         title: 'Settings & Profile',
@@ -428,18 +433,18 @@ export default function MainWeb() {
         onClick: () => router.push('/gamelayout'),
       },
       {
-        title: 'Multiplayer',
-        subtitle: 'Play with friends',
-        icon: 'people',
+        title: 'Play Online',
+        subtitle: 'Quick match & invite code',
+        icon: 'globe',
         gradient: ['#ffee60', '#ffa40b'],
         onClick: () => router.push('/multiplayer'),
       },
       {
-        title: 'Practice Mode',
-        subtitle: 'Warm up and explore',
-        icon: 'school',
-        gradient: ['#C40111', '#F01D2E'],
-        onClick: showComingSoon,
+        title: 'Play with Friends',
+        subtitle: 'Lobby, add friends, challenge',
+        icon: 'people',
+        gradient: ['#C35DD7', '#E879F9'],
+        onClick: () => router.push('/friends'),
       },
       {
         title: 'Settings',
@@ -582,6 +587,47 @@ export default function MainWeb() {
           color: ${isDark ? 'rgba(255,255,255,0.74)' : 'rgba(17,17,17,0.65)'};
           max-width: 520px;
         }
+        .friends-card {
+          margin-top: 18px;
+          border-radius: 16px;
+          border: 1px solid;
+          padding: 16px;
+        }
+        .friends-btn-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-bottom: 0;
+        }
+        .friends-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          font-family: Geist-Bold, system-ui;
+          font-size: 13px;
+          cursor: pointer;
+          border: none;
+          white-space: nowrap;
+        }
+        .friends-btn:hover { opacity: 0.92; }
+        .friends-btn:active { opacity: 0.88; }
+        .friends-btn-secondary {
+          display: inline-flex;
+          align-items: center;
+          padding: 8px 14px;
+          border-radius: 10px;
+          font-family: Geist-Bold, system-ui;
+          font-size: 13px;
+          cursor: pointer;
+          background: transparent;
+          white-space: nowrap;
+          border-width: 2px;
+          border-style: solid;
+        }
+        .friends-btn-secondary:hover { opacity: 0.92; }
+        .friends-btn-secondary:active { opacity: 0.88; }
         .tiles {
           margin-top: ${isCompact ? '14px' : '16px'};
           display: grid;
@@ -692,6 +738,9 @@ export default function MainWeb() {
             <button className="icon-btn" onClick={openTour} aria-label="Open UI tour">
               <Ionicons name="help-circle-outline" size={20} color={isDark ? '#FFFFFF' : '#0060FF'} />
             </button>
+            <button className="icon-btn" onClick={() => router.push('/notifications')} aria-label="Notifications">
+              <Ionicons name="notifications-outline" size={20} color={isDark ? '#FFFFFF' : '#0060FF'} />
+            </button>
             <button className="icon-btn" onClick={onSignOut} aria-label="Sign out">
               <Ionicons name="log-out-outline" size={20} color={isDark ? '#FFFFFF' : '#111111'} />
             </button>
@@ -701,7 +750,7 @@ export default function MainWeb() {
         <div className="hero">
           <div className="hero-left">
             <h1 className="hero-title">Choose Your Mode</h1>
-            <p className="hero-desc">Jump in fast. Multiplayer and Practice land soon.</p>
+            <p className="hero-desc">Single player, play online, or play with friends.</p>
           </div>
         </div>
 
@@ -727,12 +776,10 @@ export default function MainWeb() {
                   <div className="tile-icon">
                     <Ionicons name={t.icon} size={20} color="#FFFFFF" />
                   </div>
-                  {t.title === 'Single Player' || t.title === 'Multiplayer' ? (
-                    <div className="tile-badge">Play</div>
-                  ) : t.title === 'Settings' ? (
+                  {t.title === 'Settings' ? (
                     <div className="tile-badge">Open</div>
                   ) : (
-                    <div className="tile-badge">Soon</div>
+                    <div className="tile-badge">Play</div>
                   )}
                 </div>
                 <div>

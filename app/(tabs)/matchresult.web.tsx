@@ -2,7 +2,16 @@
 
 import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
-import { createInviteMatch, getMatch, type Match, type MatchPlayer } from '@/lib/matchmaking';
+import {
+  acceptRematch,
+  declineRematch,
+  getMatch,
+  requestRematch,
+  subscribeToRematchRequests,
+  type Match,
+  type MatchPlayer,
+  type RematchRequest,
+} from '@/lib/matchmaking';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -12,17 +21,24 @@ export default function MatchResultWebScreen() {
   const { theme, colors } = useThemeContext();
   const isDark = theme === 'dark';
   const router = useRouter();
-  const { matchId } = useLocalSearchParams<{ matchId: string }>();
+  const params = useLocalSearchParams<{ matchId: string; returnTo?: string }>();
+  const matchId = typeof params.matchId === 'string' ? params.matchId : Array.isArray(params.matchId) ? params.matchId[0] : undefined;
+  const returnTo = typeof params.returnTo === 'string' ? params.returnTo : Array.isArray(params.returnTo) ? params.returnTo[0] : undefined;
+  const backTarget = returnTo === 'friends' ? '/friends' : '/multiplayer';
   const [match, setMatch] = useState<Match | null>(null);
   const [myScore, setMyScore] = useState<number | null>(null);
   const [opponentScore, setOpponentScore] = useState<number | null>(null);
   const [isWinner, setIsWinner] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [rematchLoading, setRematchLoading] = useState(false);
+  const [rematchRequest, setRematchRequest] = useState<RematchRequest | null>(null);
+  const [requesterName, setRequesterName] = useState<string>('Opponent');
+  const [declinedNotification, setDeclinedNotification] = useState(false);
+  const [rematchRequested, setRematchRequested] = useState(false);
 
   useEffect(() => {
     if (!matchId) {
-      router.replace('/multiplayer');
+      router.replace(backTarget);
       return;
     }
     let cancelled = false;
@@ -42,28 +58,83 @@ export default function MatchResultWebScreen() {
       setLoading(false);
     })();
     return () => { cancelled = true };
-  }, [matchId, router]);
+  }, [matchId, router, backTarget]);
+
+  useEffect(() => {
+    if (!matchId) return;
+    let unsub: (() => void) | null = null;
+    authService.getSessionUser().then((user) => {
+      if (!user) return;
+      unsub = subscribeToRematchRequests(matchId, user.id, (req) => {
+        if (req.to_user_id === user.id && req.status === 'pending') {
+          setRematchRequest(req);
+          authService.getProfile(req.from_user_id).then((profile) => {
+            setRequesterName(profile?.full_name || 'Opponent');
+          });
+        } else if (req.from_user_id === user.id && req.status === 'declined') {
+          setDeclinedNotification(true);
+          setTimeout(() => router.replace(backTarget), 2000);
+        } else if (req.status === 'accepted' && req.created_match_id) {
+          if (req.from_user_id === user.id || req.to_user_id === user.id) {
+            router.replace({ pathname: '/gamelayout', params: { matchId: req.created_match_id, ...(returnTo ? { returnTo } : {}) } });
+          }
+        }
+      });
+    });
+    return () => unsub?.();
+  }, [matchId, router, backTarget, returnTo]);
 
   const handleBackToLobby = useCallback(() => {
-    router.replace('/multiplayer');
-  }, [router]);
+    router.replace(backTarget);
+  }, [router, backTarget]);
 
   const handleRematch = useCallback(async () => {
     const user = await authService.getSessionUser();
-    if (!user || !match?.match_players?.length) return;
+    if (!user || !matchId) return;
     setRematchLoading(true);
     try {
-      const { match: newMatch, inviteCode } = await createInviteMatch(user.id);
-      router.replace({
-        pathname: '/matchwaiting',
-        params: { matchId: newMatch.id, inviteCode },
-      });
+      const result = await requestRematch(matchId, user.id);
+      if (result.action === 'accepted' && result.match) {
+        router.replace({ pathname: '/gamelayout', params: { matchId: result.match.id, ...(returnTo ? { returnTo } : {}) } });
+      } else if (result.action === 'requested') {
+        setRematchRequested(true);
+      }
     } catch {
       // ignore
     } finally {
       setRematchLoading(false);
     }
-  }, [match, router]);
+  }, [matchId, router, returnTo]);
+
+  const handleAcceptRematch = useCallback(async () => {
+    if (!rematchRequest) return;
+    setRematchLoading(true);
+    try {
+      const user = await authService.getSessionUser();
+      if (!user) return;
+      const result = await acceptRematch(rematchRequest.id, user.id);
+      setRematchRequest(null);
+      if (result.match) {
+        router.replace({ pathname: '/gamelayout', params: { matchId: result.match.id, ...(returnTo ? { returnTo } : {}) } });
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRematchLoading(false);
+    }
+  }, [rematchRequest, router, returnTo]);
+
+  const handleDeclineRematch = useCallback(async () => {
+    if (!rematchRequest) return;
+    try {
+      const user = await authService.getSessionUser();
+      if (!user) return;
+      await declineRematch(rematchRequest.id, user.id);
+      setRematchRequest(null);
+    } catch {
+      // ignore
+    }
+  }, [rematchRequest]);
 
   if (!matchId) return null;
 
@@ -110,14 +181,70 @@ export default function MatchResultWebScreen() {
                 </View>
               </View>
 
+              {declinedNotification && (
+                <div style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  marginBottom: 16,
+                  backgroundColor: isDark ? 'rgba(239,68,68,0.9)' : 'rgba(220,38,38,0.9)',
+                }}>
+                  <Text style={{ fontFamily: 'Geist-Bold', fontSize: 14, color: '#FFFFFF', textAlign: 'center' }}>
+                    Opponent declined your rematch request
+                  </Text>
+                </div>
+              )}
+              {rematchRequest && (
+                <div style={{
+                  padding: 20,
+                  borderRadius: 16,
+                  marginBottom: 16,
+                  backgroundColor: isDark ? 'rgba(25,25,91,0.6)' : 'rgba(255,255,255,0.9)',
+                }}>
+                  <Text style={[styles.resultTitle, { fontSize: 16, marginBottom: 14, color: text }]}>
+                    {requesterName} wants a rematch
+                  </Text>
+                  <div style={{ display: 'flex', flexDirection: 'row', gap: 12, justifyContent: 'center' }}>
+                    <Pressable
+                      onPress={handleAcceptRematch}
+                      disabled={rematchLoading}
+                      style={[styles.primaryBtn, { flex: 1, opacity: rematchLoading ? 0.7 : 1 }]}
+                    >
+                      <Text style={styles.primaryBtnText}>
+                        {rematchLoading ? '...' : 'Accept'}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleDeclineRematch}
+                      disabled={rematchLoading}
+                      style={[styles.secondaryBtn, { flex: 1, borderColor: isDark ? 'rgba(239,68,68,0.8)' : '#dc2626' }]}
+                    >
+                      <Text style={[styles.secondaryBtnText, { color: isDark ? '#fca5a5' : '#dc2626' }]}>
+                        Decline
+                      </Text>
+                    </Pressable>
+                  </div>
+                </div>
+              )}
+              {rematchRequested && (
+                <div style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  marginBottom: 16,
+                  backgroundColor: 'rgba(34,197,94,0.9)',
+                }}>
+                  <Text style={{ fontFamily: 'Geist-Bold', fontSize: 14, color: '#FFFFFF', textAlign: 'center' }}>
+                    Waiting for opponent to accept...
+                  </Text>
+                </div>
+              )}
               <View style={styles.buttons}>
                 <Pressable
                   onPress={handleRematch}
-                  disabled={rematchLoading}
-                  style={[styles.primaryBtn, { opacity: rematchLoading ? 0.7 : 1 }]}
+                  disabled={rematchLoading || rematchRequested}
+                  style={[styles.primaryBtn, { opacity: rematchLoading || rematchRequested ? 0.7 : 1 }]}
                 >
                   <Text style={styles.primaryBtnText}>
-                    {rematchLoading ? 'Creating...' : 'Rematch'}
+                    {rematchLoading ? '...' : rematchRequested ? 'Waiting...' : 'Rematch'}
                   </Text>
                 </Pressable>
 

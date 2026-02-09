@@ -229,6 +229,7 @@ export default function MainScreen() {
   const insets = useSafeAreaInsets();
 
   const [displayName, setDisplayName] = useState<string>('Player');
+  const [userId, setUserId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -239,7 +240,7 @@ export default function MainScreen() {
   const practiceRef = useRef<any>(null);
   const settingsRef = useRef<any>(null);
 
-  const columns = width >= 360 ? 2 : 1;
+  const columns = 1;
   const isCompact = width < 420;
   const float = useRef(new Animated.Value(0)).current;
 
@@ -318,13 +319,13 @@ export default function MainScreen() {
         before: () => scrollToTile('single'),
       }),
       step({
-        title: 'Multiplayer',
-        description: 'Play with friends when Multiplayer is available. For now, you’ll see “Coming Soon”.',
+        title: 'Play Online',
+        description: 'Quick match with a random opponent or create a private game with an invite code.',
         before: () => scrollToTile('multi'),
       }),
       step({
-        title: 'Practice Mode',
-        description: 'A relaxed mode for learning patterns and warming up. This is also landing soon.',
+        title: 'Play with Friends',
+        description: 'Lobby to add friends and challenge them to a match within your friend circle.',
         before: () => scrollToTile('practice'),
       }),
       step({
@@ -377,11 +378,19 @@ export default function MainScreen() {
   );
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
       const user = await authService.getSessionUser();
-      const name = user?.displayName?.trim() || user?.email?.split('@')[0]?.trim() || 'Player';
-      setDisplayName(name);
+      if (cancelled) return;
+      if (user) {
+        setUserId(user.id);
+        const name = user.displayName?.trim() || user.email?.split('@')[0]?.trim() || 'Player';
+        setDisplayName(name);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -399,16 +408,20 @@ export default function MainScreen() {
     router.push('/gamelayout');
   }, [router]);
 
-  const handleMultiplayer = useCallback(() => {
+  const handlePlayOnline = useCallback(() => {
     router.push('/multiplayer');
   }, [router]);
 
-  const handleComingSoon = useCallback(() => {
-    showToast('Coming Soon');
-  }, [showToast]);
+  const handlePlayWithFriends = useCallback(() => {
+    router.push('/friends');
+  }, [router]);
 
   const handleSettings = useCallback(() => {
     router.push('/profile');
+  }, [router]);
+
+  const handleNotifications = useCallback(() => {
+    router.push('/notifications');
   }, [router]);
 
   const orbAOffset = float.interpolate({ inputRange: [0, 1], outputRange: [0, -14] });
@@ -511,6 +524,22 @@ export default function MainScreen() {
                     </Pressable>
 
                     <Pressable
+                      onPress={handleNotifications}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        {
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.80)',
+                          borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)',
+                          opacity: pressed ? 0.78 : 1,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Notifications"
+                    >
+                      <Ionicons name="notifications-outline" size={19} color={isDark ? '#FFFFFF' : '#0060FF'} />
+                    </Pressable>
+
+                    <Pressable
                       onPress={handleSignOut}
                       style={({ pressed }) => [
                         styles.iconButton,
@@ -537,7 +566,7 @@ export default function MainScreen() {
                 { color: isDark ? 'rgba(255,255,255,0.74)' : 'rgba(17,17,17,0.62)' },
               ]}
             >
-              Jump in fast. Multiplayer and Practice land soon.
+              Single player, play online, or play with friends.
             </Text>
           </View>
 
@@ -549,7 +578,7 @@ export default function MainScreen() {
           >
 
             <View
-              style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
+              style={[styles.tileWrap, { width: '100%' }]}
               onLayout={(e) => {
                 tileYRef.current.single = tileGridYRef.current + e.nativeEvent.layout.y;
               }}
@@ -566,41 +595,41 @@ export default function MainScreen() {
             </View>
 
             <View
-              style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
+              style={[styles.tileWrap, { width: '100%' }]}
               onLayout={(e) => {
                 tileYRef.current.multi = tileGridYRef.current + e.nativeEvent.layout.y;
               }}
             >
               <MenuTile
                 ref={multiRef}
-                title="Multiplayer"
-                subtitle="Play with friends"
+                title="Play Online"
+                subtitle="Quick match & invite code"
                 badge="Play"
-                icon="people"
+                icon="globe"
                 colors={['#ffee60', '#ffa40b']}
-                onPress={handleMultiplayer}
+                onPress={handlePlayOnline}
               />
             </View>
 
             <View
-              style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
+              style={[styles.tileWrap, { width: '100%' }]}
               onLayout={(e) => {
                 tileYRef.current.practice = tileGridYRef.current + e.nativeEvent.layout.y;
               }}
             >
               <MenuTile
                 ref={practiceRef}
-                title="Practice Mode"
-                subtitle="Warm up and explore"
-                badge="Soon"
-                icon="school"
-                colors={['#C40111', '#F01D2E']}
-                onPress={handleComingSoon}
+                title="Play with Friends"
+                subtitle="Lobby, add friends, challenge"
+                badge="Play"
+                icon="people"
+                colors={['#C35DD7', '#E879F9']}
+                onPress={handlePlayWithFriends}
               />
             </View>
 
             <View
-              style={[styles.tileWrap, { width: columns === 2 ? '50%' : '100%' }]}
+              style={[styles.tileWrap, { width: '100%' }]}
               onLayout={(e) => {
                 tileYRef.current.settings = tileGridYRef.current + e.nativeEvent.layout.y;
               }}
@@ -790,6 +819,104 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
     lineHeight: 18,
+  },
+  friendsCard: {
+    marginTop: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+  },
+  friendsCardHeader: {
+    marginBottom: 12,
+  },
+  friendsCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  friendsCardTitle: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 16,
+  },
+  friendsCardActions: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  friendsCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    flexShrink: 0,
+  },
+  friendsCardBtnText: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  friendsCardBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 2,
+    flexShrink: 0,
+  },
+  friendsCardBtnSecondaryText: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 13,
+  },
+  pendingSection: {
+    marginTop: 4,
+  },
+  pendingLabel: {
+    fontFamily: 'Geist-Regular',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  friendRequestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  friendRequestName: {
+    fontFamily: 'Geist-Regular',
+    fontSize: 14,
+    flex: 1,
+  },
+  friendRequestActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  friendRequestAccept: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  friendRequestDecline: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  friendRequestBtnText: {
+    fontFamily: 'Geist-Bold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  friendsEmpty: {
+    fontFamily: 'Geist-Regular',
+    fontSize: 13,
+    marginTop: 12,
   },
   tileGrid: {
     flexDirection: 'row',
