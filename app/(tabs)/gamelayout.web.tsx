@@ -550,8 +550,9 @@ function GameTutorialOverlay(props: {
 
 export default function GameLayoutWeb() {
   const router = useRouter()
-  const { matchId: routeMatchId } = useLocalSearchParams<{ matchId?: string }>()
+  const { matchId: routeMatchId, returnTo: routeReturnTo } = useLocalSearchParams<{ matchId?: string; returnTo?: string }>()
   const matchId = typeof routeMatchId === "string" ? routeMatchId : undefined
+  const returnTo = typeof routeReturnTo === "string" ? routeReturnTo : Array.isArray(routeReturnTo) ? routeReturnTo[0] : undefined
 
   const { theme, colors, toggleTheme } = useThemeContext()
   const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings()
@@ -887,13 +888,13 @@ export default function GameLayoutWeb() {
           if (profile?.full_name) setOpponentName(profile.full_name)
           if (profile?.avatar_url) setOpponentAvatar(profile.avatar_url)
           if (m.status === "finished") {
-            router.replace({ pathname: "/matchresult", params: { matchId: m.id } })
+            router.replace({ pathname: "/matchresult", params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } })
           }
         }
       })
     })
     return unsub
-  }, [matchId, router])
+  }, [matchId, router, returnTo])
 
   useEffect(() => {
     if (!matchId || !multiplayerJoinedAt || multiplayerFirstMoveAt != null || scoreSubmitted) return

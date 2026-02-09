@@ -48,7 +48,7 @@ export default function MatchWaitingScreen() {
       setMatch(m);
       if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
       if (m.status === 'active') {
-        router.replace({ pathname: '/gamelayout', params: { matchId: m.id } });
+        router.replace({ pathname: '/gamelayout', params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
       } else if (m.status === 'cancelled') {
         router.replace(backTarget);
       }
@@ -60,7 +60,7 @@ export default function MatchWaitingScreen() {
         setMatch(m);
         if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
         if (m.status === 'active') {
-          router.replace({ pathname: '/gamelayout', params: { matchId: m.id } });
+          router.replace({ pathname: '/gamelayout', params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
         } else if (m.status === 'cancelled') {
           router.replace(backTarget);
         }

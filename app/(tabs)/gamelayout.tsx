@@ -470,8 +470,9 @@ function GameTourSpotSync(props: {
 }
 
 export default function GameLayout() {
-  const { matchId: routeMatchId } = useLocalSearchParams<{ matchId?: string }>();
+  const { matchId: routeMatchId, returnTo: routeReturnTo } = useLocalSearchParams<{ matchId?: string; returnTo?: string }>();
   const matchId = typeof routeMatchId === 'string' ? routeMatchId : undefined;
+  const returnTo = typeof routeReturnTo === 'string' ? routeReturnTo : Array.isArray(routeReturnTo) ? routeReturnTo[0] : undefined;
 
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme, colors } = useThemeContext();
@@ -775,13 +776,13 @@ export default function GameLayout() {
           if (profile?.full_name) setOpponentName(profile.full_name);
           if (profile?.avatar_url) setOpponentAvatar(profile.avatar_url);
           if (m.status === 'finished') {
-            router.replace({ pathname: '/matchresult' as any, params: { matchId: m.id } });
+            router.replace({ pathname: '/matchresult' as any, params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
           }
         }
       });
     });
     return unsub;
-  }, [matchId, router]);
+  }, [matchId, router, returnTo]);
 
   // Timer useEffect (single player: count up)
   useEffect(() => {

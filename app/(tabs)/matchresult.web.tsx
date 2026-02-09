@@ -21,7 +21,10 @@ export default function MatchResultWebScreen() {
   const { theme, colors } = useThemeContext();
   const isDark = theme === 'dark';
   const router = useRouter();
-  const { matchId } = useLocalSearchParams<{ matchId: string }>();
+  const params = useLocalSearchParams<{ matchId: string; returnTo?: string }>();
+  const matchId = typeof params.matchId === 'string' ? params.matchId : Array.isArray(params.matchId) ? params.matchId[0] : undefined;
+  const returnTo = typeof params.returnTo === 'string' ? params.returnTo : Array.isArray(params.returnTo) ? params.returnTo[0] : undefined;
+  const backTarget = returnTo === 'friends' ? '/friends' : '/multiplayer';
   const [match, setMatch] = useState<Match | null>(null);
   const [myScore, setMyScore] = useState<number | null>(null);
   const [opponentScore, setOpponentScore] = useState<number | null>(null);
@@ -35,7 +38,7 @@ export default function MatchResultWebScreen() {
 
   useEffect(() => {
     if (!matchId) {
-      router.replace('/multiplayer');
+      router.replace(backTarget);
       return;
     }
     let cancelled = false;
@@ -55,7 +58,7 @@ export default function MatchResultWebScreen() {
       setLoading(false);
     })();
     return () => { cancelled = true };
-  }, [matchId, router]);
+  }, [matchId, router, backTarget]);
 
   useEffect(() => {
     if (!matchId) return;
@@ -70,20 +73,20 @@ export default function MatchResultWebScreen() {
           });
         } else if (req.from_user_id === user.id && req.status === 'declined') {
           setDeclinedNotification(true);
-          setTimeout(() => router.replace('/multiplayer'), 2000);
+          setTimeout(() => router.replace(backTarget), 2000);
         } else if (req.status === 'accepted' && req.created_match_id) {
           if (req.from_user_id === user.id || req.to_user_id === user.id) {
-            router.replace({ pathname: '/gamelayout', params: { matchId: req.created_match_id } });
+            router.replace({ pathname: '/gamelayout', params: { matchId: req.created_match_id, ...(returnTo ? { returnTo } : {}) } });
           }
         }
       });
     });
     return () => unsub?.();
-  }, [matchId, router]);
+  }, [matchId, router, backTarget, returnTo]);
 
   const handleBackToLobby = useCallback(() => {
-    router.replace('/multiplayer');
-  }, [router]);
+    router.replace(backTarget);
+  }, [router, backTarget]);
 
   const handleRematch = useCallback(async () => {
     const user = await authService.getSessionUser();
@@ -92,7 +95,7 @@ export default function MatchResultWebScreen() {
     try {
       const result = await requestRematch(matchId, user.id);
       if (result.action === 'accepted' && result.match) {
-        router.replace({ pathname: '/gamelayout', params: { matchId: result.match.id } });
+        router.replace({ pathname: '/gamelayout', params: { matchId: result.match.id, ...(returnTo ? { returnTo } : {}) } });
       } else if (result.action === 'requested') {
         setRematchRequested(true);
       }
@@ -101,7 +104,7 @@ export default function MatchResultWebScreen() {
     } finally {
       setRematchLoading(false);
     }
-  }, [matchId, router]);
+  }, [matchId, router, returnTo]);
 
   const handleAcceptRematch = useCallback(async () => {
     if (!rematchRequest) return;
@@ -112,14 +115,14 @@ export default function MatchResultWebScreen() {
       const result = await acceptRematch(rematchRequest.id, user.id);
       setRematchRequest(null);
       if (result.match) {
-        router.replace({ pathname: '/gamelayout', params: { matchId: result.match.id } });
+        router.replace({ pathname: '/gamelayout', params: { matchId: result.match.id, ...(returnTo ? { returnTo } : {}) } });
       }
     } catch {
       // ignore
     } finally {
       setRematchLoading(false);
     }
-  }, [rematchRequest, router]);
+  }, [rematchRequest, router, returnTo]);
 
   const handleDeclineRematch = useCallback(async () => {
     if (!rematchRequest) return;
