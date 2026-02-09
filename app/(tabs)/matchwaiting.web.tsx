@@ -12,9 +12,11 @@ export default function MatchWaitingWebScreen() {
   const { theme, colors } = useThemeContext();
   const isDark = theme === 'dark';
   const router = useRouter();
-  const params = useLocalSearchParams<{ matchId: string; inviteCode?: string }>();
+  const params = useLocalSearchParams<{ matchId: string; inviteCode?: string; returnTo?: string }>();
   const matchId = typeof params.matchId === 'string' ? params.matchId : Array.isArray(params.matchId) ? params.matchId[0] : undefined;
   const inviteCodeParam = typeof params.inviteCode === 'string' ? params.inviteCode : Array.isArray(params.inviteCode) ? params.inviteCode[0] : undefined;
+  const returnTo = typeof params.returnTo === 'string' ? params.returnTo : Array.isArray(params.returnTo) ? params.returnTo[0] : undefined;
+  const backTarget = returnTo === 'friends' ? '/friends' : '/multiplayer';
   const [match, setMatch] = useState<Match | null>(null);
   const [inviteCodeFromMatch, setInviteCodeFromMatch] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,7 +25,7 @@ export default function MatchWaitingWebScreen() {
 
   useEffect(() => {
     if (!matchId) {
-      router.replace('/multiplayer');
+      router.replace(backTarget);
       return;
     }
 
@@ -41,7 +43,7 @@ export default function MatchWaitingWebScreen() {
       if (m.status === 'active') {
         router.replace({ pathname: '/gamelayout', params: { matchId: m.id } });
       } else if (m.status === 'cancelled') {
-        router.replace('/multiplayer');
+        router.replace(backTarget);
       }
     });
 
@@ -53,7 +55,7 @@ export default function MatchWaitingWebScreen() {
         if (m.status === 'active') {
           router.replace({ pathname: '/gamelayout', params: { matchId: m.id } });
         } else if (m.status === 'cancelled') {
-          router.replace('/multiplayer');
+          router.replace(backTarget);
         }
       }
     }, 2500);
@@ -62,25 +64,25 @@ export default function MatchWaitingWebScreen() {
       clearInterval(poll);
       unsubRef.current?.();
     };
-  }, [matchId, router]);
+  }, [matchId, router, backTarget]);
 
   const handleCancel = useCallback(async () => {
     if (!matchId) return;
     const user = await authService.getSessionUser();
     if (!user) {
-      router.replace('/multiplayer');
+      router.replace(backTarget);
       return;
     }
     setLeaving(true);
     try {
       await leaveMatch(matchId, user.id);
-      router.replace('/multiplayer');
+      router.replace(backTarget);
     } catch {
       // ignore
     } finally {
       setLeaving(false);
     }
-  }, [matchId, router]);
+  }, [matchId, router, backTarget]);
 
   const displayCode = (inviteCodeParam ?? inviteCodeFromMatch ?? match?.invite_code ?? '').toString().toUpperCase();
   const text = isDark ? '#FFFFFF' : '#111111';

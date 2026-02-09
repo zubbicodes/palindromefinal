@@ -105,6 +105,13 @@ export default function MultiplayerLobbyScreen() {
       const me = match.match_players.find((p) => p.user_id === userId);
       const other = match.match_players.find((p) => p.user_id !== userId);
       if (!me || !other) return '—';
+      const myScore = me.score != null ? me.score : null;
+      const theirScore = other.score != null ? other.score : null;
+      if (myScore !== null && theirScore !== null) {
+        if (myScore > theirScore) return 'Won';
+        if (theirScore > myScore) return 'Lost';
+        return 'Draw';
+      }
       if (me.is_winner) return 'Won';
       if (other.is_winner) return 'Lost';
       return 'Draw';
@@ -167,6 +174,7 @@ export default function MultiplayerLobbyScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={true}
         >
           {modes.map((mode) => (
             <Pressable
@@ -259,7 +267,7 @@ export default function MultiplayerLobbyScreen() {
 
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
-  safe: { flex: 1 },
+  safe: { flex: 1, minHeight: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -275,7 +283,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 16,
   },
-  scroll: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0 },
   scrollContent: { padding: 16, paddingBottom: 40 },
   modeCard: {
     flexDirection: 'row',

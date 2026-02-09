@@ -118,6 +118,13 @@ export default function MultiplayerLobbyWebScreen() {
       const me = match.match_players.find((p) => p.user_id === userId);
       const other = match.match_players.find((p) => p.user_id !== userId);
       if (!me || !other) return '—';
+      const myScore = me.score != null ? me.score : null;
+      const theirScore = other.score != null ? other.score : null;
+      if (myScore !== null && theirScore !== null) {
+        if (myScore > theirScore) return 'Won';
+        if (theirScore > myScore) return 'Lost';
+        return 'Draw';
+      }
       if (me.is_winner) return 'Won';
       if (other.is_winner) return 'Lost';
       return 'Draw';
@@ -188,33 +195,36 @@ export default function MultiplayerLobbyWebScreen() {
           <View style={styles.backBtn} />
         </View>
 
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: twoColumn ? 'row' : 'column',
-            flex: 1,
-            gap: twoColumn ? 24 : 0,
-            padding: 16,
-            paddingTop: 8,
-            maxWidth: twoColumn ? 1200 : 520,
-            marginLeft: 'auto',
-            marginRight: 'auto',
-            width: '100%',
-            minHeight: 0,
-            alignItems: twoColumn ? 'stretch' : undefined,
-          }}
+        <ScrollView
+          style={styles.mainScroll}
+          contentContainerStyle={styles.mainScrollContent}
+          showsVerticalScrollIndicator={true}
         >
           <div
             style={{
-              flex: twoColumn ? '0 0 380px' : undefined,
-              minWidth: 0,
               display: 'flex',
-              flexDirection: 'column',
+              flexDirection: twoColumn ? 'row' : 'column',
+              gap: twoColumn ? 24 : 0,
+              padding: 16,
+              paddingTop: 8,
+              maxWidth: twoColumn ? 1200 : 520,
+              marginLeft: 'auto',
+              marginRight: 'auto',
+              width: '100%',
+              alignItems: twoColumn ? 'stretch' : undefined,
             }}
           >
-            <Text style={[styles.subtitle, { color: muted }]}>Choose a game mode</Text>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {modes.map((mode) => (
+            <div
+              style={{
+                flex: twoColumn ? '0 0 380px' : undefined,
+                minWidth: 0,
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <Text style={[styles.subtitle, { color: muted }]}>Choose a game mode</Text>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {modes.map((mode) => (
                 <Pressable
                   key={mode.key}
                   onPress={mode.loading ? undefined : mode.onPress}
@@ -329,7 +339,8 @@ export default function MultiplayerLobbyWebScreen() {
               </ScrollView>
             )}
           </div>
-        </div>
+          </div>
+        </ScrollView>
 
         {toastMessage ? (
           <div
@@ -355,7 +366,9 @@ export default function MultiplayerLobbyWebScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, paddingTop: 48, paddingBottom: 24, display: 'flex', flexDirection: 'column' },
+  safe: { flex: 1, minHeight: 0, paddingTop: 48, paddingBottom: 24, display: 'flex', flexDirection: 'column' },
+  mainScroll: { flex: 1, minHeight: 0 },
+  mainScrollContent: { paddingBottom: 24 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -108,7 +108,7 @@ export default function FriendsWebScreen() {
     } else {
       router.replace({
         pathname: '/matchwaiting',
-        params: inviteCode ? { matchId: match.id, inviteCode } : { matchId: match.id },
+        params: inviteCode ? { matchId: match.id, inviteCode, returnTo: 'friends' } : { matchId: match.id, returnTo: 'friends' },
       });
     }
   }, []);
@@ -184,7 +184,7 @@ export default function FriendsWebScreen() {
       try {
         const { challengeFriend } = await import('@/lib/friends');
         const { matchId } = await challengeFriend(userId, friendId);
-        router.replace({ pathname: '/matchwaiting', params: { matchId } });
+        router.replace({ pathname: '/matchwaiting', params: { matchId, returnTo: 'friends' } });
       } catch (e) {
         Alert.alert('Error', (e as Error).message ?? 'Could not challenge.');
       }
@@ -223,169 +223,206 @@ export default function FriendsWebScreen() {
   const goBack = useCallback(() => router.back(), []);
   const goToAddFriend = useCallback(() => router.push('/addfriend'), []);
 
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 1024
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const twoColumn = windowWidth >= 900;
+
   const cardBg = isDark ? 'rgba(25,25,91,0.6)' : 'rgba(255,255,255,0.9)';
   const text = isDark ? '#FFFFFF' : '#111111';
   const muted = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(17,17,17,0.6)';
 
+  const leftColumn = (
+    <>
+      {pendingChallenges.length > 0 && (
+        <View style={[styles.card, { backgroundColor: cardBg, borderLeftWidth: 4, borderLeftColor: colors.accent }]}>
+          <Text style={[styles.cardTitle, { color: text }]}>Challenges</Text>
+          <Text style={[styles.cardSubtitle, { color: muted, marginBottom: 12 }]}>Accept or decline to play</Text>
+          {pendingChallenges.map((c) => (
+            <ChallengeRowWeb
+              key={c.id}
+              challenge={c}
+              onAccept={() => handleAcceptChallenge(c.id)}
+              onDecline={() => handleDeclineChallenge(c.id)}
+              text={text}
+              muted={muted}
+              accentColor={colors.accent}
+            />
+          ))}
+        </View>
+      )}
+      {pending.length > 0 && (
+        <View style={[styles.card, { backgroundColor: cardBg }]}>
+          <Text style={[styles.cardTitle, { color: text }]}>Friend requests</Text>
+          {pending.map((req) => (
+            <FriendRequestRowWeb
+              key={req.id}
+              requestId={req.id}
+              fromUserId={req.user_id}
+              onAccept={() => handleAcceptRequest(req.id)}
+              onDecline={() => handleDeclineRequest(req.id)}
+              text={text}
+              muted={muted}
+            />
+          ))}
+        </View>
+      )}
+
+      <View style={[styles.card, { backgroundColor: cardBg }]}>
+        <Text style={[styles.cardTitle, { color: text }]}>Create game</Text>
+        <Text style={[styles.cardSubtitle, { color: muted }]}>
+          Create a game and share the code with a friend
+        </Text>
+        <Pressable
+          onPress={handleCreateGame}
+          disabled={createLoading}
+          style={[styles.secondaryBtn, { borderColor: colors.accent, opacity: createLoading ? 0.7 : 1 }]}
+        >
+          <Text style={[styles.secondaryBtnText, { color: colors.accent }]}>
+            {createLoading ? 'Creating...' : 'Create & Get Code'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: cardBg }]}>
+        <Text style={[styles.cardTitle, { color: text }]}>Join by code</Text>
+        <Text style={[styles.cardSubtitle, { color: muted }]}>
+          Enter the 6-character code from your friend
+        </Text>
+        <View style={styles.joinRow}>
+          <TextInput
+            value={inviteCodeInput}
+            onChangeText={(t) => setInviteCodeInput(t.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase())}
+            placeholder="ABC123"
+            placeholderTextColor={muted}
+            style={[
+              styles.codeInput,
+              {
+                backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.06)',
+                color: text,
+                borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
+              },
+            ]}
+            maxLength={6}
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+          <Pressable
+            onPress={handleJoinByCode}
+            disabled={joinLoading || inviteCodeInput.trim().length !== 6}
+            style={[
+              styles.joinBtn,
+              {
+                backgroundColor: colors.accent,
+                opacity: joinLoading || inviteCodeInput.trim().length !== 6 ? 0.6 : 1,
+              },
+            ]}
+          >
+            <Text style={styles.joinBtnText}>{joinLoading ? 'Joining...' : 'Join'}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: cardBg }]}>
+        <View style={styles.cardTitleRow}>
+          <Text style={[styles.cardTitle, { color: text, marginBottom: 0 }]}>Friends</Text>
+          <Pressable onPress={goToAddFriend} style={({ pressed }) => [styles.addFriendBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 }]}>
+            <Ionicons name="person-add" size={20} color="#FFFFFF" />
+            <Text style={styles.addFriendBtnText}>Add friend</Text>
+          </Pressable>
+        </View>
+        {loading ? (
+          <ActivityIndicator size="small" color={colors.accent} style={{ marginVertical: 20 }} />
+        ) : friends.length === 0 ? (
+          <Text style={[styles.empty, { color: muted }]}>No friends yet. Add friends to challenge them!</Text>
+        ) : (
+          friends.map((f) => (
+            <View key={f.id} style={styles.friendRow}>
+              <Image
+                source={f.avatarUrl ? { uri: f.avatarUrl } : require('../../assets/images/profile_ph.png')}
+                style={styles.avatar}
+              />
+              <View style={styles.friendInfo}>
+                <Text style={[styles.friendName, { color: text }]}>{f.displayName}</Text>
+                <Text style={[styles.friendStats, { color: muted }]}>
+                  H2H: {f.wins}W – {f.losses}L
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => handleChallenge(f.otherUserId)}
+                style={[styles.challengeBtn, { backgroundColor: colors.accent }]}
+              >
+                <Text style={styles.challengeBtnText}>Challenge</Text>
+              </Pressable>
+            </View>
+          ))
+        )}
+      </View>
+    </>
+  );
+
+  const recentGamesColumn = (
+    <View style={[styles.card, styles.recentCard, { backgroundColor: cardBg }]}>
+      <Text style={[styles.cardTitle, { color: text }]}>Recent matches</Text>
+      {recentLoading ? (
+        <ActivityIndicator size="small" color={colors.accent} style={{ marginVertical: 12 }} />
+      ) : recentMatches.length === 0 ? (
+        <Text style={[styles.emptyText, { color: muted }]}>No recent matches</Text>
+      ) : (
+        recentMatches.slice(0, 10).map((m) => (
+          <Pressable
+            key={m.id}
+            onPress={() => openRecentMatch(m)}
+            style={styles.recentRow}
+          >
+            <Text style={[styles.recentStatus, { color: muted }]}>
+              {m.status === 'finished' ? 'Finished' : m.status}
+            </Text>
+            <Text style={[styles.recentDate, { color: muted }]}>
+              {new Date(m.created_at).toLocaleDateString()}
+            </Text>
+            {m.status === 'finished' && (
+              <Ionicons name="chevron-forward" size={18} color={muted} />
+            )}
+          </Pressable>
+        ))
+      )}
+    </View>
+  );
+
   return (
-    <div style={{ flex: 1, minHeight: '100vh', background: isDark ? '#0a0a1c' : '#f0f4ff', fontFamily: 'Geist-Regular, system-ui' }}>
+    <div style={{ flex: 1, minHeight: '100vh', background: isDark ? '#0a0a1c' : '#f0f4ff', fontFamily: 'Geist-Regular, system-ui', display: 'flex', flexDirection: 'column' }}>
       <View style={styles.safe}>
         <View style={styles.header}>
           <Pressable onPress={goBack} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={text} />
           </Pressable>
           <Text style={[styles.title, { color: text }]}>Play with Friends</Text>
-          <Pressable onPress={goToAddFriend} style={styles.addBtn}>
-            <Ionicons name="person-add" size={24} color={colors.accent} />
-          </Pressable>
+          <View style={styles.backBtn} />
         </View>
 
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-          {pendingChallenges.length > 0 && (
-            <View style={[styles.card, { backgroundColor: cardBg, borderLeftWidth: 4, borderLeftColor: colors.accent }]}>
-              <Text style={[styles.cardTitle, { color: text }]}>Challenges</Text>
-              <Text style={[styles.cardSubtitle, { color: muted, marginBottom: 12 }]}>Accept or decline to play</Text>
-              {pendingChallenges.map((c) => (
-                <ChallengeRowWeb
-                  key={c.id}
-                  challenge={c}
-                  onAccept={() => handleAcceptChallenge(c.id)}
-                  onDecline={() => handleDeclineChallenge(c.id)}
-                  text={text}
-                  muted={muted}
-                  accentColor={colors.accent}
-                />
-              ))}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, twoColumn && styles.scrollContentRow]}
+          showsVerticalScrollIndicator={true}
+        >
+          {twoColumn ? (
+            <View style={styles.twoColWrap}>
+              <View style={styles.twoColLeft}>{leftColumn}</View>
+              <View style={styles.twoColRight}>{recentGamesColumn}</View>
             </View>
+          ) : (
+            <>
+              {leftColumn}
+              {recentGamesColumn}
+            </>
           )}
-          {pending.length > 0 && (
-            <View style={[styles.card, { backgroundColor: cardBg }]}>
-              <Text style={[styles.cardTitle, { color: text }]}>Friend requests</Text>
-              {pending.map((req) => (
-                <FriendRequestRowWeb
-                  key={req.id}
-                  requestId={req.id}
-                  fromUserId={req.user_id}
-                  onAccept={() => handleAcceptRequest(req.id)}
-                  onDecline={() => handleDeclineRequest(req.id)}
-                  text={text}
-                  muted={muted}
-                />
-              ))}
-            </View>
-          )}
-
-          <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <Text style={[styles.cardTitle, { color: text }]}>Create game</Text>
-            <Text style={[styles.cardSubtitle, { color: muted }]}>
-              Create a game and share the code with a friend
-            </Text>
-            <Pressable
-              onPress={handleCreateGame}
-              disabled={createLoading}
-              style={[styles.secondaryBtn, { borderColor: colors.accent, opacity: createLoading ? 0.7 : 1 }]}
-            >
-              <Text style={[styles.secondaryBtnText, { color: colors.accent }]}>
-                {createLoading ? 'Creating...' : 'Create & Get Code'}
-              </Text>
-            </Pressable>
-          </View>
-
-          <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <Text style={[styles.cardTitle, { color: text }]}>Join by code</Text>
-            <Text style={[styles.cardSubtitle, { color: muted }]}>
-              Enter the 6-character code from your friend
-            </Text>
-            <View style={styles.joinRow}>
-              <TextInput
-                value={inviteCodeInput}
-                onChangeText={(t) => setInviteCodeInput(t.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase())}
-                placeholder="ABC123"
-                placeholderTextColor={muted}
-                style={[
-                  styles.codeInput,
-                  {
-                    backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.06)',
-                    color: text,
-                    borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
-                  },
-                ]}
-                maxLength={6}
-                autoCapitalize="characters"
-                autoCorrect={false}
-              />
-              <Pressable
-                onPress={handleJoinByCode}
-                disabled={joinLoading || inviteCodeInput.trim().length !== 6}
-                style={[
-                  styles.joinBtn,
-                  {
-                    backgroundColor: colors.accent,
-                    opacity: joinLoading || inviteCodeInput.trim().length !== 6 ? 0.6 : 1,
-                  },
-                ]}
-              >
-                <Text style={styles.joinBtnText}>{joinLoading ? 'Joining...' : 'Join'}</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <Text style={[styles.cardTitle, { color: text }]}>Recent matches</Text>
-            {recentLoading ? (
-              <ActivityIndicator size="small" color={colors.accent} style={{ marginVertical: 12 }} />
-            ) : recentMatches.length === 0 ? (
-              <Text style={[styles.emptyText, { color: muted }]}>No recent matches</Text>
-            ) : (
-              recentMatches.slice(0, 10).map((m) => (
-                <Pressable
-                  key={m.id}
-                  onPress={() => openRecentMatch(m)}
-                  style={styles.recentRow}
-                >
-                  <Text style={[styles.recentStatus, { color: muted }]}>
-                    {m.status === 'finished' ? 'Finished' : m.status}
-                  </Text>
-                  <Text style={[styles.recentDate, { color: muted }]}>
-                    {new Date(m.created_at).toLocaleDateString()}
-                  </Text>
-                  {m.status === 'finished' && (
-                    <Ionicons name="chevron-forward" size={18} color={muted} />
-                  )}
-                </Pressable>
-              ))
-            )}
-          </View>
-
-          <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <Text style={[styles.cardTitle, { color: text }]}>Friends</Text>
-            {loading ? (
-              <ActivityIndicator size="small" color={colors.accent} style={{ marginVertical: 20 }} />
-            ) : friends.length === 0 ? (
-              <Text style={[styles.empty, { color: muted }]}>No friends yet. Add friends to challenge them!</Text>
-            ) : (
-              friends.map((f) => (
-                <View key={f.id} style={styles.friendRow}>
-                  <Image
-                    source={f.avatarUrl ? { uri: f.avatarUrl } : require('../../assets/images/profile_ph.png')}
-                    style={styles.avatar}
-                  />
-                  <View style={styles.friendInfo}>
-                    <Text style={[styles.friendName, { color: text }]}>{f.displayName}</Text>
-                    <Text style={[styles.friendStats, { color: muted }]}>
-                      H2H: {f.wins}W – {f.losses}L
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => handleChallenge(f.otherUserId)}
-                    style={[styles.challengeBtn, { backgroundColor: colors.accent }]}
-                  >
-                    <Text style={styles.challengeBtnText}>Challenge</Text>
-                  </Pressable>
-                </View>
-              ))
-            )}
-          </View>
         </ScrollView>
       </View>
     </div>
@@ -468,7 +505,7 @@ function FriendRequestRowWeb({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, paddingTop: 48, paddingBottom: 24 },
+  safe: { flex: 1, minHeight: 0, paddingTop: 48, paddingBottom: 24 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -477,18 +514,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  title: { fontFamily: 'Geist-Bold', fontSize: 20 },
-  addBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  scroll: { flex: 1 },
+  title: { fontFamily: 'Geist-Bold, system-ui', fontSize: 20 },
+  scroll: { flex: 1, minHeight: 0 },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  addFriendBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  addFriendBtnText: { fontFamily: 'Geist-Bold, system-ui', fontSize: 14, color: '#FFFFFF' },
   scrollContent: { padding: 16, paddingBottom: 32 },
+  scrollContentRow: { maxWidth: 1200, alignSelf: 'center', width: '100%' },
+  twoColWrap: { flexDirection: 'row', alignItems: 'flex-start', gap: 24, width: '100%', maxWidth: 1200 },
+  twoColLeft: { width: 380, minWidth: 0 },
+  twoColRight: { flex: 1, minWidth: 0 },
+  recentCard: { flex: 1, minHeight: 200 },
   card: {
     borderRadius: 16,
     padding: 18,
     marginBottom: 16,
   },
-  cardTitle: { fontFamily: 'Geist-Bold', fontSize: 17, marginBottom: 4 },
-  cardSubtitle: { fontFamily: 'Geist-Regular', fontSize: 13, marginBottom: 14 },
-  empty: { fontFamily: 'Geist-Regular', fontSize: 14, marginVertical: 12 },
+  cardTitle: { fontFamily: 'Geist-Bold, system-ui', fontSize: 17, marginBottom: 4 },
+  cardSubtitle: { fontFamily: 'Geist-Regular, system-ui', fontSize: 13, marginBottom: 14 },
+  empty: { fontFamily: 'Geist-Regular, system-ui', fontSize: 14, marginVertical: 12 },
   friendRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -505,20 +549,20 @@ const styles = StyleSheet.create({
   },
   avatar: { width: 44, height: 44, borderRadius: 22, marginRight: 12 },
   friendInfo: { flex: 1 },
-  friendName: { fontFamily: 'Geist-Bold', fontSize: 15 },
-  friendStats: { fontFamily: 'Geist-Regular', fontSize: 12, marginTop: 2 },
+  friendName: { fontFamily: 'Geist-Bold, system-ui', fontSize: 15 },
+  friendStats: { fontFamily: 'Geist-Regular, system-ui', fontSize: 12, marginTop: 2 },
   challengeBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
   },
-  challengeBtnText: { fontFamily: 'Geist-Bold', fontSize: 13, color: '#FFFFFF' },
+  challengeBtnText: { fontFamily: 'Geist-Bold, system-ui', fontSize: 13, color: '#FFFFFF' },
   smallBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
-  smallBtnText: { fontFamily: 'Geist-Bold', fontSize: 12, color: '#FFFFFF' },
+  smallBtnText: { fontFamily: 'Geist-Bold, system-ui', fontSize: 12, color: '#FFFFFF' },
   secondaryBtn: {
     height: 44,
     borderRadius: 12,
@@ -527,7 +571,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  secondaryBtnText: { fontFamily: 'Geist-Bold', fontSize: 15 },
+  secondaryBtnText: { fontFamily: 'Geist-Bold, system-ui', fontSize: 15 },
   joinRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 8 },
   codeInput: {
     flex: 1,
@@ -535,7 +579,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 14,
-    fontFamily: 'Geist-Regular',
+    fontFamily: 'Geist-Regular, system-ui',
     fontSize: 18,
     letterSpacing: 2,
   },
@@ -546,8 +590,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  joinBtnText: { fontFamily: 'Geist-Bold', fontSize: 16, color: '#FFFFFF' },
-  emptyText: { fontFamily: 'Geist-Regular', fontSize: 14, marginVertical: 8 },
+  joinBtnText: { fontFamily: 'Geist-Bold, system-ui', fontSize: 16, color: '#FFFFFF' },
+  emptyText: { fontFamily: 'Geist-Regular, system-ui', fontSize: 14, marginVertical: 8 },
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -556,6 +600,6 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0,0,0,0.08)',
     gap: 8,
   },
-  recentStatus: { fontFamily: 'Geist-Regular', fontSize: 14, flex: 1 },
-  recentDate: { fontFamily: 'Geist-Regular', fontSize: 12 },
+  recentStatus: { fontFamily: 'Geist-Regular, system-ui', fontSize: 14, flex: 1 },
+  recentDate: { fontFamily: 'Geist-Regular, system-ui', fontSize: 12 },
 });

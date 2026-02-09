@@ -111,7 +111,7 @@ export default function FriendsScreen() {
     } else {
       router.replace({
         pathname: '/matchwaiting',
-        params: inviteCode ? { matchId: match.id, inviteCode } : { matchId: match.id },
+        params: inviteCode ? { matchId: match.id, inviteCode, returnTo: 'friends' } : { matchId: match.id, returnTo: 'friends' },
       });
     }
   }, []);
@@ -187,7 +187,7 @@ export default function FriendsScreen() {
       try {
         const { challengeFriend } = await import('@/lib/friends');
         const { matchId } = await challengeFriend(userId, friendId);
-        router.replace({ pathname: '/matchwaiting', params: { matchId } });
+        router.replace({ pathname: '/matchwaiting', params: { matchId, returnTo: 'friends' } });
       } catch (e) {
         Alert.alert('Error', (e as Error).message ?? 'Could not challenge.');
       }
@@ -245,9 +245,7 @@ export default function FriendsScreen() {
             <Ionicons name="arrow-back" size={24} color={text} />
           </Pressable>
           <Text style={[styles.title, { color: text }]}>Play with Friends</Text>
-          <Pressable onPress={goToAddFriend} style={styles.addBtn}>
-            <Ionicons name="person-add" size={24} color={colors.accent} />
-          </Pressable>
+          <View style={styles.backBtn} />
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -380,7 +378,16 @@ export default function FriendsScreen() {
           </View>
 
           <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <Text style={[styles.cardTitle, { color: text }]}>Friends</Text>
+            <View style={styles.cardTitleRow}>
+              <Text style={[styles.cardTitle, { color: text, marginBottom: 0 }]}>Friends</Text>
+              <Pressable
+                onPress={goToAddFriend}
+                style={({ pressed }) => [styles.addFriendBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.9 : 1 }]}
+              >
+                <Ionicons name="person-add" size={20} color="#FFFFFF" />
+                <Text style={styles.addFriendBtnText}>Add friend</Text>
+              </Pressable>
+            </View>
             {loading ? (
               <ActivityIndicator size="small" color={colors.accent} style={{ marginVertical: 20 }} />
             ) : friends.length === 0 ? (
@@ -501,7 +508,7 @@ function FriendRequestRow({
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
   safe: { flex: 1 },
-  keyboard: { flex: 1 },
+  keyboard: { flex: 1, minHeight: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -511,9 +518,11 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   title: { fontFamily: 'Geist-Bold', fontSize: 20 },
-  addBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  scroll: { flex: 1 },
+  scroll: { flex: 1, minHeight: 0 },
   scrollContent: { padding: 16, paddingBottom: 32 },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  addFriendBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  addFriendBtnText: { fontFamily: 'Geist-Bold', fontSize: 14, color: '#FFFFFF' },
   card: {
     borderRadius: 16,
     padding: 18,
