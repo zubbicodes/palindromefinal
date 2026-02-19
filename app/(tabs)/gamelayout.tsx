@@ -29,15 +29,8 @@ import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useThemeContext } from '@/context/ThemeContext';
 import { useSound } from '@/hooks/use-sound';
 import { createInitialState } from '@/lib/gameEngine';
+import { DEFAULT_GAME_GRADIENTS } from '@/lib/gameColors';
 import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, subscribeToMatch, submitScore, updateLiveScore, type Match, type MatchPlayer } from '@/lib/matchmaking';
-
-const COLOR_GRADIENTS = [
-  ['#C40111', '#F01D2E'],
-  ['#757F35', '#99984D'],
-  ['#1177FE', '#48B7FF'],
-  ['#111111', '#3C3C3C'],
-  ['#E7CC01', '#E7E437'],
-] as const;
 
 const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
   symbols: ['●', '▲', '■', '◆', '★'],
@@ -476,7 +469,8 @@ export default function GameLayout() {
 
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme, colors } = useThemeContext();
-  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, interactionMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled, setInteractionMode } = useSettings();
+  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, interactionMode, customGameColors, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled, setInteractionMode } = useSettings();
+  const colorGradients = customGameColors ?? [...DEFAULT_GAME_GRADIENTS];
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -1151,13 +1145,13 @@ export default function GameLayout() {
           >
             {gridState[row][col] !== null && (
               <LinearGradient
-                colors={COLOR_GRADIENTS[gridState[row][col]!]}
+                colors={colorGradients[gridState[row][col]!]}
                 style={StyleSheet.absoluteFill}
               />
             )}
             {activeHint?.row === row && activeHint?.col === col && (
               <LinearGradient
-                colors={COLOR_GRADIENTS[activeHint.colorIndex]}
+                colors={colorGradients[activeHint.colorIndex]}
                 style={[StyleSheet.absoluteFill, { opacity: 0.6 }]}
               />
             )}
@@ -1204,7 +1198,7 @@ export default function GameLayout() {
     </View>
   ));
 
-  const blocks = COLOR_GRADIENTS.map((gradient, index) => (
+  const blocks = colorGradients.map((gradient, index) => (
     interactionMode === 'pick' ? (
       <PaletteBlock
         key={index}

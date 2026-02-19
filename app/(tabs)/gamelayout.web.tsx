@@ -19,6 +19,7 @@ import {
 // Actually user snippet imports Svg from react-native-svg. I will try to use it, or fallback to standard svg if I can match styles.
 import { authService } from "@/authService"
 import { createInitialState } from "@/lib/gameEngine"
+import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
 import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, subscribeToMatch, submitScore, updateLiveScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from "react-native-svg"
 import { Switch } from "react-native-switch"
@@ -555,7 +556,7 @@ export default function GameLayoutWeb() {
   const returnTo = typeof routeReturnTo === "string" ? routeReturnTo : Array.isArray(routeReturnTo) ? routeReturnTo[0] : undefined
 
   const { theme, colors, toggleTheme } = useThemeContext()
-  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings()
+  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, customGameColors, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings()
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound()
 
   const [score, setScore] = useState(0)
@@ -780,13 +781,7 @@ export default function GameLayoutWeb() {
 
   const layoutConfig = getLayoutConfig()
 
-  const colorGradients = [
-    ["#C40111", "#F01D2E"],
-    ["#757F35", "#99984D"],
-    ["#1177FE", "#48B7FF"],
-    ["#111111", "#3C3C3C"],
-    ["#E7CC01", "#E7E437"],
-  ] as const
+  const colorGradients = customGameColors ?? [...DEFAULT_GAME_GRADIENTS]
 
   const spawnBulldogs = useCallback(() => {
     const totalBulldogs = 5

@@ -1,11 +1,12 @@
 import { authService } from '@/authService';
 import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useTheme } from '@/context/ThemeContext';
+import { DEFAULT_GAME_GRADIENTS, gradientFromHex, type GameColorGradient } from '@/lib/gameColors';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Dimensions,
     Image,
@@ -16,17 +17,10 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { HexColorInput, HexColorPicker } from 'react-colorful';
 import { Switch } from 'react-native-switch';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-const COLOR_GRADIENTS = [
-  ['#C40111', '#F01D2E'],
-  ['#757F35', '#99984D'],
-  ['#1177FE', '#48B7FF'],
-  ['#111111', '#3C3C3C'],
-  ['#E7CC01', '#E7E437'],
-] as const;
 
 const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
   symbols: ['●', '▲', '■', '◆', '★'],
@@ -41,7 +35,48 @@ function getColorBlindToken(mode: ColorBlindMode, index: number) {
 
 export default function ProfileScreenWeb() {
   const { colors, theme } = useTheme();
-  const { colorBlindEnabled, colorBlindMode, setColorBlindEnabled, setColorBlindMode } = useSettings();
+  const { colorBlindEnabled, colorBlindMode, setColorBlindEnabled, setColorBlindMode, customGameColors, setCustomGameColors } = useSettings();
+  const displayGradients = customGameColors ?? [...DEFAULT_GAME_GRADIENTS];
+  const [editingColors, setEditingColors] = useState<GameColorGradient[]>(() => customGameColors ?? [...DEFAULT_GAME_GRADIENTS]);
+  const [colorsSaved, setColorsSaved] = useState(false);
+  const [selectedColorIndex, setSelectedColorIndex] = useState<number | null>(null);
+  const [pickerHex, setPickerHex] = useState('');
+  const throttleRef = useRef<{ raf: number | null; pending: string | null }>({ raf: null, pending: null });
+  const selectedIndexRef = useRef(selectedColorIndex);
+  selectedIndexRef.current = selectedColorIndex;
+
+  useEffect(() => {
+    setEditingColors(customGameColors ?? [...DEFAULT_GAME_GRADIENTS]);
+  }, [customGameColors]);
+
+  useEffect(() => {
+    if (selectedColorIndex !== null) setPickerHex(editingColors[selectedColorIndex][0]);
+  }, [selectedColorIndex]);
+
+  const commitPickerColor = useCallback((hex: string) => {
+    const idx = selectedIndexRef.current;
+    if (idx === null) return;
+    setEditingColors((prev) => {
+      const next = [...prev];
+      next[idx] = gradientFromHex(hex);
+      return next;
+    });
+    setColorsSaved(false);
+  }, []);
+
+  const handlePickerChange = useCallback((hex: string) => {
+    setPickerHex(hex);
+    const ref = throttleRef.current;
+    ref.pending = hex;
+    if (ref.raf !== null) return;
+    ref.raf = requestAnimationFrame(() => {
+      if (ref.pending !== null) {
+        commitPickerColor(ref.pending);
+        ref.pending = null;
+      }
+      ref.raf = null;
+    });
+  }, [commitPickerColor]);
 
   const gradientColors =
     theme === 'dark'
@@ -329,71 +364,165 @@ export default function ProfileScreenWeb() {
           </View>
         </View>
 
-        <View
-          style={[
-            styles.accessibilityCard,
-            {
-              backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.92)',
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.accessibilityTitle, { color: colors.text }]}>Accessibility</Text>
-          <View style={styles.accessibilityRow}>
-            <Text style={[styles.accessibilityLabel, { color: colors.text }]}>Color Blind Mode</Text>
-            <Switch
-              value={colorBlindEnabled}
-              onValueChange={setColorBlindEnabled}
-              circleSize={18}
-              barHeight={22}
-              backgroundActive={colors.primary}
-              backgroundInactive="#ccc"
-              circleActiveColor="#fff"
-              circleInActiveColor="#fff"
-              switchWidthMultiplier={2.5}
-              renderActiveText={false}
-              renderInActiveText={false}
-            />
-          </View>
-          <Text style={[styles.accessibilitySubtitle, { color: colors.secondaryText }]}>
-            Choose how colors are represented in the game.
-          </Text>
+        <View style={styles.cardsSection}>
+          <View
+            style={[
+              styles.fullWidthCard,
+              styles.accessibilityCard,
+              {
+                backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.92)',
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.accessibilityTitle, { color: colors.text }]}>Accessibility</Text>
+            <View style={styles.accessibilityRow}>
+              <Text style={[styles.accessibilityLabel, { color: colors.text }]}>Color Blind Mode</Text>
+              <Switch
+                value={colorBlindEnabled}
+                onValueChange={setColorBlindEnabled}
+                circleSize={18}
+                barHeight={22}
+                backgroundActive={colors.primary}
+                backgroundInactive="#ccc"
+                circleActiveColor="#fff"
+                circleInActiveColor="#fff"
+                switchWidthMultiplier={2.5}
+                renderActiveText={false}
+                renderInActiveText={false}
+              />
+            </View>
+            <Text style={[styles.accessibilitySubtitle, { color: colors.secondaryText }]}>
+              Choose how colors are represented in the game.
+            </Text>
 
-          <View style={styles.modeGrid}>
-            {(['symbols', 'emojis', 'cards', 'letters'] as const).map((mode) => {
-              const selected = colorBlindMode === mode;
-              return (
-                <TouchableOpacity
-                  key={mode}
-                  onPress={() => setColorBlindMode(mode)}
-                  style={[
-                    styles.modeTile,
-                    {
-                      borderColor: selected ? colors.primary : colors.border,
-                      backgroundColor: selected ? (theme === 'dark' ? 'rgba(0,96,255,0.20)' : 'rgba(0,96,255,0.08)') : 'transparent',
-                    },
-                  ]}
-                  activeOpacity={0.9}
-                >
-                  <Text style={[styles.modeTitle, { color: colors.text }]}>
-                    {mode === 'symbols'
-                      ? 'Symbols'
-                      : mode === 'emojis'
-                        ? 'Emojis'
-                        : mode === 'cards'
-                          ? 'Cards'
-                          : 'Letters'}
-                  </Text>
-                  <View style={styles.modePreviewRow}>
-                    {COLOR_GRADIENTS.map((g, i) => (
-                      <LinearGradient key={i} colors={g} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.modePreviewSwatch}>
-                        <Text style={styles.modePreviewToken}>{getColorBlindToken(mode, i)}</Text>
-                      </LinearGradient>
-                    ))}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+            <View style={styles.modeGrid}>
+              {(['symbols', 'emojis', 'cards', 'letters'] as const).map((mode) => {
+                const selected = colorBlindMode === mode;
+                return (
+                  <TouchableOpacity
+                    key={mode}
+                    onPress={() => setColorBlindMode(mode)}
+                    style={[
+                      styles.modeTile,
+                      {
+                        borderColor: selected ? colors.primary : colors.border,
+                        backgroundColor: selected ? (theme === 'dark' ? 'rgba(0,96,255,0.20)' : 'rgba(0,96,255,0.08)') : 'transparent',
+                      },
+                    ]}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={[styles.modeTitle, { color: colors.text }]}>
+                      {mode === 'symbols'
+                        ? 'Symbols'
+                        : mode === 'emojis'
+                          ? 'Emojis'
+                          : mode === 'cards'
+                            ? 'Cards'
+                            : 'Letters'}
+                    </Text>
+                    <View style={styles.modePreviewRow}>
+                      {displayGradients.map((g, i) => (
+                        <LinearGradient key={i} colors={g} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.modePreviewSwatch}>
+                          <Text style={styles.modePreviewToken}>{getColorBlindToken(mode, i)}</Text>
+                        </LinearGradient>
+                      ))}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.fullWidthCard,
+              styles.customColorsCard,
+              {
+                backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.92)',
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.accessibilityTitle, { color: colors.text }]}>Customize colors</Text>
+            <Text style={[styles.accessibilitySubtitle, { color: colors.secondaryText, marginTop: 4 }]}>
+              Tap a block to change its color. Use the picker or enter a hex code.
+            </Text>
+            <View style={styles.colorBlocksRow}>
+              {editingColors.map((gradient, index) => {
+                const selected = selectedColorIndex === index;
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => setSelectedColorIndex(selected ? null : index)}
+                    style={[
+                      styles.colorBlockTapTarget,
+                      selected && { borderColor: colors.primary, borderWidth: 3 },
+                    ]}
+                    activeOpacity={0.9}
+                  >
+                    <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.colorBlockSwatch} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {selectedColorIndex !== null && (
+              <View style={styles.colorSelectorPanel}>
+                <Text style={[styles.colorSelectorTitle, { color: colors.text }]}>
+                  Editing block {selectedColorIndex + 1}
+                </Text>
+                <View style={styles.pickerWrapper}>
+                  <HexColorPicker
+                    color={pickerHex || editingColors[selectedColorIndex][0]}
+                    onChange={handlePickerChange}
+                  />
+                </View>
+                <View style={styles.hexInputRow}>
+                  <View style={[styles.hexPreviewSwatch, { backgroundColor: pickerHex || editingColors[selectedColorIndex][0] }]} />
+                  <HexColorInput
+                    color={pickerHex || editingColors[selectedColorIndex][0]}
+                    onChange={(hex) => {
+                      setPickerHex(hex);
+                      commitPickerColor(hex);
+                    }}
+                    prefixed
+                    style={{
+                      flex: 1,
+                      height: 44,
+                      borderWidth: 1,
+                      borderRadius: 10,
+                      paddingLeft: 14,
+                      paddingRight: 14,
+                      fontSize: 15,
+                      fontFamily: 'Geist-Regular',
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+                    }}
+                  />
+                </View>
+              </View>
+            )}
+            <View style={styles.colorActionsRow}>
+              <TouchableOpacity
+                style={[styles.resetColorsButton, { borderColor: colors.border }]}
+                onPress={() => {
+                  setEditingColors([...DEFAULT_GAME_GRADIENTS]);
+                  setColorsSaved(false);
+                }}
+              >
+                <Text style={[styles.resetColorsButtonText, { color: colors.text }]}>Reset to default</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveColorsButton, { backgroundColor: colors.primary }]}
+                onPress={async () => {
+                  await setCustomGameColors(editingColors);
+                  setColorsSaved(true);
+                }}
+              >
+                <Text style={styles.saveButtonText}>{colorsSaved ? 'Saved' : 'Save colors'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
         {/* Logout */}
@@ -579,64 +708,196 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'center',
   },
-  accessibilityCard: {
+  cardsSection: {
     width: '100%',
-    maxWidth: 620,
+    flexDirection: 'column',
+    marginTop: 18,
+    gap: 20,
+  },
+  fullWidthCard: {
+    width: '100%',
+  },
+  accessibilityCard: {
     borderWidth: 1,
     borderRadius: 18,
-    padding: 16,
+    padding: 20,
+  },
+  customColorsCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 20,
+  },
+  colorBlocksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginTop: 14,
+    justifyContent: 'center',
+  },
+  colorBlockTapTarget: {
+    padding: 4,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    cursor: 'pointer',
+  },
+  colorBlockSwatch: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+  },
+  colorSelectorPanel: {
     marginTop: 18,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128,128,128,0.25)',
+  },
+  colorSelectorTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 12,
+    fontFamily: 'Geist-Bold',
+  },
+  pickerWrapper: {
+    height: 220,
+    width: '100%',
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  hexInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  hexPreviewSwatch: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(128,128,128,0.3)',
+  },
+  hexColorInput: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    fontFamily: 'Geist-Regular',
+  },
+  colorRow: {
+    marginTop: 12,
+  },
+  colorRowLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+  colorPreviewSwatch: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+  },
+  colorRowText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Geist-Regular',
+  },
+  hueBarContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    height: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  lightnessBarContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    height: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  hueBarSegment: {
+    flex: 1,
+    minWidth: 2,
+  },
+  colorActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 12,
+  },
+  resetColorsButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  resetColorsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  saveColorsButton: {
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
   },
   accessibilityTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
   },
   accessibilityRow: {
-    marginTop: 12,
+    marginTop: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   accessibilityLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   accessibilitySubtitle: {
     marginTop: 10,
-    fontSize: 12,
+    fontSize: 13,
   },
   modeGrid: {
-    marginTop: 12,
+    marginTop: 14,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 14,
   },
   modeTile: {
-    width: '48%',
+    flex: 1,
+    minWidth: 200,
     borderWidth: 1,
     borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
   },
   modeTitle: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '800',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   modePreviewRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   modePreviewSwatch: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modePreviewToken: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '900',
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 1 },
