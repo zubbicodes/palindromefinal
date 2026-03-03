@@ -5,7 +5,7 @@ import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { Ionicons } from "@expo/vector-icons"
 import { BlurView } from "expo-blur"
-import { useRouter, useLocalSearchParams } from "expo-router"
+import { useLocalSearchParams, useRouter } from "expo-router"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import {
   Dimensions,
@@ -18,9 +18,9 @@ import {
 // User snippet had Svg imports, let's keep them if they work, but standard SVG is safer for "pure web".
 // Actually user snippet imports Svg from react-native-svg. I will try to use it, or fallback to standard svg if I can match styles.
 import { authService } from "@/authService"
-import { createInitialState } from "@/lib/gameEngine"
 import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
-import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, subscribeToMatch, submitScore, updateLiveScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
+import { createInitialState } from "@/lib/gameEngine"
+import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, submitScore, subscribeToMatch, updateLiveScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from "react-native-svg"
 import { Switch } from "react-native-switch"
 
@@ -565,6 +565,12 @@ export default function GameLayoutWeb() {
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([])
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [pause, setPause] = useState(false)
+  
+  // Track initial colors for game logic
+  const [initialColorCount, setInitialColorCount] = useState<number>(3) // 2 or 3 distinct colors
+  const [highestPalindromeMade, setHighestPalindromeMade] = useState<number>(0) // Track longest palindrome made
+  const [canMakeShorterPalindrome, setCanMakeShorterPalindrome] = useState<boolean>(false) // After longer, can make shorter
+  
   const [avatar, setAvatar] = useState<string | null>(null)
   const [userName, setUserName] = useState("John Doe")
   const [restartConfirmationVisible, setRestartConfirmationVisible] = useState(false)
@@ -812,7 +818,19 @@ export default function GameLayoutWeb() {
       { row: 5, col: 4 },
       { row: 5, col: 5 },
     ]
-    const initialColors = indPositions.map(() => Math.floor(Math.random() * 5))
+    
+    // Decide whether to use 3 colors or 2 colors
+    const useThreeColors = Math.random() < 0.5
+    const availableColors = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5)
+    
+    let initialColors: number[]
+    if (useThreeColors) {
+      // 3 different colors
+      initialColors = [availableColors[0], availableColors[1], availableColors[2]]
+    } else {
+      // 2 colors: first color repeated (A, B, A pattern)
+      initialColors = [availableColors[0], availableColors[1], availableColors[0]]
+    }
 
     setGridState(() => {
       const newGrid = Array.from({ length: gridSize }, () => Array(gridSize).fill(null))
@@ -827,6 +845,12 @@ export default function GameLayoutWeb() {
       initialCounts[colorIdx] = Math.max(0, initialCounts[colorIdx] - 1)
     })
     setBlockCounts(initialCounts)
+    
+    // Track distinct colors for game logic
+    const distinctColors = new Set(initialColors)
+    setInitialColorCount(distinctColors.size)
+    setHighestPalindromeMade(0)
+    setCanMakeShorterPalindrome(false)
 
     setScore(0)
     setHints(2)
@@ -1046,11 +1070,30 @@ export default function GameLayoutWeb() {
       return false
     }
 
-    const forcedMove = findFirstScoringMove(3, gridState, blockCounts)
+    // Calculate minimum palindrome length based on game state
+    // If initial was 3 colors: must make 5 first, then 4, then 3
+    // If initial was 2 colors: can make 4, then 3
+    // After making longer, can always make shorter
+    let requiredMinLength = 3
+    if (initialColorCount === 3 && highestPalindromeMade < 5) {
+      requiredMinLength = 5
+    } else if (initialColorCount === 2 && highestPalindromeMade < 4) {
+      requiredMinLength = 4
+    } else if (canMakeShorterPalindrome) {
+      requiredMinLength = 3
+    } else if (highestPalindromeMade < 4) {
+      requiredMinLength = 4
+    } else if (highestPalindromeMade < 5 && initialColorCount === 3) {
+      requiredMinLength = 5
+    } else if (highestPalindromeMade < 5 && initialColorCount === 2) {
+      requiredMinLength = 4
+    }
+
+    const forcedMove = findFirstScoringMove(requiredMinLength, gridState, blockCounts)
     if (forcedMove) {
       const tempGrid = gridState.map((r) => [...r])
       tempGrid[row][col] = colorIndex
-      const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, tempGrid, true, 3)
+      const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, tempGrid, true, requiredMinLength)
 
       if (attemptedScore <= 0) {
         const nextWrongTries = wrongForcedTriesRef.current + 1
@@ -1090,9 +1133,21 @@ export default function GameLayoutWeb() {
     triggerHaptic(14)
     console.log(`Successfully placed color ${colorIndex} at ${row},${col}`)
 
-    const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid)
+    const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid, false, requiredMinLength)
     if (scoreFound > 0) {
       setScore(prev => prev + scoreFound)
+      
+      // Determine what length was scored based on score value
+      // Score = palindrome length (3, 4, 5+) + bulldog bonus (10) if applicable
+      const baseScore = scoreFound >= 10 ? scoreFound - 10 : scoreFound
+      let scoredLength = baseScore
+      if (scoredLength > 5) scoredLength = 5 // Cap at 5
+      
+      // Update highest palindrome made and allow shorter ones after longer
+      if (scoredLength > highestPalindromeMade) {
+        setHighestPalindromeMade(scoredLength)
+        setCanMakeShorterPalindrome(true)
+      }
     }
     const newScore = score + scoreFound
     if (matchId && scoreFound > 0 && !scoreSubmitted) {
@@ -1161,42 +1216,58 @@ export default function GameLayoutWeb() {
       while (end < gridSize - 1 && line[end + 1].color !== -1) end++
 
       const segment = line.slice(start, end + 1)
-      if (segment.length >= minLength) {
-        const colors = segment.map((s) => s.color)
-        const isPal = colors.join(",") === [...colors].reverse().join(",")
+      if (segment.length < minLength) return
 
-        if (isPal) {
-          let segmentScore = segment.length
-          let hasBulldog = false
-          segment.forEach((b) => {
-            if (bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)) {
-              hasBulldog = true
-            }
-          })
+      // Find the longest palindrome within the segment that includes the placed tile
+      const targetPosInSegment = targetIndex - start
+      let bestLength = 0
+      let bestSegment: typeof segment | null = null
 
-          if (hasBulldog) segmentScore += 10
-          scoreFound += segmentScore
-
-          // Trigger Feedback
-          if (!dryRun) {
-            let feedbackText = "GOOD!"
-            let feedbackColor = "#4ADE80" // green-400
-            if (segment.length === 4) {
-              feedbackText = "GREAT!"
-              feedbackColor = "#60A5FA" // blue-400
-            } else if (segment.length === 5) {
-              feedbackText = "AMAZING!"
-              feedbackColor = "#A78BFA" // purple-400
-            } else if (segment.length >= 6) {
-              feedbackText = "LEGENDARY!"
-              feedbackColor = "#F472B6" // pink-400
-            }
-
-            setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() })
-            playSuccessSound()
-            triggerHaptic([0, 12, 10, 12])
-            setTimeout(() => setFeedback(null), 2000)
+      for (let s = 0; s <= targetPosInSegment; s++) {
+        for (let e = targetPosInSegment; e < segment.length; e++) {
+          const len = e - s + 1
+          if (len < minLength || len <= bestLength) continue
+          const sub = segment.slice(s, e + 1)
+          const colors = sub.map((c) => c.color)
+          const isPal = colors.join(",") === [...colors].reverse().join(",")
+          if (isPal) {
+            bestLength = len
+            bestSegment = sub
           }
+        }
+      }
+
+      if (bestSegment && bestLength >= minLength) {
+        let segmentScore = bestLength
+        let hasBulldog = false
+        bestSegment.forEach((b) => {
+          if (bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)) {
+            hasBulldog = true
+          }
+        })
+
+        if (hasBulldog) segmentScore += 10
+        scoreFound += segmentScore
+
+        // Trigger Feedback
+        if (!dryRun) {
+          let feedbackText = "GOOD!"
+          let feedbackColor = "#4ADE80" // green-400
+          if (bestLength === 4) {
+            feedbackText = "GREAT!"
+            feedbackColor = "#60A5FA" // blue-400
+          } else if (bestLength === 5) {
+            feedbackText = "AMAZING!"
+            feedbackColor = "#A78BFA" // purple-400
+          } else if (bestLength >= 6) {
+            feedbackText = "LEGENDARY!"
+            feedbackColor = "#F472B6" // pink-400
+          }
+
+          setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() })
+          playSuccessSound()
+          triggerHaptic([0, 12, 10, 12])
+          setTimeout(() => setFeedback(null), 2000)
         }
       }
     }

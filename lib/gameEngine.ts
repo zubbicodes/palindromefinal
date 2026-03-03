@@ -14,12 +14,8 @@ const CENTER = Math.floor(GRID_SIZE / 2);
 const WORD = ' PALINDROME';
 const HALF_WORD = Math.floor(WORD.length / 2);
 
-/** Fixed positions for initial 3 pre-placed colors (same on both platforms) */
-const INITIAL_POSITIONS: { row: number; col: number }[] = [
-  { row: 6, col: 5 },
-  { row: 5, col: 4 },
-  { row: 5, col: 5 },
-];
+/** Number of initial pre-placed blocks */
+const INITIAL_BLOCK_COUNT = 3;
 
 export type Grid = (number | null)[][];
 
@@ -75,17 +71,60 @@ export function createInitialState(seed: string): GameState {
     }
   }
 
-  const initialColors = INITIAL_POSITIONS.map(() =>
-    Math.floor(rng() * NUM_COLORS)
-  );
+  // Pick 2-3 colors for the starting horizontal palindrome setup
+  // 50% chance: 3 different colors (player needs 2 blocks to make 5-counter)
+  // 50% chance: 2 colors with one repeated (player can make 4-counter with 1 block)
+  const useThreeColors = rng() < 0.5;
+  const numDistinctColors = useThreeColors ? 3 : 2;
+  
+  const availableColors = Array.from({ length: NUM_COLORS }, (_, i) => i);
+  // Shuffle available colors
+  for (let i = availableColors.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [availableColors[i], availableColors[j]] = [availableColors[j], availableColors[i]];
+  }
+  
+  const initialColors: number[] = [];
+  if (useThreeColors) {
+    // 3 different colors
+    initialColors.push(availableColors[0], availableColors[1], availableColors[2]);
+  } else {
+    // 2 colors: first color repeated, second different
+    // Pattern: A, B, A (to make it a palindrome-able setup)
+    initialColors.push(availableColors[0], availableColors[1], availableColors[0]);
+  }
+
+  // Place them horizontally in a row (consecutive columns)
+  // Pick a random row and starting column that avoids blocked positions
+  let startRow: number;
+  let startCol: number;
+  let positionsValid = false;
+  do {
+    startRow = Math.floor(rng() * GRID_SIZE);
+    startCol = Math.floor(rng() * (GRID_SIZE - INITIAL_BLOCK_COUNT + 1));
+    positionsValid = true;
+    for (let i = 0; i < INITIAL_BLOCK_COUNT; i++) {
+      const key = `${startRow},${startCol + i}`;
+      if (blocked.has(key) || bulldogPositions.some(p => p.row === startRow && p.col === startCol + i)) {
+        positionsValid = false;
+        break;
+      }
+    }
+  } while (!positionsValid);
+
+  const initialPositions = Array.from({ length: INITIAL_BLOCK_COUNT }, (_, i) => ({
+    row: startRow,
+    col: startCol + i,
+  }));
+
   const grid: Grid = Array.from({ length: GRID_SIZE }, () =>
     Array(GRID_SIZE).fill(null)
   );
-  INITIAL_POSITIONS.forEach((pos, idx) => {
+  initialPositions.forEach((pos, idx) => {
     grid[pos.row][pos.col] = initialColors[idx];
   });
 
-  const blockCounts = [...DEFAULT_BLOCK_COUNTS];
+  const blockCounts = [...DEFAULT_BLOCK_COUNTS] as number[];
   initialColors.forEach((colorIdx) => {
     blockCounts[colorIdx] = Math.max(0, blockCounts[colorIdx] - 1);
   });
@@ -133,21 +172,37 @@ export function checkPalindromes(
     while (end < GRID_SIZE - 1 && line[end + 1].color !== -1) end++;
 
     const segment = line.slice(start, end + 1);
-    if (segment.length >= minLength) {
-      const colorsArr = segment.map((s) => s.color);
-      const isPal =
-        colorsArr.join(',') === [...colorsArr].reverse().join(',');
+    if (segment.length < minLength) return;
 
-      if (isPal) {
-        let segmentScore = segment.length;
-        const hasBulldog = segment.some((b) =>
-          bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)
-        );
-        if (hasBulldog) segmentScore += BULLDOG_BONUS;
-        scoreFound += segmentScore;
-        if (segment.length > maxSegmentLength)
-          maxSegmentLength = segment.length;
+    // Find the longest palindrome within the segment that includes the placed tile
+    const targetPosInSegment = targetIndex - start;
+    let bestScore = 0;
+    let bestLength = 0;
+
+    for (let s = 0; s <= targetPosInSegment; s++) {
+      for (let e = targetPosInSegment; e < segment.length; e++) {
+        const len = e - s + 1;
+        if (len < minLength || len <= bestLength) continue;
+        const sub = segment.slice(s, e + 1);
+        const colors = sub.map(c => c.color);
+        const isPal = colors.join(',') === [...colors].reverse().join(',');
+        if (isPal) {
+          let segScore = len;
+          const hasBulldog = sub.some((b) =>
+            bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)
+          );
+          if (hasBulldog) segScore += BULLDOG_BONUS;
+          if (segScore > bestScore) {
+            bestScore = segScore;
+            bestLength = len;
+          }
+        }
       }
+    }
+
+    if (bestScore > 0) {
+      scoreFound += bestScore;
+      if (bestLength > maxSegmentLength) maxSegmentLength = bestLength;
     }
   };
 

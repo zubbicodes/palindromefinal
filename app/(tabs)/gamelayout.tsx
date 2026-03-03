@@ -6,17 +6,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
-  GestureResponderEvent,
-  Image,
-  PanResponder,
-  PanResponderGestureState,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions
+    Animated,
+    GestureResponderEvent,
+    Image,
+    PanResponder,
+    PanResponderGestureState,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+    useWindowDimensions
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SpotlightTourProvider, type TourState, type TourStep } from 'react-native-spotlight-tour';
@@ -28,9 +28,9 @@ import { authService } from '@/authService';
 import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useThemeContext } from '@/context/ThemeContext';
 import { useSound } from '@/hooks/use-sound';
-import { createInitialState } from '@/lib/gameEngine';
 import { DEFAULT_GAME_GRADIENTS } from '@/lib/gameColors';
-import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, subscribeToMatch, submitScore, updateLiveScore, type Match, type MatchPlayer } from '@/lib/matchmaking';
+import { createInitialState } from '@/lib/gameEngine';
+import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, submitScore, subscribeToMatch, updateLiveScore, type Match, type MatchPlayer } from '@/lib/matchmaking';
 
 const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
   symbols: ['●', '▲', '■', '◆', '★'],
@@ -482,6 +482,12 @@ export default function GameLayout() {
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([]);
   const [pause, setPause] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  
+  // Track initial colors for game logic
+  const [initialColorCount, setInitialColorCount] = useState<number>(3); // 2 or 3 distinct colors
+  const [highestPalindromeMade, setHighestPalindromeMade] = useState<number>(0); // Track longest palindrome made
+  const [canMakeShorterPalindrome, setCanMakeShorterPalindrome] = useState<boolean>(false); // After longer, can make shorter
+  
   const tourRef = useRef<any>(null);
 
   const [multiplayerMatch, setMultiplayerMatch] = useState<Match | null>(null);
@@ -706,12 +712,26 @@ export default function GameLayout() {
     spawnBulldogs();
 
     // Pre-place 3 random colors matching web logic
+    // 50% chance: 3 different colors (player needs 2 blocks to make 5-counter)
+    // 50% chance: 2 colors with one repeated (player can make 4-counter with 1 block)
     const indPositions = [
       { row: 6, col: 5 },
       { row: 5, col: 4 },
       { row: 5, col: 5 },
     ];
-    const initialColors = indPositions.map(() => Math.floor(Math.random() * 5));
+    
+    // Decide whether to use 3 colors or 2 colors
+    const useThreeColors = Math.random() < 0.5;
+    const availableColors = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5);
+    
+    let initialColors: number[];
+    if (useThreeColors) {
+      // 3 different colors
+      initialColors = [availableColors[0], availableColors[1], availableColors[2]];
+    } else {
+      // 2 colors: first color repeated (A, B, A pattern)
+      initialColors = [availableColors[0], availableColors[1], availableColors[0]];
+    }
 
     setGridState(prev => {
       const newGrid = prev.map(r => [...r]);
@@ -728,6 +748,12 @@ export default function GameLayout() {
       });
       return next;
     });
+    
+    // Track distinct colors for game logic
+    const distinctColors = new Set(initialColors);
+    setInitialColorCount(distinctColors.size);
+    setHighestPalindromeMade(0);
+    setCanMakeShorterPalindrome(false);
   }, [spawnBulldogs, matchId]);
 
   useEffect(() => {
@@ -899,41 +925,57 @@ export default function GameLayout() {
       while (end < gridSize - 1 && line[end + 1].color !== -1) end++;
 
       const segment = line.slice(start, end + 1);
-      if (segment.length >= minLength) {
-        const colorsArr = segment.map((s) => s.color);
-        const isPal = colorsArr.join(",") === [...colorsArr].reverse().join(",");
+      if (segment.length < minLength) return;
 
-        if (isPal) {
-          let segmentScore = segment.length;
-          let hasBulldog = false;
-          segment.forEach((b) => {
-            if (bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)) {
-              hasBulldog = true;
-            }
-          });
+      // Find the longest palindrome within the segment that includes the placed tile
+      const targetPosInSegment = targetIndex - start;
+      let bestLength = 0;
+      let bestSegment: typeof segment | null = null;
 
-          if (hasBulldog) segmentScore += 10;
-          scoreFound += segmentScore;
-
-          if (!dryRun) {
-            let feedbackText = "GOOD!";
-            let feedbackColor = "#4ADE80";
-            if (segment.length === 4) {
-              feedbackText = "GREAT!";
-              feedbackColor = "#60A5FA";
-            } else if (segment.length === 5) {
-              feedbackText = "AMAZING!";
-              feedbackColor = "#A78BFA";
-            } else if (segment.length >= 6) {
-              feedbackText = "LEGENDARY!";
-              feedbackColor = "#F472B6";
-            }
-
-            triggerHaptic('success');
-            playSuccessSound();
-            setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
-            setTimeout(() => setFeedback(null), 2000);
+      for (let s = 0; s <= targetPosInSegment; s++) {
+        for (let e = targetPosInSegment; e < segment.length; e++) {
+          const len = e - s + 1;
+          if (len < minLength || len <= bestLength) continue;
+          const sub = segment.slice(s, e + 1);
+          const colors = sub.map((c) => c.color);
+          const isPal = colors.join(",") === [...colors].reverse().join(",");
+          if (isPal) {
+            bestLength = len;
+            bestSegment = sub;
           }
+        }
+      }
+
+      if (bestSegment && bestLength >= minLength) {
+        let segmentScore = bestLength;
+        let hasBulldog = false;
+        bestSegment.forEach((b) => {
+          if (bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)) {
+            hasBulldog = true;
+          }
+        });
+
+        if (hasBulldog) segmentScore += 10;
+        scoreFound += segmentScore;
+
+        if (!dryRun) {
+          let feedbackText = "GOOD!";
+          let feedbackColor = "#4ADE80";
+          if (bestLength === 4) {
+            feedbackText = "GREAT!";
+            feedbackColor = "#60A5FA";
+          } else if (bestLength === 5) {
+            feedbackText = "AMAZING!";
+            feedbackColor = "#A78BFA";
+          } else if (bestLength >= 6) {
+            feedbackText = "LEGENDARY!";
+            feedbackColor = "#F472B6";
+          }
+
+          triggerHaptic('success');
+          playSuccessSound();
+          setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
+          setTimeout(() => setFeedback(null), 2000);
         }
       }
     };
@@ -991,11 +1033,30 @@ export default function GameLayout() {
       return false;
     }
 
-    const forcedMove = findFirstScoringMove(3);
+    // Calculate minimum palindrome length based on game state
+    // If initial was 3 colors: must make 5 first, then 4, then 3
+    // If initial was 2 colors: can make 4, then 3
+    // After making longer, can always make shorter
+    let requiredMinLength = 3;
+    if (initialColorCount === 3 && highestPalindromeMade < 5) {
+      requiredMinLength = 5;
+    } else if (initialColorCount === 2 && highestPalindromeMade < 4) {
+      requiredMinLength = 4;
+    } else if (canMakeShorterPalindrome) {
+      requiredMinLength = 3;
+    } else if (highestPalindromeMade < 4) {
+      requiredMinLength = 4;
+    } else if (highestPalindromeMade < 5 && initialColorCount === 3) {
+      requiredMinLength = 5;
+    } else if (highestPalindromeMade < 5 && initialColorCount === 2) {
+      requiredMinLength = 4;
+    }
+
+    const forcedMove = findFirstScoringMove(requiredMinLength);
     if (forcedMove) {
       const tempGrid = gridStateRef.current.map((r) => [...r]);
       tempGrid[row][col] = colorIndex;
-      const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, tempGrid, true, 3);
+      const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, tempGrid, true, requiredMinLength);
 
       if (attemptedScore <= 0) {
         const nextWrongTries = wrongForcedTriesRef.current + 1;
@@ -1032,10 +1093,31 @@ export default function GameLayout() {
 
     playDropSound();
     triggerHaptic('drop');
-    const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid);
-    const newScore = score + scoreFound;
-    if (scoreFound > 0) setScore((prev) => prev + scoreFound);
+    
+    // Use the calculated requiredMinLength for scoring
+    const scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid, false, requiredMinLength);
+    
+    // Update game state tracking
+    if (scoreFound > 0) {
+      setScore((prev) => prev + scoreFound);
+      
+      // Determine what length was scored based on score value
+      // Score = palindrome length (3, 4, 5+) + bulldog bonus (10) if applicable
+      // 3 = 3-counter, 4 = 4-counter, 5 = 5-counter
+      // 13 = 3-counter with bulldog, 14 = 4-counter with bulldog, 15 = 5-counter with bulldog
+      const baseScore = scoreFound >= 10 ? scoreFound - 10 : scoreFound;
+      let scoredLength = baseScore;
+      if (scoredLength > 5) scoredLength = 5; // Cap at 5
+      
+      // Update highest palindrome made and allow shorter ones after longer
+      if (scoredLength > highestPalindromeMade) {
+        setHighestPalindromeMade(scoredLength);
+        setCanMakeShorterPalindrome(true);
+      }
+    }
+    
     if (matchId && scoreFound > 0 && !scoreSubmitted) {
+      const newScore = score + scoreFound;
       authService.getSessionUser().then((user) => {
         if (user) void updateLiveScore(matchId, user.id, newScore);
       });
@@ -1051,6 +1133,7 @@ export default function GameLayout() {
     }
     if (matchId && nextBlockCounts.every((c) => c === 0) && !scoreSubmitted) {
       setScoreSubmitted(true);
+      const newScore = score + scoreFound;
       authService.getSessionUser().then((user) => {
         if (user) submitScore(matchId, user.id, newScore);
       });
