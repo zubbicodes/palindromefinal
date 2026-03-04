@@ -814,7 +814,7 @@ export default function GameLayoutWeb() {
 
     // Pre-place 3 random colors on horizontal 'I', 'N', 'D' (coordinates (5,3), (5,4), (5,5))
     const indPositions = [
-      { row: 6, col: 5 },
+      { row: 5, col: 3 },
       { row: 5, col: 4 },
       { row: 5, col: 5 },
     ]
@@ -1927,26 +1927,7 @@ export default function GameLayoutWeb() {
             </div>
           </Pressable>
 
-          <Pressable onPress={() => router.push("/profile")}>
-             <div id="tour-game-btn-profile" style={{
-              width: 80,
-              height: 80,
-              borderRadius: 25,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
-              cursor: 'pointer',
-              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-              border: "1px solid rgba(0,0,0,0.05)",
-               transition: "transform 0.1s",
-            }}
-             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
-             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-            >
-              <Ionicons name="list" size={32} color={colors.text} />
-            </div>
-          </Pressable>
+         
 
           <Pressable onPress={() => setRestartConfirmationVisible(true)}>
              <div id="tour-game-btn-restart" style={{
@@ -2192,7 +2173,33 @@ export default function GameLayoutWeb() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginBottom: 10,
+                    marginTop: 14,
+                    marginBottom: 6,
+                  }}>
+                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Dark Mode</span>
+                    <Switch
+                      value={theme === "dark"}
+                      onValueChange={toggleTheme}
+                      circleSize={18}
+                      barHeight={22}
+                      backgroundActive={colors.accent}
+                      backgroundInactive="#E5E5E5"
+                      circleActiveColor="#fff"
+                      circleInActiveColor="#fff"
+                      switchWidthMultiplier={2.5}
+                      renderActiveText={false}
+                      renderInActiveText={false}
+                    />
+                  </div>
+
+                  {/* Color Blind Mode - Last Position */}
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginTop: 14,
+                    marginBottom: 6,
                   }}>
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Color Blind Mode</span>
@@ -2215,55 +2222,29 @@ export default function GameLayoutWeb() {
                     />
                   </div>
 
-
-                  <div style={{
+                  {/* Preferences Link - Opens Profile Page */}
+                  <Pressable 
+                    onPress={() => {
+                      setSettingsVisible(false);
+                      router.push("/profile");
+                    }}
+                    style={{
                     display: "flex",
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginTop: 14,
+                    marginTop: 20,
                     marginBottom: 6,
-                  }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Dark Mode</span>
-                    <Switch
-                      value={theme === "dark"}
-                      onValueChange={toggleTheme}
-                      circleSize={18}
-                      barHeight={22}
-                      backgroundActive={colors.accent}
-                      backgroundInactive="#E5E5E5"
-                      circleActiveColor="#fff"
-                      circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
-                      renderActiveText={false}
-                      renderInActiveText={false}
-                    />
-                  </div>
-
-                  {/* Links */}
-                  <Pressable style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: 14,
-                    marginBottom: 6,
+                    padding: 14,
+                    backgroundColor: theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    borderRadius: 14,
                     cursor: 'pointer'
                   }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Privacy Policy</span>
+                    <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 12 }}>
+                      <Ionicons name="settings-sharp" size={20} color={colors.accent} />
+                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui", fontWeight: "600" }}>Preferences</span>
+                    </div>
                     <span style={{ fontSize: 22, fontWeight: "600", color: colors.accent, fontFamily: "Geist-Regular, system-ui" }}>›</span>
-                  </Pressable>
-                  <Pressable style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: 14,
-                    marginBottom: 6,
-                    cursor: 'pointer'
-                  }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "system-ui" }}>Terms & Conditions</span>
-                    <span style={{ fontSize: 22, fontWeight: "600", color: colors.accent, fontFamily: "system-ui" }}>›</span>
                   </Pressable>
                 </div>
               </div>

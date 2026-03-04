@@ -543,6 +543,27 @@ export default function ProfileScreenWeb() {
             </View>
           </View>
 
+          {/* Legal Links */}
+          <View style={styles.legalLinksContainer}>
+            <TouchableOpacity
+              style={[styles.legalLink, { borderColor: colors.border }]}
+              onPress={() => alert('Privacy Policy - Coming Soon')}
+            >
+              <Ionicons name="shield-outline" size={18} color={colors.primary} />
+              <Text style={[styles.legalLinkText, { color: colors.text }]}>Privacy Policy</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.legalLink, { borderColor: colors.border }]}
+              onPress={() => alert('Terms & Conditions - Coming Soon')}
+            >
+              <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+              <Text style={[styles.legalLinkText, { color: colors.text }]}>Terms & Conditions</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+
           {/* Logout Button */}
           <TouchableOpacity
             style={[styles.logoutButton, { backgroundColor: colors.primary }]}
@@ -896,6 +917,29 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 24,
+  },
+
+  // Legal Links
+  legalLinksContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  legalLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
+  legalLinkText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Geist-Regular',
   },
 
   // Logout
