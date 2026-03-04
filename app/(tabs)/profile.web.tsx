@@ -1,32 +1,27 @@
 import { authService } from '@/authService';
 import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useTheme } from '@/context/ThemeContext';
+import { DEFAULT_GAME_GRADIENTS, gradientFromHex, type GameColorGradient } from '@/lib/gameColors';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { HexColorInput, HexColorPicker } from 'react-colorful';
 import {
-    Dimensions,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Switch } from 'react-native-switch';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-const COLOR_GRADIENTS = [
-  ['#C40111', '#F01D2E'],
-  ['#757F35', '#99984D'],
-  ['#1177FE', '#48B7FF'],
-  ['#111111', '#3C3C3C'],
-  ['#E7CC01', '#E7E437'],
-] as const;
+const MAX_CONTENT_WIDTH = 800;
 
 const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
   symbols: ['●', '▲', '■', '◆', '★'],
@@ -41,15 +36,53 @@ function getColorBlindToken(mode: ColorBlindMode, index: number) {
 
 export default function ProfileScreenWeb() {
   const { colors, theme } = useTheme();
-  const { colorBlindEnabled, colorBlindMode, setColorBlindEnabled, setColorBlindMode } = useSettings();
+  const { colorBlindEnabled, colorBlindMode, setColorBlindEnabled, setColorBlindMode, customGameColors, setCustomGameColors } = useSettings();
+  const displayGradients = customGameColors ?? [...DEFAULT_GAME_GRADIENTS];
+  const [editingColors, setEditingColors] = useState<GameColorGradient[]>(() => customGameColors ?? [...DEFAULT_GAME_GRADIENTS]);
+  const [colorsSaved, setColorsSaved] = useState(false);
+  const [selectedColorIndex, setSelectedColorIndex] = useState<number | null>(null);
+  const [pickerHex, setPickerHex] = useState('');
+  const throttleRef = useRef<{ raf: number | null; pending: string | null }>({ raf: null, pending: null });
+  const selectedIndexRef = useRef(selectedColorIndex);
+  selectedIndexRef.current = selectedColorIndex;
 
-  const gradientColors =
-    theme === 'dark'
-      ? (['#000017', '#000074'] as const)
-      : (['#FFFFFF', '#FFFFFF'] as const);
+  useEffect(() => {
+    setEditingColors(customGameColors ?? [...DEFAULT_GAME_GRADIENTS]);
+  }, [customGameColors]);
 
+  useEffect(() => {
+    if (selectedColorIndex !== null) setPickerHex(editingColors[selectedColorIndex][0]);
+  }, [selectedColorIndex]);
 
-  const inputBackground = theme === 'dark' ? 'rgba(0, 0, 35, 0)' : '#FFFFFF';
+  const commitPickerColor = useCallback((hex: string) => {
+    const idx = selectedIndexRef.current;
+    if (idx === null) return;
+    setEditingColors((prev) => {
+      const next = [...prev];
+      next[idx] = gradientFromHex(hex);
+      return next;
+    });
+    setColorsSaved(false);
+  }, []);
+
+  const handlePickerChange = useCallback((hex: string) => {
+    setPickerHex(hex);
+    const ref = throttleRef.current;
+    ref.pending = hex;
+    if (ref.raf !== null) return;
+    ref.raf = requestAnimationFrame(() => {
+      if (ref.pending !== null) {
+        commitPickerColor(ref.pending);
+        ref.pending = null;
+      }
+      ref.raf = null;
+    });
+  }, [commitPickerColor]);
+
+  const isDark = theme === 'dark';
+  const gradientColors = isDark
+    ? (['#000017', '#000074'] as const)
+    : (['#FFFFFF', '#E9EFFF'] as const);
 
   const [avatar, setAvatar] = React.useState<string | null>(null);
   const [uploading, setUploading] = React.useState(false);
@@ -61,12 +94,10 @@ export default function ProfileScreenWeb() {
 
   React.useEffect(() => {
     const loadProfile = async () => {
-      // Use getSessionUser for faster initial load (avoids network roundtrip)
       const user = await authService.getSessionUser();
       if (user) {
         setEmail(user.email || '');
         
-        // Try to load from cache first
         const cached = await authService.getCachedProfile(user.id);
         if (cached) {
           setFullName(cached.full_name || '');
@@ -75,7 +106,6 @@ export default function ProfileScreenWeb() {
           setAvatar(cached.avatar_url);
         }
 
-        // Fetch fresh profile data
         const profile = await authService.getProfile(user.id);
         if (profile) {
           setFullName(profile.full_name || '');
@@ -95,19 +125,14 @@ export default function ProfileScreenWeb() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
-        base64: true, // Request base64 for Web if needed, but we can try to use URI
+        base64: true,
       });
 
       if (!result.canceled && result.assets[0].uri) {
-        // For web, URI might be a blob: or data: URL. 
-        // If it's base64 (data:), we can pass it directly.
-        // ImagePicker on web often returns base64 if requested, or a blob URI.
-        
         let uriToUpload = result.assets[0].uri;
         if (result.assets[0].base64) {
            uriToUpload = `data:image/jpeg;base64,${result.assets[0].base64}`;
         }
-        
         await uploadAvatar(uriToUpload);
       }
     } catch (error) {
@@ -175,250 +200,393 @@ export default function ProfileScreenWeb() {
         end={{ x: 1, y: 1 }}
         style={styles.container}
       >
-        {/* Back Button */}
-        <TouchableOpacity 
-          style={styles.webBackButton} 
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/main');
-            }
-          }}
-        >
-           <Ionicons name="arrow-back" size={24} color={colors.primary} />
-           <Text style={[styles.backButtonText, { color: colors.primary }]}>Back</Text>
-        </TouchableOpacity>
+        {/* Header Section */}
+        <View style={styles.headerSection}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/main');
+              }
+            }}
+          >
+            <Ionicons name="arrow-back" size={22} color={isDark ? '#FFF' : colors.primary} />
+            <Text style={[styles.backButtonText, { color: isDark ? '#FFF' : colors.primary }]}>
+              Back
+            </Text>
+          </TouchableOpacity>
 
-        {/* App Name */}
-        <View style={[styles.topHeader, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.appName, { color: colors.primary }]}>
-            PALINDROME®
-          </Text>
+          <View style={styles.headerContent}>
+            <Text style={[styles.gameTitle, { color: isDark ? '#FFF' : colors.primary }]}>
+              PALINDROME
+            </Text>
+            <Text style={[styles.pageTitle, { color: colors.secondaryText }]}>
+              Player Profile
+            </Text>
+          </View>
         </View>
 
-        {/* Page Title */}
-        <View style={styles.pageHeader}>
-          <Text style={[styles.headerTitle, { color: colors.primary }]}>
-            PROFILE
-          </Text>
-        </View>
-
-        {/* Form Area */}
-        <View style={styles.formWrapper}>
-          {/* Full Name + Avatar */}
-          <View style={styles.nameRow}>
-            <View style={styles.inputGroup}>
-              <View style={styles.floatingLabelWrapper}>
-                <Text
-                  style={[
-                    styles.floatingLabel,
-                    { backgroundColor: 'transparent', color: colors.text },
-                  ]}
-                >
-                  Full Name
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      borderColor: colors.border,
-                      backgroundColor: inputBackground,
-                      color: colors.text,
-                    },
-                  ]}
-                  placeholder="e.g. Jenny Wilson"
-                  placeholderTextColor={colors.secondaryText}
-                  value={fullName}
-                  onChangeText={setFullName}
+        {/* Main Content */}
+        <View style={styles.contentWrapper}>
+          {/* Profile Card */}
+          <View
+            style={[
+              styles.profileCard,
+              {
+                backgroundColor: isDark ? 'rgba(26, 31, 60, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                borderColor: colors.border,
+                shadowColor: isDark ? '#000' : 'rgba(0, 0, 0, 0.08)',
+              },
+            ]}
+          >
+            {/* Avatar Section */}
+            <View style={styles.avatarSection}>
+              <TouchableOpacity onPress={pickImage} disabled={uploading} style={styles.avatarContainer}>
+                <Image
+                  source={avatar ? { uri: avatar } : require('../../assets/images/profile_ph.png')}
+                  style={styles.avatar}
                 />
-              </View>
-            </View>
-
-            {/* Avatar */}
-            <View style={styles.avatarWrapper}>
-              <Image
-                source={avatar ? { uri: avatar } : require('../../assets/images/profile_ph.png')}
-                style={styles.avatar}
-              />
-              <TouchableOpacity
-                style={[styles.editIcon, { backgroundColor: inputBackground }]}
-                onPress={pickImage}
-                disabled={uploading}
-              >
-                <Text style={[styles.editIconText, { color: colors.primary }]}>
-                  {uploading ? '...' : '✎'}
-                </Text>
+                {uploading && (
+                  <View style={styles.uploadingOverlay}>
+                    <Text style={styles.uploadingText}>...</Text>
+                  </View>
+                )}
+                <View style={[styles.editAvatarBadge, { backgroundColor: colors.primary }]}>
+                  <Ionicons name="camera" size={14} color="#FFF" />
+                </View>
               </TouchableOpacity>
             </View>
-          </View>
 
-          {/* Email + Phone */}
-          <View style={styles.rowInputs}>
-            <View style={styles.inputGroup}>
-              <View style={styles.floatingLabelWrapper}>
-                <Text
-                  style={[
-                    styles.floatingLabel,
-                    { backgroundColor: 'transparent', color: colors.text },
-                  ]}
-                >
-                  Email Address
-                </Text>
+            {/* Form Fields */}
+            <View style={styles.formSection}>
+              <View style={styles.inputRow}>
+                <View style={[styles.inputGroup, styles.inputGroupHalf]}>
+                  <Text style={[styles.inputLabel, { color: colors.secondaryText }]}>Full Name</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8F9FA',
+                        color: colors.text,
+                      },
+                    ]}
+                    placeholder="Your name"
+                    placeholderTextColor={colors.secondaryText}
+                    value={fullName}
+                    onChangeText={setFullName}
+                  />
+                </View>
+
+                <View style={[styles.inputGroup, styles.inputGroupHalf]}>
+                  <Text style={[styles.inputLabel, { color: colors.secondaryText }]}>Phone Number</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8F9FA',
+                        color: colors.text,
+                      },
+                    ]}
+                    placeholder="0 123 456 7890"
+                    placeholderTextColor={colors.secondaryText}
+                    keyboardType="phone-pad"
+                    value={phone}
+                    onChangeText={setPhone}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.secondaryText }]}>Email Address</Text>
                 <TextInput
                   style={[
                     styles.input,
                     {
                       borderColor: colors.border,
-                      backgroundColor: inputBackground,
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8F9FA',
                       color: colors.text,
                     },
                   ]}
-                  placeholder="e.g. wilson09@gmail.com"
+                  placeholder="your@email.com"
                   placeholderTextColor={colors.secondaryText}
                   keyboardType="email-address"
+                  autoCapitalize="none"
                   value={email}
                   onChangeText={setEmail}
                 />
               </View>
-            </View>
 
-            <View style={styles.inputGroup}>
-              <View style={styles.floatingLabelWrapper}>
-                <Text
-                  style={[
-                    styles.floatingLabel,
-                    { backgroundColor: 'transparent', color: colors.text },
-                  ]}
+              {/* Action Buttons */}
+              <View style={styles.formActions}>
+                <TouchableOpacity style={styles.changePasswordLink}>
+                  <Text style={[styles.changePasswordText, { color: colors.primary }]}>
+                    Change Password
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveButton, { backgroundColor: colors.primary }]}
+                  onPress={handleSave}
+                  disabled={loading}
                 >
-                  Phone Number
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      borderColor: colors.border,
-                      backgroundColor: inputBackground,
-                      color: colors.text,
-                    },
-                  ]}
-                  placeholder="0 123 456 7890"
-                  placeholderTextColor={colors.secondaryText}
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={setPhone}
-                />
+                  <Text style={styles.saveButtonText}>
+                    {loading ? 'Saving...' : 'Save Changes'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
 
-          {/* Change Password + Save */}
-          <View style={styles.actionRow}>
-            <TouchableOpacity>
-              <Text style={[styles.changePassword, { color: colors.primary }]}>
-                Change Password
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.saveButton, { backgroundColor: colors.primary }]}
-              onPress={handleSave}
-              disabled={loading}
+          {/* Settings Grid */}
+          <View style={styles.settingsGrid}>
+            {/* Accessibility Card */}
+            <View
+              style={[
+                styles.settingsCard,
+                {
+                  backgroundColor: isDark ? 'rgba(26, 31, 60, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                  borderColor: colors.border,
+                  shadowColor: isDark ? '#000' : 'rgba(0, 0, 0, 0.08)',
+                },
+              ]}
             >
-              <Text style={styles.saveButtonText}>{loading ? 'Saving...' : 'Save'}</Text>
+              <View style={styles.cardHeader}>
+                <Ionicons name="eye-outline" size={22} color={colors.primary} />
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Accessibility</Text>
+              </View>
+
+              <View style={styles.settingRow}>
+                <Text style={[styles.settingLabel, { color: colors.text }]}>Color Blind Mode</Text>
+                <Switch
+                  value={colorBlindEnabled}
+                  onValueChange={setColorBlindEnabled}
+                  circleSize={18}
+                  barHeight={22}
+                  backgroundActive={colors.primary}
+                  backgroundInactive="#ccc"
+                  circleActiveColor="#fff"
+                  circleInActiveColor="#fff"
+                  switchWidthMultiplier={2.5}
+                  renderActiveText={false}
+                  renderInActiveText={false}
+                />
+              </View>
+
+              <Text style={[styles.settingDescription, { color: colors.secondaryText }]}>
+                Choose how colors are represented in the game
+              </Text>
+
+              <View style={styles.modeGrid}>
+                {(['symbols', 'emojis', 'cards', 'letters'] as const).map((mode) => {
+                  const selected = colorBlindMode === mode;
+                  return (
+                    <TouchableOpacity
+                      key={mode}
+                      onPress={() => setColorBlindMode(mode)}
+                      style={[
+                        styles.modeTile,
+                        {
+                          borderColor: selected ? colors.primary : colors.border,
+                          backgroundColor: selected
+                            ? isDark
+                              ? 'rgba(0,96,255,0.20)'
+                              : 'rgba(0,96,255,0.08)'
+                            : isDark
+                              ? 'rgba(255,255,255,0.03)'
+                              : 'rgba(0,0,0,0.02)',
+                        },
+                      ]}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={[styles.modeTitle, { color: colors.text }]}>
+                        {mode === 'symbols'
+                          ? 'Symbols'
+                          : mode === 'emojis'
+                            ? 'Emojis'
+                            : mode === 'cards'
+                              ? 'Cards'
+                              : 'Letters'}
+                      </Text>
+                      <View style={styles.modePreviewRow}>
+                        {displayGradients.map((g, i) => (
+                          <LinearGradient
+                            key={i}
+                            colors={g}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.modePreviewSwatch}
+                          >
+                            <Text style={styles.modePreviewToken}>{getColorBlindToken(mode, i)}</Text>
+                          </LinearGradient>
+                        ))}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Custom Colors Card */}
+            <View
+              style={[
+                styles.settingsCard,
+                {
+                  backgroundColor: isDark ? 'rgba(26, 31, 60, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                  borderColor: colors.border,
+                  shadowColor: isDark ? '#000' : 'rgba(0, 0, 0, 0.08)',
+                },
+              ]}
+            >
+              <View style={styles.cardHeader}>
+                <Ionicons name="color-palette-outline" size={22} color={colors.primary} />
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Customize Colors</Text>
+              </View>
+
+              <Text style={[styles.settingDescription, { color: colors.secondaryText }]}>
+                Tap a block to change its color
+              </Text>
+
+              <View style={styles.colorBlocksRow}>
+                {editingColors.map((gradient, index) => {
+                  const selected = selectedColorIndex === index;
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => setSelectedColorIndex(selected ? null : index)}
+                      style={[
+                        styles.colorBlockTapTarget,
+                        selected && { borderColor: colors.primary, borderWidth: 3 },
+                      ]}
+                      activeOpacity={0.9}
+                    >
+                      <LinearGradient
+                        colors={gradient}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.colorBlockSwatch}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {selectedColorIndex !== null && (
+                <View style={styles.colorSelectorPanel}>
+                  <Text style={[styles.colorSelectorTitle, { color: colors.text }]}>
+                    Editing Block {selectedColorIndex + 1}
+                  </Text>
+                  <View style={styles.pickerWrapper}>
+                    <HexColorPicker
+                      color={pickerHex || editingColors[selectedColorIndex][0]}
+                      onChange={handlePickerChange}
+                    />
+                  </View>
+                  <View style={styles.hexInputRow}>
+                    <View
+                      style={[
+                        styles.hexPreviewSwatch,
+                        { backgroundColor: pickerHex || editingColors[selectedColorIndex][0] },
+                      ]}
+                    />
+                    <HexColorInput
+                      color={pickerHex || editingColors[selectedColorIndex][0]}
+                      onChange={(hex) => {
+                        setPickerHex(hex);
+                        commitPickerColor(hex);
+                      }}
+                      prefixed
+                      style={{
+                        flex: 1,
+                        height: 44,
+                        borderWidth: 1,
+                        borderRadius: 10,
+                        paddingLeft: 14,
+                        paddingRight: 14,
+                        fontSize: 15,
+                        fontFamily: 'Geist-Regular',
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+                      }}
+                    />
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.colorActionsRow}>
+                <TouchableOpacity
+                  style={[styles.resetColorsButton, { borderColor: colors.border }]}
+                  onPress={() => {
+                    setEditingColors([...DEFAULT_GAME_GRADIENTS]);
+                    setColorsSaved(false);
+                  }}
+                >
+                  <Text style={[styles.resetColorsButtonText, { color: colors.text }]}>
+                    Reset
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveColorsButton, { backgroundColor: colors.primary }]}
+                  onPress={async () => {
+                    await setCustomGameColors(editingColors);
+                    setColorsSaved(true);
+                  }}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {colorsSaved ? 'Saved!' : 'Save Colors'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Legal Links */}
+          <View style={styles.legalLinksContainer}>
+            <TouchableOpacity
+              style={[styles.legalLink, { borderColor: colors.border }]}
+              onPress={() => alert('Privacy Policy - Coming Soon')}
+            >
+              <Ionicons name="shield-outline" size={18} color={colors.primary} />
+              <Text style={[styles.legalLinkText, { color: colors.text }]}>Privacy Policy</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.legalLink, { borderColor: colors.border }]}
+              onPress={() => alert('Terms & Conditions - Coming Soon')}
+            >
+              <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+              <Text style={[styles.legalLinkText, { color: colors.text }]}>Terms & Conditions</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.primary} />
             </TouchableOpacity>
           </View>
-        </View>
 
-        <View
-          style={[
-            styles.accessibilityCard,
-            {
-              backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.92)',
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.accessibilityTitle, { color: colors.text }]}>Accessibility</Text>
-          <View style={styles.accessibilityRow}>
-            <Text style={[styles.accessibilityLabel, { color: colors.text }]}>Color Blind Mode</Text>
-            <Switch
-              value={colorBlindEnabled}
-              onValueChange={setColorBlindEnabled}
-              circleSize={18}
-              barHeight={22}
-              backgroundActive={colors.primary}
-              backgroundInactive="#ccc"
-              circleActiveColor="#fff"
-              circleInActiveColor="#fff"
-              switchWidthMultiplier={2.5}
-              renderActiveText={false}
-              renderInActiveText={false}
-            />
-          </View>
-          <Text style={[styles.accessibilitySubtitle, { color: colors.secondaryText }]}>
-            Choose how colors are represented in the game.
-          </Text>
-
-          <View style={styles.modeGrid}>
-            {(['symbols', 'emojis', 'cards', 'letters'] as const).map((mode) => {
-              const selected = colorBlindMode === mode;
-              return (
-                <TouchableOpacity
-                  key={mode}
-                  onPress={() => setColorBlindMode(mode)}
-                  style={[
-                    styles.modeTile,
-                    {
-                      borderColor: selected ? colors.primary : colors.border,
-                      backgroundColor: selected ? (theme === 'dark' ? 'rgba(0,96,255,0.20)' : 'rgba(0,96,255,0.08)') : 'transparent',
-                    },
-                  ]}
-                  activeOpacity={0.9}
-                >
-                  <Text style={[styles.modeTitle, { color: colors.text }]}>
-                    {mode === 'symbols'
-                      ? 'Symbols'
-                      : mode === 'emojis'
-                        ? 'Emojis'
-                        : mode === 'cards'
-                          ? 'Cards'
-                          : 'Letters'}
-                  </Text>
-                  <View style={styles.modePreviewRow}>
-                    {COLOR_GRADIENTS.map((g, i) => (
-                      <LinearGradient key={i} colors={g} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.modePreviewSwatch}>
-                        <Text style={styles.modePreviewToken}>{getColorBlindToken(mode, i)}</Text>
-                      </LinearGradient>
-                    ))}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {/* Logout Button */}
+          <TouchableOpacity
+            style={[styles.logoutButton, { backgroundColor: colors.primary }]}
+            onPress={async () => {
+              try {
+                await authService.signOut();
+                router.replace('/');
+              } catch (error) {
+                console.error('Logout failed:', error);
+                alert('Failed to logout. Please try again.');
+              }
+            }}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#FFF" style={styles.logoutIcon} />
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
         </View>
-        {/* Logout */}
-        <TouchableOpacity
-          style={[styles.logoutButton, { backgroundColor: colors.primary }]}
-          onPress={async () => {
-            try {
-              await authService.signOut();
-              router.replace('/');
-            } catch (error) {
-              console.error('Logout failed:', error);
-              alert('Failed to logout. Please try again.');
-            }
-          }}
-        >
-          <Text style={styles.saveButtonText}>Logout</Text>
-        </TouchableOpacity>
       </LinearGradient>
     </ScrollView>
   );
 }
 
-// Avatar and fonts capped for large screens
-const MAX_CONTAINER_WIDTH = 1000;
-const AVATAR_SIZE = Math.min(screenWidth * 0.12, 110);
+const AVATAR_SIZE = 100;
 
 const styles = StyleSheet.create({
   scrollContainer: {
@@ -430,197 +598,230 @@ const styles = StyleSheet.create({
     minHeight: screenHeight,
     width: '100%',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-    position: 'relative', // Ensure absolute children are relative to this
   },
-  webBackButton: {
+
+  // Header
+  headerSection: {
+    width: '100%',
+    paddingTop: 40,
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    alignItems: 'center',
+  },
+  backButton: {
     position: 'absolute',
     top: 40,
-    left: 40,
+    left: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     zIndex: 10,
     cursor: 'pointer',
+    padding: 8,
+    borderRadius: 8,
   },
   backButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     fontFamily: 'Geist-Bold',
   },
-  topHeader: {
-    paddingVertical: -1,
-    borderBottomWidth: 1,
+  headerContent: {
     alignItems: 'center',
-    width: '120%',
   },
-  appName: {
-    fontSize: Math.min(screenWidth * 0.03, 30),
-    fontWeight: '700',
+  gameTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    fontFamily: 'Geist-Bold',
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  pageTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Geist-Regular',
     letterSpacing: 1,
-
-  },
-  pageHeader: {
-    maxWidth: MAX_CONTAINER_WIDTH,
-    width: '100%',
-    alignSelf: 'center',
-    marginTop: 160,
-    marginBottom: -50
-  },
-  headerTitle: {
-    fontSize: Math.min(screenWidth * 0.02, 24),
-    fontWeight: '700',
     textTransform: 'uppercase',
   },
-  formWrapper: {
-    maxWidth: MAX_CONTAINER_WIDTH,
+
+  // Content
+  contentWrapper: {
     width: '100%',
-    alignSelf: 'center',
-    marginTop: 30,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    flexWrap: 'wrap',
+    maxWidth: MAX_CONTENT_WIDTH,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
     gap: 20,
-    marginBottom: 30,
   },
-  avatarWrapper: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
+
+  // Profile Card
+  profileCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 24,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  avatarContainer: {
     position: 'relative',
   },
   avatar: {
-    width: '100%',
-    height: '100%',
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
+    borderWidth: 3,
+    borderColor: 'rgba(0, 96, 255, 0.3)',
   },
-  editIcon: {
+  uploadingOverlay: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
-    borderRadius: 15,
-    width: AVATAR_SIZE * 0.3, // Much smaller relative size
-    height: AVATAR_SIZE * 0.3, // Much smaller relative size
+    top: 0,
+    left: 0,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 3,
-    backgroundColor: 'transparent', // Make it transparent
+  },
+  uploadingText: {
+    color: '#FFF',
+    fontSize: 24,
+  },
+  editAvatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 2,
+    borderColor: '#FFF',
   },
-  editIconText: {
-    fontSize: AVATAR_SIZE * 0.3,
+
+  // Form
+  formSection: {
+    gap: 16,
   },
-  rowInputs: {
+  inputRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 20,
-    marginBottom: 30,
+    gap: 16,
   },
   inputGroup: {
     flex: 1,
-    minWidth: 250,
-    maxWidth: 480, // capped for large screens
   },
-  floatingLabelWrapper: {
-    position: 'relative',
+  inputGroupHalf: {
+    flex: 0.5,
   },
-  floatingLabel: {
-    position: 'absolute',
-    top: -7,
-    left: 16,
-    paddingHorizontal: 6,
+  inputLabel: {
     fontSize: 13,
+    fontWeight: '600',
     fontFamily: 'Geist-Bold',
-    zIndex: 2,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   input: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     fontSize: 15,
-    width: '100%',
+    fontFamily: 'Geist-Regular',
   },
-  actionRow: {
+  formActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    marginTop: 10,
-    gap: 20,
+    marginTop: 8,
   },
-  changePassword: {
+  changePasswordLink: {
+    paddingVertical: 8,
+  },
+  changePasswordText: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Geist-Bold',
   },
   saveButton: {
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 40,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveButtonText: {
     color: '#fff',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontFamily: 'Geist-Bold',
   },
-  logoutButton: {
-    marginTop: 50,
-    width: 180,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
+
+  // Settings Grid
+  settingsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    flexWrap: 'wrap',
   },
-  accessibilityCard: {
-    width: '100%',
-    maxWidth: 620,
+  settingsCard: {
+    flex: 1,
+    minWidth: 300,
+    borderRadius: 20,
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 18,
+    padding: 20,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  accessibilityTitle: {
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  cardTitle: {
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: 'Geist-Bold',
   },
-  accessibilityRow: {
-    marginTop: 12,
+  settingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  accessibilityLabel: {
-    fontSize: 14,
-    fontWeight: '700',
+  settingLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Geist-Regular',
   },
-  accessibilitySubtitle: {
-    marginTop: 10,
-    fontSize: 12,
+  settingDescription: {
+    fontSize: 13,
+    fontFamily: 'Geist-Regular',
+    marginBottom: 16,
   },
+
+  // Mode Grid
   modeGrid: {
-    marginTop: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    flexDirection: 'column',
+    gap: 10,
   },
   modeTile: {
-    width: '48%',
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 12,
     paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   modeTitle: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'Geist-Bold',
     marginBottom: 10,
   },
   modePreviewRow: {
@@ -628,18 +829,148 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modePreviewSwatch: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modePreviewToken: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: 'Geist-Bold',
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
+  },
+
+  // Color Blocks
+  colorBlocksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
+    justifyContent: 'center',
+  },
+  colorBlockTapTarget: {
+    padding: 3,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    cursor: 'pointer',
+  },
+  colorBlockSwatch: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+  },
+  colorSelectorPanel: {
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128,128,128,0.2)',
+    marginBottom: 16,
+  },
+  colorSelectorTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 12,
+    fontFamily: 'Geist-Bold',
+  },
+  pickerWrapper: {
+    height: 180,
+    width: '100%',
+    marginBottom: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  hexInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  hexPreviewSwatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(128,128,128,0.3)',
+  },
+  colorActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  resetColorsButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  resetColorsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Geist-Bold',
+  },
+  saveColorsButton: {
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+  },
+
+  // Legal Links
+  legalLinksContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  legalLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
+  legalLinkText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Geist-Regular',
+  },
+
+  // Logout
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginTop: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 12,
+    gap: 8,
+  },
+  logoutIcon: {
+    marginTop: 1,
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: 'Geist-Bold',
+  },
+
+  // Card component style
+  card: {
+    borderRadius: 20,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
 });
