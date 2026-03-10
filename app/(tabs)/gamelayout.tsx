@@ -904,8 +904,12 @@ export default function GameLayout() {
 
   const checkAndProcessPalindromes = (row: number, col: number, colorIdx: number, currentGrid: (number | null)[][], dryRun = false, minLength = 3) => {
     let scoreFound = 0;
+    let rowPalindromeLength = 0;
+    let colPalindromeLength = 0;
+    let rowSegment: { color: number; r: number; c: number }[] | null = null;
+    let colSegment: { color: number; r: number; c: number }[] | null = null;
 
-    const checkLine = (lineIsRow: boolean) => {
+    const checkLine = (lineIsRow: boolean): { length: number; segment: typeof rowSegment } => {
       const line: { color: number; r: number; c: number }[] = [];
       if (lineIsRow) {
         for (let c = 0; c < gridSize; c++) {
@@ -925,7 +929,7 @@ export default function GameLayout() {
       while (end < gridSize - 1 && line[end + 1].color !== -1) end++;
 
       const segment = line.slice(start, end + 1);
-      if (segment.length < minLength) return;
+      if (segment.length < 2) return { length: 0, segment: null }; // Need at least 2 to form palindrome with center
 
       // Find the longest palindrome within the segment that includes the placed tile
       const targetPosInSegment = targetIndex - start;
@@ -935,7 +939,7 @@ export default function GameLayout() {
       for (let s = 0; s <= targetPosInSegment; s++) {
         for (let e = targetPosInSegment; e < segment.length; e++) {
           const len = e - s + 1;
-          if (len < minLength || len <= bestLength) continue;
+          if (len < 2 || len <= bestLength) continue; // Min 2 for palindrome check
           const sub = segment.slice(s, e + 1);
           const colors = sub.map((c) => c.color);
           const isPal = colors.join(",") === [...colors].reverse().join(",");
@@ -946,42 +950,97 @@ export default function GameLayout() {
         }
       }
 
-      if (bestSegment && bestLength >= minLength) {
-        let segmentScore = bestLength;
-        let hasBulldog = false;
-        bestSegment.forEach((b) => {
-          if (bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)) {
-            hasBulldog = true;
-          }
-        });
-
-        if (hasBulldog) segmentScore += 10;
-        scoreFound += segmentScore;
-
-        if (!dryRun) {
-          let feedbackText = "GOOD!";
-          let feedbackColor = "#4ADE80";
-          if (bestLength === 4) {
-            feedbackText = "GREAT!";
-            feedbackColor = "#60A5FA";
-          } else if (bestLength === 5) {
-            feedbackText = "AMAZING!";
-            feedbackColor = "#A78BFA";
-          } else if (bestLength >= 6) {
-            feedbackText = "LEGENDARY!";
-            feedbackColor = "#F472B6";
-          }
-
-          triggerHaptic('success');
-          playSuccessSound();
-          setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
-          setTimeout(() => setFeedback(null), 2000);
-        }
-      }
+      return { length: bestLength, segment: bestSegment };
     };
 
-    checkLine(true);
-    checkLine(false);
+    // Check both directions
+    const rowResult = checkLine(true);
+    const colResult = checkLine(false);
+    rowPalindromeLength = rowResult.length;
+    colPalindromeLength = colResult.length;
+    rowSegment = rowResult.segment;
+    colSegment = colResult.segment;
+
+    // Check for right-angle palindrome (intersection of row and column palindromes)
+    // This happens when both row and column have palindromes including the placed tile
+    const hasRightAnglePalindrome = rowPalindromeLength >= 2 && colPalindromeLength >= 2;
+    
+    // Calculate effective length for right-angle palindrome
+    // Right-angle palindrome counts unique tiles: row + col - 1 (center counted once)
+    let rightAngleLength = 0;
+    if (hasRightAnglePalindrome) {
+      rightAngleLength = rowPalindromeLength + colPalindromeLength - 1;
+    }
+
+    // Determine if we have a valid palindrome based on minLength
+    // Option 1: Single row palindrome meets minLength
+    // Option 2: Single column palindrome meets minLength  
+    // Option 3: Right-angle palindrome meets minLength
+    const hasValidRowPalindrome = rowPalindromeLength >= minLength;
+    const hasValidColPalindrome = colPalindromeLength >= minLength;
+    const hasValidRightAnglePalindrome = rightAngleLength >= minLength;
+
+    const isValidMove = hasValidRowPalindrome || hasValidColPalindrome || hasValidRightAnglePalindrome;
+
+    if (!isValidMove) {
+      return 0;
+    }
+
+    // Calculate score
+    // For right-angle palindromes, we score based on the combined unique tile count
+    let scoredLength = 0;
+    let scoredSegment: typeof rowSegment = null;
+
+    if (hasValidRightAnglePalindrome && rightAngleLength >= Math.max(rowPalindromeLength, colPalindromeLength)) {
+      // Right-angle palindrome is the best scoring option
+      scoredLength = rightAngleLength;
+      // Combine segments for bulldog check (avoid duplicates)
+      type Tile = { color: number; r: number; c: number };
+      const uniqueTiles = new Map<string, Tile>();
+      rowSegment!.forEach((tile: Tile) => uniqueTiles.set(`${tile.r},${tile.c}`, tile));
+      colSegment!.forEach((tile: Tile) => uniqueTiles.set(`${tile.r},${tile.c}`, tile));
+      scoredSegment = Array.from(uniqueTiles.values());
+    } else if (hasValidRowPalindrome && rowPalindromeLength >= colPalindromeLength) {
+      scoredLength = rowPalindromeLength;
+      scoredSegment = rowSegment;
+    } else if (hasValidColPalindrome) {
+      scoredLength = colPalindromeLength;
+      scoredSegment = colSegment;
+    }
+
+    if (scoredLength > 0 && scoredSegment) {
+      let segmentScore = scoredLength;
+      let hasBulldog = false;
+      scoredSegment.forEach((b) => {
+        if (bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)) {
+          hasBulldog = true;
+        }
+      });
+
+      if (hasBulldog) segmentScore += 10;
+      scoreFound = segmentScore;
+
+      if (!dryRun) {
+        let feedbackText = "GOOD!";
+        let feedbackColor = "#4ADE80";
+        if (scoredLength === 4) {
+          feedbackText = "GREAT!";
+          feedbackColor = "#60A5FA";
+        } else if (scoredLength === 5) {
+          feedbackText = "AMAZING!";
+          feedbackColor = "#A78BFA";
+        } else if (scoredLength >= 6) {
+          feedbackText = "LEGENDARY!";
+          feedbackColor = "#F472B6";
+        }
+
+        triggerHaptic('success');
+        playSuccessSound();
+        setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
+        setTimeout(() => setFeedback(null), 2000);
+      }
+    }
+
     return scoreFound;
   };
 
