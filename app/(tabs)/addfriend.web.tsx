@@ -188,7 +188,7 @@ export default function AddFriendWebScreen() {
           )}
 
           <View style={[styles.card, { backgroundColor: cardBg }]}>
-            <Text style={[styles.cardTitle, { color: text }]}>Players you've met</Text>
+            <Text style={[styles.cardTitle, { color: text }]}>Players you&apos;ve met</Text>
             {recentOpponents.length === 0 ? (
               <Text style={[styles.empty, { color: muted }]}>Play matches to see opponents here</Text>
             ) : (
