@@ -23,6 +23,10 @@ create index if not exists idx_single_player_best_score_time on public.single_pl
 alter table public.single_player_runs enable row level security;
 alter table public.single_player_best enable row level security;
 
+drop policy if exists "Users can insert own single_player_runs" on public.single_player_runs;
+drop policy if exists "Users can read own single_player_runs" on public.single_player_runs;
+drop policy if exists "Single player leaderboard is viewable by everyone" on public.single_player_best;
+
 -- Users can insert their own run rows.
 create policy "Users can insert own single_player_runs"
   on public.single_player_runs for insert
@@ -73,4 +77,3 @@ drop trigger if exists trg_update_single_player_best on public.single_player_run
 create trigger trg_update_single_player_best
 after insert on public.single_player_runs
 for each row execute procedure public.update_single_player_best();
-

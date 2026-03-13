@@ -796,12 +796,13 @@ export default function GameLayoutWeb() {
     const finalTimeSeconds = secondsElapsedRef.current
     if (finalScore <= 0 && finalTimeSeconds <= 0) return
 
-    singlePlayerSavedRef.current = true
     try {
       const user = await authService.getSessionUser()
       if (!user) return
+      singlePlayerSavedRef.current = true
       await saveSinglePlayerRun(user.id, finalScore, finalTimeSeconds)
     } catch (e) {
+      singlePlayerSavedRef.current = false
       console.error('Failed to save single-player run:', e)
     }
   }, [matchId])
