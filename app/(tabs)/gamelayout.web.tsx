@@ -21,6 +21,7 @@ import { authService } from "@/authService"
 import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
 import { createInitialState } from "@/lib/gameEngine"
 import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, submitScore, subscribeToMatch, updateLiveScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
+import { saveSinglePlayerRun } from "@/lib/singlePlayer"
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from "react-native-svg"
 import { Switch } from "react-native-switch"
 
@@ -1188,9 +1189,36 @@ export default function GameLayoutWeb() {
         setGameOver({ status: "lose", message: "Board is full." })
       }
     } else {
+      const hadAnyScoringMoveBefore = !matchId ? !!findFirstScoringMove(3, gridState, blockCounts) : true
       nextGrid[row][col] = colorIndex
       const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, nextGrid, true, 3)
       if (attemptedScore <= 0) {
+        if (!matchId && !hadAnyScoringMoveBefore) {
+          nextBlockCounts[colorIndex] = Math.max(0, nextBlockCounts[colorIndex] - 1)
+          setGridState(nextGrid)
+          setBlockCounts(nextBlockCounts)
+
+          playDropSound()
+          triggerHaptic(14)
+
+          if (wrongForcedTriesRef.current !== 0) {
+            wrongForcedTriesRef.current = 0
+            setWrongForcedTries(0)
+          }
+
+          if (nextBlockCounts.every((c) => c === 0)) {
+            setPause(false)
+            setIsTimerRunning(false)
+            setGameOver({ status: "win", message: "All counters used." })
+          } else if (nextGrid.every((r) => r.every((cell) => cell !== null))) {
+            setPause(false)
+            setIsTimerRunning(false)
+            setGameOver({ status: "lose", message: "Board is full." })
+          }
+
+          return true
+        }
+
         const nextWrongTries = wrongForcedTriesRef.current + 1
         const nextValue = nextWrongTries >= 3 ? 0 : nextWrongTries
         wrongForcedTriesRef.current = nextValue
