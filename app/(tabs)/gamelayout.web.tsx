@@ -573,6 +573,7 @@ export default function GameLayoutWeb() {
   const [userName, setUserName] = useState("John Doe")
   const [restartConfirmationVisible, setRestartConfirmationVisible] = useState(false)
   const [homeConfirmationVisible, setHomeConfirmationVisible] = useState(false)
+  const [rulesVisible, setRulesVisible] = useState(false)
   const [tutorialOpen, setTutorialOpen] = useState(false)
   const [tutorialPhase, setTutorialPhase] = useState<GameTutorialPhase>("ui")
   const [tutorialUiIndex, setTutorialUiIndex] = useState(0)
@@ -591,6 +592,7 @@ export default function GameLayoutWeb() {
   const multiplayerInitDone = useRef(false)
   const scoreRef = useRef(score)
   const multiplayerFirstMoveAtRef = useRef<number | null>(null)
+  const singlePlayerSavedRef = useRef(false)
 
   const triggerHaptic = useCallback((pattern: number | number[]) => {
     if (!hapticsEnabled) return
@@ -760,7 +762,7 @@ export default function GameLayoutWeb() {
   const [feedback, setFeedback] = useState<{ text: string, color: string, id: number } | null>(null)
 
   // Timer State
-  const [, setSecondsElapsed] = useState(0)
+  const [secondsElapsed, setSecondsElapsed] = useState(0)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
 
   // Game Logic State
@@ -780,6 +782,37 @@ export default function GameLayoutWeb() {
   useEffect(() => {
     scoreRef.current = score
   }, [score])
+
+  const secondsElapsedRef = useRef(secondsElapsed)
+  useEffect(() => {
+    secondsElapsedRef.current = secondsElapsed
+  }, [secondsElapsed])
+
+  const persistSinglePlayerRun = useCallback(async () => {
+    if (matchId) return
+    if (singlePlayerSavedRef.current) return
+
+    const finalScore = scoreRef.current
+    const finalTimeSeconds = secondsElapsedRef.current
+    if (finalScore <= 0 && finalTimeSeconds <= 0) return
+
+    singlePlayerSavedRef.current = true
+    try {
+      const user = await authService.getSessionUser()
+      if (!user) return
+      await saveSinglePlayerRun(user.id, finalScore, finalTimeSeconds)
+    } catch (e) {
+      console.error('Failed to save single-player run:', e)
+    }
+  }, [matchId])
+
+  useEffect(() => {
+    if (matchId) return
+    if (!gameOver) return
+    setIsTimerRunning(false)
+    setPause(false)
+    void persistSinglePlayerRun()
+  }, [gameOver, matchId, persistSinglePlayerRun])
 
   useEffect(() => {
     return () => {
@@ -847,6 +880,7 @@ export default function GameLayoutWeb() {
     setFirstMovePlacements([])
     setFirstMoveActive(true)
     setGameOver(null)
+    singlePlayerSavedRef.current = false
 
     setScore(0)
     setHints(2)
@@ -1144,11 +1178,13 @@ export default function GameLayoutWeb() {
         setWrongForcedTries(0)
       }
       if (nextBlockCounts.every((c) => c === 0)) {
-        setPause(true)
+        setPause(false)
+        setIsTimerRunning(false)
         setGameOver({ status: "win", message: "All counters used." })
-      } else if (!findFirstScoringMove(3, nextGrid, nextBlockCounts)) {
-        setPause(true)
-        setGameOver({ status: "lose", message: "No valid moves remain." })
+      } else if (nextGrid.every((r) => r.every((cell) => cell !== null))) {
+        setPause(false)
+        setIsTimerRunning(false)
+        setGameOver({ status: "lose", message: "Board is full." })
       }
     } else {
       nextGrid[row][col] = colorIndex
@@ -1204,11 +1240,13 @@ export default function GameLayoutWeb() {
 
       if (!matchId) {
         if (nextBlockCounts.every((c) => c === 0)) {
-          setPause(true)
+          setPause(false)
+          setIsTimerRunning(false)
           setGameOver({ status: "win", message: "All counters used." })
-        } else if (!findFirstScoringMove(3, nextGrid, nextBlockCounts)) {
-          setPause(true)
-          setGameOver({ status: "lose", message: "No valid moves remain." })
+        } else if (nextGrid.every((r) => r.every((cell) => cell !== null))) {
+          setPause(false)
+          setIsTimerRunning(false)
+          setGameOver({ status: "lose", message: "Board is full." })
         }
       }
     }
@@ -1540,34 +1578,157 @@ export default function GameLayoutWeb() {
     <div style={containerStyle}>
         {!matchId && gameOver ? (
           <div style={{
-            position: "absolute",
+            position: "fixed",
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 100,
+            zIndex: 10000,
           }}>
-            <div style={{
-              padding: 24,
-              borderRadius: 16,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              minWidth: 280,
-              backgroundColor: theme === "dark" ? "rgba(25,25,91,0.95)" : "rgba(255,255,255,0.95)",
-              textAlign: "center",
-            }}>
-              <span style={{ fontFamily: "Geist-Bold", fontSize: 18, marginBottom: 8, color: theme === "dark" ? "#FFFFFF" : "#111111", display: "block" }}>
-                {gameOver.status === "win" ? "You win!" : "Game over"}
-              </span>
-              <span style={{ fontFamily: "Geist-Regular", fontSize: 14, marginBottom: 12, color: theme === "dark" ? "rgba(255,255,255,0.7)" : "rgba(17,17,17,0.7)", display: "block" }}>
-                {gameOver.message}
-              </span>
-              <span style={{ fontFamily: "Geist-Bold", fontSize: 20, color: colors.accent }}>Score: {score}</span>
-            </div>
+            <BlurView
+              intensity={20}
+              tint="default"
+              experimentalBlurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            >
+              <div style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 30px",
+                height: "100%",
+                width: "100%",
+                backgroundColor: "rgba(0,0,0,0.4)",
+              }}>
+                <div style={{
+                  width: "100%",
+                  maxWidth: 420,
+                  borderRadius: 32,
+                  padding: 32,
+                  boxShadow: "0px 20px 40px rgba(0, 0, 0, 0.4)",
+                  background: theme === "dark"
+                    ? "linear-gradient(to right bottom, #000017, #000074)"
+                    : "#FFFFFF",
+                  display: "flex",
+                  flexDirection: "column",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  alignItems: "center",
+                  gap: 10,
+                }}>
+                  <div style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 20,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: gameOver.status === "win"
+                      ? "linear-gradient(to right, #22c55e, #16a34a)"
+                      : "linear-gradient(to right, #ff4b4b, #ff0000)",
+                    boxShadow: gameOver.status === "win"
+                      ? "0 10px 20px rgba(34,197,94,0.25)"
+                      : "0 10px 20px rgba(255,0,0,0.25)",
+                    marginBottom: 6,
+                  }}>
+                    <Ionicons name={gameOver.status === "win" ? "trophy" : "alert"} size={34} color="#FFFFFF" />
+                  </div>
+
+                  <h2 style={{
+                    fontSize: 26,
+                    fontWeight: "800",
+                    color: colors.text,
+                    fontFamily: "Geist-Regular, system-ui",
+                    margin: 0,
+                    textAlign: "center",
+                    letterSpacing: -0.2,
+                  }}>
+                    {gameOver.status === "win" ? "You win!" : "Game over"}
+                  </h2>
+
+                  <p style={{
+                    fontSize: 16,
+                    color: colors.text,
+                    opacity: 0.82,
+                    fontFamily: "Geist-Regular, system-ui",
+                    margin: 0,
+                    textAlign: "center",
+                    lineHeight: "22px",
+                  }}>
+                    {gameOver.message}
+                  </p>
+
+                  <div style={{
+                    marginTop: 6,
+                    padding: "10px 14px",
+                    borderRadius: 16,
+                    backgroundColor: theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+                    border: theme === "dark" ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.06)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    width: "100%",
+                  }}>
+                    <span style={{ fontSize: 14, fontFamily: "Geist-Regular, system-ui", fontWeight: "600", color: colors.text, opacity: 0.8 }}>Final score</span>
+                    <span style={{ fontSize: 18, fontFamily: "Geist-Bold, system-ui", fontWeight: "800", color: colors.accent }}>{score}</span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "row", gap: 14, width: "100%", marginTop: 18 }}>
+                    <Pressable
+                      onPress={async () => {
+                        await persistSinglePlayerRun()
+                        setGameOver(null)
+                        initializeGame()
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      <div style={{
+                        padding: "16px",
+                        borderRadius: 16,
+                        background: "linear-gradient(to right, #1177FE, #48B7FF)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        boxShadow: "0 6px 16px rgba(17, 119, 254, 0.28)",
+                        transition: "transform 0.1s",
+                      }}
+                        onMouseDown={e => e.currentTarget.style.transform = "scale(0.98)"}
+                        onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                      >
+                        <span style={{ fontSize: 16, fontFamily: "Geist-Regular, system-ui", fontWeight: "700", color: "#fff" }}>Play again</span>
+                      </div>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={async () => {
+                        await persistSinglePlayerRun()
+                        setGameOver(null)
+                        router.push("/")
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      <div style={{
+                        padding: "16px",
+                        borderRadius: 16,
+                        backgroundColor: "rgba(0,0,0,0.05)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        transition: "background-color 0.2s",
+                      }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.1)"}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)"}
+                      >
+                        <span style={{ fontSize: 16, fontFamily: "Geist-Regular, system-ui", fontWeight: "700", color: colors.text }}>Home</span>
+                      </div>
+                    </Pressable>
+                  </div>
+                </div>
+              </div>
+            </BlurView>
           </div>
         ) : null}
         {matchId && scoreSubmitted && multiplayerMatch?.status !== "finished" ? (
@@ -2261,7 +2422,173 @@ export default function GameLayoutWeb() {
               <Ionicons name="help-circle-outline" size={32} color={colors.text} />
             </div>
           </Pressable>
+
+          <Pressable onPress={() => setRulesVisible(true)}>
+            <div style={{
+              width: 80,
+              height: 80,
+              borderRadius: 25,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
+              cursor: 'pointer',
+              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
+              border: "1px solid rgba(0,0,0,0.05)",
+              transition: "transform 0.1s",
+            }}
+              onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
+              onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+            >
+              <Ionicons name="book-outline" size={30} color={colors.text} />
+            </div>
+          </Pressable>
         </div>
+
+        {rulesVisible && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10000,
+          }}>
+            <BlurView
+              intensity={20}
+              tint="default"
+              experimentalBlurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            >
+              <div style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 18px",
+                height: "100%",
+                width: "100%",
+                backgroundColor: "rgba(0,0,0,0.4)"
+              }}>
+                <div style={{
+                  width: "100%",
+                  maxWidth: 520,
+                  maxHeight: "78vh",
+                  borderRadius: 32,
+                  padding: 26,
+                  boxShadow: "0px 20px 40px rgba(0, 0, 0, 0.4)",
+                  background: theme === "dark"
+                    ? "linear-gradient(to right bottom, #000017, #000074)"
+                    : "#FFFFFF",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  overflow: "hidden",
+                }}>
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 14,
+                    gap: 12,
+                  }}>
+                    <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Ionicons name="book-outline" size={22} color={colors.accent} />
+                      <span style={{ fontSize: 22, fontWeight: "900", fontFamily: "Geist-Regular, system-ui", color: colors.text }}>
+                        How to Play
+                      </span>
+                    </div>
+                    <Pressable onPress={() => setRulesVisible(false)} style={{
+                      width: 40,
+                      height: 40,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                      borderRadius: 20,
+                      cursor: "pointer",
+                    }}>
+                      <span style={{ fontSize: 24, fontWeight: "800", color: colors.text, lineHeight: 1 }}>×</span>
+                    </Pressable>
+                  </div>
+
+                  <div style={{
+                    overflowY: "auto",
+                    paddingRight: 6,
+                    paddingBottom: 4,
+                  }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div style={{
+                        padding: 14,
+                        borderRadius: 18,
+                        backgroundColor: theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                        border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)",
+                      }}>
+                        <div style={{ fontSize: 14, fontFamily: "Geist-Bold, system-ui", color: colors.text, marginBottom: 6 }}>Goal</div>
+                        <div style={{ fontSize: 13, fontFamily: "Geist-Regular, system-ui", color: colors.text, opacity: 0.82, lineHeight: "18px" }}>
+                          Place blocks to form color palindromes. Use all counters.
+                        </div>
+                      </div>
+
+                      <div style={{
+                        padding: 14,
+                        borderRadius: 18,
+                        backgroundColor: theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                        border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)",
+                      }}>
+                        <div style={{ fontSize: 14, fontFamily: "Geist-Bold, system-ui", color: colors.text, marginBottom: 6 }}>Palindrome</div>
+                        <div style={{ fontSize: 13, fontFamily: "Geist-Regular, system-ui", color: colors.text, opacity: 0.82, lineHeight: "18px" }}>
+                          A sequence that reads the same forwards and backwards. Only odd lengths count (3, 5, 7, ...).
+                        </div>
+                      </div>
+
+                      <div style={{
+                        padding: 14,
+                        borderRadius: 18,
+                        backgroundColor: theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                        border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)",
+                      }}>
+                        <div style={{ fontSize: 14, fontFamily: "Geist-Bold, system-ui", color: colors.text, marginBottom: 6 }}>Valid Move</div>
+                        <div style={{ fontSize: 13, fontFamily: "Geist-Regular, system-ui", color: colors.text, opacity: 0.82, lineHeight: "18px" }}>
+                          Your placement must create a palindrome in a row, column, or a single 90° right-angle (L-shape).
+                        </div>
+                      </div>
+
+                      <div style={{
+                        padding: 14,
+                        borderRadius: 18,
+                        backgroundColor: theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                        border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)",
+                      }}>
+                        <div style={{ fontSize: 14, fontFamily: "Geist-Bold, system-ui", color: colors.text, marginBottom: 6 }}>First Move</div>
+                        <div style={{ fontSize: 13, fontFamily: "Geist-Regular, system-ui", color: colors.text, opacity: 0.82, lineHeight: "18px" }}>
+                          At the start you place two blocks. After the second placement you must have created a 5+ palindrome.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+                    <Pressable onPress={() => setRulesVisible(false)}>
+                      <div style={{
+                        padding: "12px 14px",
+                        borderRadius: 16,
+                        background: "linear-gradient(to right, #1177FE, #48B7FF)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        boxShadow: "0 6px 16px rgba(17, 119, 254, 0.28)",
+                      }}>
+                        <span style={{ fontSize: 15, fontFamily: "Geist-Regular, system-ui", fontWeight: "700", color: "#fff" }}>Got it</span>
+                      </div>
+                    </Pressable>
+                  </div>
+                </div>
+              </div>
+            </BlurView>
+          </div>
+        )}
 
         {/* Settings Modal */}
         {settingsVisible && (
@@ -2584,7 +2911,8 @@ export default function GameLayoutWeb() {
                     </Pressable>
 
                     <Pressable 
-                        onPress={() => {
+                        onPress={async () => {
+                            await persistSinglePlayerRun()
                             initializeGame()
                             setRestartConfirmationVisible(false)
                         }}
@@ -2697,7 +3025,8 @@ export default function GameLayoutWeb() {
                     </Pressable>
 
                     <Pressable 
-                        onPress={() => {
+                        onPress={async () => {
+                            await persistSinglePlayerRun()
                             setHomeConfirmationVisible(false)
                             router.push("/")
                         }}
@@ -2726,7 +3055,7 @@ export default function GameLayoutWeb() {
             </BlurView>
           </div>
         )}
-        {pause && (
+        {pause && !gameOver && !matchId && (
           <div style={{
             position: "fixed",
             top: 0,

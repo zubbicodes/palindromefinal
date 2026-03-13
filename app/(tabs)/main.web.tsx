@@ -447,6 +447,13 @@ export default function MainWeb() {
         onClick: () => router.push('/friends'),
       },
       {
+        title: 'Leaderboard',
+        subtitle: 'Top scores & your best',
+        icon: 'trophy',
+        gradient: ['#22c55e', '#16a34a'],
+        onClick: () => router.push('/leaderboard'),
+      },
+      {
         title: 'Settings',
         subtitle: 'Profile and preferences',
         icon: 'settings',
