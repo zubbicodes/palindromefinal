@@ -1,8 +1,13 @@
 "use client"
 
+import { authService } from "@/authService"
 import { ColorBlindMode, useSettings } from "@/context/SettingsContext"
 import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
+import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
+import { createInitialState } from "@/lib/gameEngine"
+import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, submitScore, subscribeToMatch, updateLiveScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
+import { saveSinglePlayerRun } from "@/lib/singlePlayer"
 import { Ionicons } from "@expo/vector-icons"
 import { BlurView } from "expo-blur"
 import { useLocalSearchParams, useRouter } from "expo-router"
@@ -13,66 +18,65 @@ import {
   Pressable, // Keeps Pressable for unified event handling or allows simple onClick
   StyleSheet,
 } from "react-native"
-// react-native-svg works on web, usually maps to <svg>, but we can also use native <svg> if RN-SVG gives trouble. 
-// However, sticking to RN-SVG is usually fine on web if setup correctly. The user snippet used Svg, let's stick to it or standard svg if safer.
-// User snippet had Svg imports, let's keep them if they work, but standard SVG is safer for "pure web".
-// Actually user snippet imports Svg from react-native-svg. I will try to use it, or fallback to standard svg if I can match styles.
-import { authService } from "@/authService"
-import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
-import { createInitialState } from "@/lib/gameEngine"
-import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, submitScore, subscribeToMatch, updateLiveScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
-import { saveSinglePlayerRun } from "@/lib/singlePlayer"
-import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from "react-native-svg"
 import { Switch } from "react-native-switch"
 
 const { width } = Dimensions.get("window")
 
 // Responsive layout configuration based on screen size
 const getLayoutConfig = () => {
-  if (width >= 1920) {
+  const vw = typeof window !== "undefined" ? window.innerWidth : width
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800
+  const TOP_BAR = 52
+  const PAD = 12
+  const GAP = 10
+
+  if (vw >= 900) {
+    // Desktop 3-column: LEFT | BOARD | RIGHT
+    const leftW  = Math.min(200, Math.max(140, Math.floor(vw * 0.13)))
+    const rightW = Math.min(260, Math.max(180, Math.floor(vw * 0.16)))
+    const availW = vw - leftW - rightW - GAP * 2 - PAD * 2
+    const availH = vh - TOP_BAR - PAD * 2
+    const boardSize = Math.max(Math.min(availW, availH, 600), 280)
+    const cellSize  = Math.max(Math.floor((boardSize - 20) / 11), 22)
+    // Larger color blocks - use more of the left panel width
+    const squareSize = Math.min(leftW - 24, 90, Math.floor(availH / 7))
     return {
-      statusGap: 230,
-      mainLayoutGap: 70,
-      boardSize: 600,
-      cellSize: 46,
-      colorBlockWrapper: { width: 100, height: 570 },
-      colorBlock: { width: 100, height: 98 },
-      controlsBottom: 15,
-      statusMargin: { top: 15, bottom: 15 },
+      boardSize, cellSize,
+      colorBlock:        { width: squareSize, height: squareSize },
+      colorBlockWrapper: { width: squareSize, height: squareSize + 4 },
+      leftPanelW: leftW, rightPanelW: rightW,
+      statusGap: 0, mainLayoutGap: 0, controlsBottom: 0,
+      statusMargin: { top: 0, bottom: 0 },
     }
-  } else if (width >= 1440) {
+  }
+
+  if (vw >= 600) {
+    // Tablet 2-column: BOARD | RIGHT  (blocks below board)
+    const rightW = Math.min(190, Math.max(150, Math.floor(vw * 0.23)))
+    const availW = vw - rightW - GAP * 3 - PAD * 2
+    const availH = Math.floor(vh * 0.56)
+    const boardSize = Math.max(Math.min(availW, availH, 480), 240)
+    const cellSize  = Math.max(Math.floor((boardSize - 18) / 11), 19)
     return {
-      statusGap: 165,
-      mainLayoutGap: 50,
-      boardSize: 520,
-      cellSize: 40,
-      colorBlockWrapper: { width: 85, height: 490 },
-      colorBlock: { width: 85, height: 83 },
-      controlsBottom: -5,
-      statusMargin: { top: 30, bottom: 30 },
+      boardSize, cellSize,
+      colorBlock:        { width: 58, height: 54 },
+      colorBlockWrapper: { width: 58, height: 58 },
+      leftPanelW: 0, rightPanelW: rightW,
+      statusGap: 0, mainLayoutGap: 0, controlsBottom: 0,
+      statusMargin: { top: 0, bottom: 0 },
     }
-  } else if (width >= 1366) {
-    return {
-      statusGap: 140,
-      mainLayoutGap: 40,
-      boardSize: 500,
-      cellSize: 38,
-      colorBlockWrapper: { width: 75, height: 440 },
-      colorBlock: { width: 75, height: 73 },
-      controlsBottom: 10,
-      statusMargin: { top: 15, bottom: 15 },
-    }
-  } else {
-    return {
-      statusGap: 80,
-      mainLayoutGap: 20,
-      boardSize: Math.min(width * 0.7, 400),
-      cellSize: 32,
-      colorBlockWrapper: { width: 90, height: 400 },
-      colorBlock: { width: 65, height: 63 },
-      controlsBottom: 5,
-      statusMargin: { top: 20, bottom: 20 },
-    }
+  }
+
+  // Mobile single-column
+  const boardSize = Math.max(Math.min(vw - 16, 360), 240)
+  const cellSize  = Math.max(Math.floor((boardSize - 14) / 11), 18)
+  return {
+    boardSize, cellSize,
+    colorBlock:        { width: 48, height: 44 },
+    colorBlockWrapper: { width: 48, height: 48 },
+    leftPanelW: 0, rightPanelW: 0,
+    statusGap: 0, mainLayoutGap: 0, controlsBottom: 0,
+    statusMargin: { top: 0, bottom: 0 },
   }
 }
 
@@ -829,6 +833,13 @@ export default function GameLayoutWeb() {
   const word = " PALINDROME"
   const halfWord = Math.floor(word.length / 2)
 
+  const [, forceUpdateLayout] = useState(0)
+  useEffect(() => {
+    const onResize = () => forceUpdateLayout(n => n + 1)
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
+
   const layoutConfig = getLayoutConfig()
 
   const colorGradients = customGameColors ?? [...DEFAULT_GAME_GRADIENTS]
@@ -1555,18 +1566,17 @@ export default function GameLayoutWeb() {
 
   const containerStyle: React.CSSProperties = {
     display: "flex",
-    flexDirection: "row",
-    flex: 1,
+    flexDirection: "column",
     alignItems: "center",
-    justifyContent: "center",
-    padding: "40px",
+    height: "100vh",
+    overflow: "hidden",
     background: theme === "dark"
-      ? "linear-gradient(to right bottom, #000017, #000074)"
-      : "linear-gradient(to right bottom, #FFFFFF, #F5F5F5)",
-    minHeight: "100vh",
+      ? "linear-gradient(135deg, #00000f 0%, #00004a 60%, #000074 100%)"
+      : "linear-gradient(135deg, #eef2ff 0%, #f5f0ff 60%, #fff 100%)",
     width: "100%",
     boxSizing: "border-box",
-    gap: 60,
+    padding: "10px 10px 0",
+    gap: 0,
   }
 
   const tutorialStep: GameTutorialStep | null =
@@ -1791,6 +1801,7 @@ export default function GameLayoutWeb() {
           </div>
         ) : null}
         <style>{`
+          * { box-sizing: border-box; }
           @keyframes popIn {
             0% { transform: scale(0); opacity: 0; }
             50% { transform: scale(1.2); opacity: 1; }
@@ -1798,11 +1809,11 @@ export default function GameLayoutWeb() {
           }
           @keyframes floatUp {
             0% { transform: translateY(0px); opacity: 1; }
-            100% { transform: translateY(-50px); opacity: 0; }
+            100% { transform: translateY(-60px); opacity: 0; }
           }
           @keyframes pulse {
             0% { opacity: 0.3; transform: scale(0.95); }
-            50% { opacity: 0.7; transform: scale(1.05); }
+            50% { opacity: 0.72; transform: scale(1.05); }
             100% { opacity: 0.3; transform: scale(0.95); }
           }
           @keyframes scorePulse {
@@ -1815,664 +1826,456 @@ export default function GameLayoutWeb() {
             30% { opacity: 0.85; }
             100% { opacity: 0; transform: translateX(120%) skewX(-18deg); }
           }
+          @keyframes hudFadeIn {
+            0% { opacity: 0; transform: translateY(-8px); }
+            100% { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes boardGlow {
+            0% { box-shadow: 0 0 0 1px rgba(100,120,255,0.15), 0 24px 64px rgba(0,0,0,0.55); }
+            50% { box-shadow: 0 0 0 1px rgba(100,120,255,0.3), 0 24px 64px rgba(0,0,0,0.55), 0 0 40px rgba(80,100,255,0.1); }
+            100% { box-shadow: 0 0 0 1px rgba(100,120,255,0.15), 0 24px 64px rgba(0,0,0,0.55); }
+          }
         `}</style>
 
-        {/* Left Panel: Status & Info */}
+        {/* ── Thin Top Bar ── */}
         <div style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 30,
-          minWidth: 200,
+          width: "100%", maxWidth: 1600,
+          height: 52, flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "0 4px", position: "relative",
         }}>
-          <h1 style={{
-            fontSize: 32,
-            fontWeight: "900",
-            marginBottom: 20,
-            textAlign: "center",
-            color: colors.accent,
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            margin: 0,
-            textShadow: "0 2px 10px rgba(0,0,0,0.1)",
-          }}>PALINDROME®</h1>
-
-          {/* User Profile Summary */}
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 15,
-            padding: "10px 20px",
-            backgroundColor: theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-            borderRadius: 20,
-            marginBottom: 10,
-          }}>
-             <Image
-                source={avatar ? { uri: avatar } : require("../../assets/images/profile_ph.png")}
-                style={{
-                  width: 50,
-                  height: 50,
-                  borderRadius: 25,
-                  resizeMode: 'contain',
-                  borderWidth: 2,
-                  borderColor: colors.accent,
-                }}
-                accessibilityLabel="Profile"
-              />
-              <span style={{
-                fontSize: 18,
-                fontWeight: "700",
-                color: colors.text,
-                fontFamily: "system-ui"
-              }}>{userName}</span>
-          </div>
-
-          {matchId ? (
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              width: "100%",
-              padding: "10px 16px",
-              backgroundColor: theme === "dark" ? "rgba(25,25,91,0.5)" : "rgba(229,236,241,0.6)",
-              borderRadius: 12,
-              borderWidth: 1,
-              borderStyle: "solid",
-              borderColor: theme === "dark" ? "rgba(255,255,255,0.15)" : "#C7D5DF",
-            }}>
-              <Image
-                source={opponentAvatar ? { uri: opponentAvatar } : require("../../assets/images/profile_ph.png")}
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  resizeMode: "contain",
-                }}
-                accessibilityLabel="Opponent"
-              />
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 13, color: colors.secondaryText, fontFamily: "system-ui" }}>{opponentName}</span>
-                <span style={{ fontSize: 18, fontWeight: "700", color: colors.accent, fontFamily: "system-ui" }}>{opponentScore ?? "—"}</span>
-              </div>
-            </div>
-          ) : null}
-
-          <div id="tour-game-status-score" style={{
-            display: "flex",
-            flexDirection: "column",
-            borderWidth: 1,
-            borderStyle: "solid",
-            borderRadius: 24,
-            width: "100%",
-            padding: "20px 0",
-            justifyContent: "center",
-            alignItems: "center",
-            boxShadow: "0px 10px 20px rgba(0, 0, 0, 0.1)",
-            backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
-            borderColor: colors.border,
-          }}>
-            <span style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: colors.secondaryText, fontFamily: "system-ui", marginBottom: 5 }}>Score</span>
-            <span style={{ fontSize: 42, fontWeight: "800", color: colors.accent, fontFamily: "system-ui" }}>{score}</span>
-          </div>
-
-          {matchId && firstMoveCountdown != null ? (
-            <div style={{
-              padding: "8px 16px",
-              borderRadius: 12,
-              backgroundColor: firstMoveCountdown <= 5 ? "rgba(239,68,68,0.9)" : "rgba(34,197,94,0.9)",
-              marginBottom: 8,
-            }}>
-              <span style={{ fontFamily: "Geist-Bold", fontSize: 14, color: "#FFFFFF" }}>
-                Make your first move! {firstMoveCountdown}s
-              </span>
-            </div>
-          ) : null}
-          <div id="tour-game-timer" style={{
-             display: "flex",
-             flexDirection: "column",
-             alignItems: "center",
-             justifyContent: "center",
-          }}>
-             <Svg height="80" width="200">
-              <Defs>
-                <SvgLinearGradient id="timeGradWeb" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0" stopColor="#95DEFE" stopOpacity="1" />
-                  <Stop offset="1" stopColor="#419EEF" stopOpacity="1" />
-                </SvgLinearGradient>
-              </Defs>
-              <SvgText
-                fill="url(#timeGradWeb)"
-                fontSize="48"
-                fontFamily="Geist-Regular"
-                fontWeight="bold"
-                x="50%"
-                y="65%"
-                textAnchor="middle"
-              >
-                {time}
-              </SvgText>
-            </Svg>
-          </div>
-
-          <div
-            id="tour-game-status-hints"
-            onClick={findHint}
-            style={{
-              cursor: hints > 0 ? "pointer" : "not-allowed",
-              opacity: hints > 0 ? 1 : 0.6,
-              display: "flex",
-              flexDirection: "column",
-              borderWidth: 1,
-              borderStyle: "solid",
-              borderRadius: 24,
-              width: "100%",
-              padding: "20px 0",
-              justifyContent: "center",
-              alignItems: "center",
-              boxShadow: "0px 10px 20px rgba(0, 0, 0, 0.1)",
-              backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
-              borderColor: colors.border,
-              transition: "transform 0.2s",
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.02)"}
-            onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-          >
-            <span style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1, color: colors.secondaryText, fontFamily: "system-ui", marginBottom: 5 }}>Hints</span>
-            <div style={{ position: "relative", height: 38, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{
-                position: "absolute",
-                fontSize: 32,
-                fontWeight: "700",
-                color: "#C35DD9",
-                fontFamily: "system-ui",
-                opacity: noHintsFaceVisible ? 0 : 1,
-                transform: noHintsFaceVisible ? "scale(0.98)" : "scale(1)",
-                transition: "opacity 200ms ease, transform 200ms ease",
-              }}>
-                {hints}
-              </span>
-              <span style={{
-                position: "absolute",
-                fontSize: 32,
-                fontWeight: "700",
-                color: "#C35DD9",
-                fontFamily: "system-ui",
-                opacity: noHintsFaceVisible ? 1 : 0,
-                transform: noHintsFaceVisible ? "scale(1)" : "scale(0.98)",
-                transition: "opacity 200ms ease, transform 200ms ease",
-              }}>
-                (¬_¬)
-              </span>
-            </div>
-          </div>
+          <span style={{
+            fontSize: "clamp(20px, 2.8vw, 32px)", fontWeight: 900,
+            color: colors.accent, fontFamily: "system-ui", letterSpacing: -1,
+          }}>PALINDROME®</span>
         </div>
 
-        {/* Center Panel: Board & Blocks */}
+        {/* ── Main 3-Column Area ── */}
         <div style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 40,
+          flex: 1, display: "flex", flexDirection: "row",
+          gap: 6, padding: "8px 12px 10px",
+          width: "100%", maxWidth: 1400,
+          minHeight: 0, overflow: "hidden",
+          boxSizing: "border-box",
+          justifyContent: "center",
         }}>
-          {/* Game Board */}
-          <div
-            id="tour-game-board"
-            ref={boardRef}
-            style={{
-              borderRadius: 24,
-              padding: 12,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#f1f1f1ff",
-              boxShadow: theme === "dark" ? "0 20px 50px rgba(0,0,0,0.5)" : "0 20px 50px rgba(0,0,0,0.1)",
-              width: layoutConfig.boardSize,
-              height: layoutConfig.boardSize,
-              zIndex: 1,
-              position: 'relative',
-            }}
-          >
-            {/* Feedback Overlay */}
-            {feedback && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  zIndex: 9999,
-                  pointerEvents: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <div
-                  key={feedback.id}
-                  style={{
-                    animation: "popIn 0.5s ease-out forwards, floatUp 1.5s ease-in 1s forwards",
-                    width: "100%",
-                    textAlign: "center",
-                  }}
-                >
-                  <h2
-                    style={{
-                      fontSize: 56,
-                      fontWeight: "900",
-                      color: feedback.color,
-                      textShadow: "0px 4px 20px rgba(0,0,0,0.4)",
-                      margin: 0,
-                      fontFamily: "Geist-Regular, system-ui",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {feedback.text}
-                  </h2>
-                </div>
+
+          {/* ── LEFT PANEL: Player + Color Blocks ── */}
+          {layoutConfig.leftPanelW > 0 && (
+            <div style={{
+              width: layoutConfig.leftPanelW, flexShrink: 0,
+              display: "flex", flexDirection: "column", gap: 10,
+              justifyContent: "center", alignItems: "center",
+              paddingRight: 8,
+            }}>
+              {/* Player card */}
+              <div style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 7,
+                padding: "12px 8px", borderRadius: 16,
+                background: theme === "dark" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
+                border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
+                boxShadow: theme === "dark" ? "0 4px 16px rgba(0,0,0,0.3)" : "0 4px 16px rgba(0,0,0,0.06)",
+                width: "100%", maxWidth: layoutConfig.leftPanelW - 16,
+              }}>
+                <Image
+                  source={avatar ? { uri: avatar } : require("../../assets/images/profile_ph.png")}
+                  style={{ width: 48, height: 48, borderRadius: 24, resizeMode: "contain", borderWidth: 2.5, borderColor: colors.accent }}
+                  accessibilityLabel="Profile"
+                />
+                <span style={{
+                  fontSize: 13, fontWeight: 700, color: colors.text, fontFamily: "system-ui",
+                  textAlign: "center", overflow: "hidden", textOverflow: "ellipsis",
+                  whiteSpace: "nowrap", maxWidth: layoutConfig.leftPanelW - 20,
+                }}>{userName}</span>
               </div>
-            )}
 
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {Array.from({ length: gridSize }, (_, row) => (
-                <div key={row} style={{ display: "flex", flexDirection: "row" }}>
-                  {Array.from({ length: gridSize }, (_, col) => {
-                    const isBulldog = bulldogPositions.some((pos) => pos.row === row && pos.col === col)
-                    let letter: string | null = null
-                    if (row === center && col >= center - halfWord && col < center - halfWord + word.length) {
-                      letter = word[col - (center - halfWord)]
-                    }
-                    if (col === center && row >= center - halfWord && row < center - halfWord + word.length) {
-                      letter = word[row - (center - halfWord)]
-                    }
+              {/* Opponent card (multiplayer) */}
+              {matchId ? (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "9px 10px",
+                  borderRadius: 12,
+                  background: theme === "dark" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
+                  border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
+                }}>
+                  <Image source={opponentAvatar ? { uri: opponentAvatar } : require("../../assets/images/profile_ph.png")}
+                    style={{ width: 28, height: 28, borderRadius: 14, resizeMode: "contain" }} accessibilityLabel="Opponent" />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, color: colors.secondaryText, fontFamily: "system-ui" }}>Opponent</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: colors.accent }}>{opponentScore ?? "—"}</div>
+                  </div>
+                </div>
+              ) : null}
 
-                    const cellColorIndex = gridState[row][col]
-                    const isHovered = dragOverCell?.row === row && dragOverCell?.col === col
+              {/* Vertical color blocks */}
+              <div id="tour-game-blocks" style={{
+                display: "flex", flexDirection: "column", alignItems: "center",
+                justifyContent: "center", padding: "16px 10px", gap: 10,
+                borderRadius: 16,
+                background: theme === "dark" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
+                border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
+                boxShadow: theme === "dark" ? "0 4px 16px rgba(0,0,0,0.3)" : "0 4px 16px rgba(0,0,0,0.06)",
+                width: "100%", maxWidth: layoutConfig.leftPanelW - 16,
+              }}>
+                {colorGradients.map((gradient, i) => (
+                  <DraggableBlock key={`left-${i}`} colorIndex={i} gradient={gradient}
+                    count={blockCounts[i]} layoutConfig={layoutConfig} onDragStart={handleDragStart} />
+                ))}
+              </div>
+            </div>
+          )}
 
-                    const cellStyle: React.CSSProperties = {
-                      width: layoutConfig.cellSize,
-                      height: layoutConfig.cellSize,
-                      borderWidth: 1,
-                      borderStyle: "solid",
-                      borderColor: "#CCDAE466",
-                      borderRadius: 8,
-                      margin: 3,
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
-                      transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
-                      position: "relative",
-                      boxShadow: "inset 0 2px 4px rgba(0,0,0,0.05)",
-                    }
+          {/* ── CENTER: Board (+ blocks below on tablet/mobile) ── */}
+          <div style={{
+            flex: 1, display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: 10, minWidth: 0, minHeight: 0,
+          }}>
+            {/* Game Board */}
+            <div
+              id="tour-game-board"
+              ref={boardRef}
+              style={{
+                borderRadius: 24, padding: 10,
+                display: "flex", justifyContent: "center", alignItems: "center",
+                background: theme === "dark"
+                  ? "linear-gradient(145deg, rgba(18,18,75,0.92) 0%, rgba(8,8,44,0.97) 100%)"
+                  : "linear-gradient(145deg, #f4f6ff 0%, #e8eaf0 100%)",
+                boxShadow: theme === "dark"
+                  ? "0 0 0 1px rgba(100,120,255,0.18), 0 20px 60px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.04)"
+                  : "0 0 0 1px rgba(0,0,0,0.07), 0 20px 60px rgba(0,0,0,0.13), inset 0 1px 0 rgba(255,255,255,0.9)",
+                width: layoutConfig.boardSize, height: layoutConfig.boardSize,
+                zIndex: 1, position: "relative", flexShrink: 0,
+              }}
+            >
+              {/* Feedback Overlay */}
+              {feedback && (
+                <div style={{
+                  position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                  zIndex: 9999, pointerEvents: "none", display: "flex",
+                  alignItems: "center", justifyContent: "center",
+                }}>
+                  <div key={feedback.id} style={{ animation: "popIn 0.5s ease-out forwards, floatUp 1.5s ease-in 1s forwards", width: "100%", textAlign: "center" }}>
+                    <h2 style={{ fontSize: 56, fontWeight: "900", color: feedback.color, textShadow: "0px 4px 20px rgba(0,0,0,0.4)", margin: 0, fontFamily: "Geist-Regular, system-ui", whiteSpace: "nowrap" }}>
+                      {feedback.text}
+                    </h2>
+                  </div>
+                </div>
+              )}
 
-                    const isHint = activeHint?.row === row && activeHint?.col === col
-                    const isScored = scoredCells.includes(`${row},${col}`)
-                    
-                    if (isHovered || isHint) {
-                      cellStyle.backgroundColor = theme === "dark" ? "rgba(100, 200, 255, 0.4)" : "rgba(100, 200, 255, 0.3)"
-                      cellStyle.borderColor = theme === "dark" ? "rgba(100, 200, 255, 0.8)" : "rgba(50, 150, 255, 0.6)"
-                      cellStyle.borderWidth = 2
-                      cellStyle.boxShadow = "0 0 12px rgba(74, 158, 255, 0.5)"
-                      cellStyle.transform = "scale(1.05)"
-                      cellStyle.zIndex = 10
-                    }
-
-                    if (isHint) {
-                      cellStyle.borderColor = "#FFD700"
-                      cellStyle.boxShadow = "0 0 20px rgba(255, 215, 0, 0.6)"
-                    }
-                    
-                    if (isScored) {
-                      cellStyle.borderColor = "rgba(255, 215, 0, 0.95)"
-                      cellStyle.borderWidth = 2
-                      cellStyle.animation = "scorePulse 0.5s ease-out"
-                      cellStyle.zIndex = 12
-                    }
-
-                    return (
-                      <div
-                        key={col}
-                        onDragOver={(e) => handleDragOver(e, row, col)}
-                        onDragEnter={(e) => handleDragEnter(e, row, col)}
-                        onDragLeave={(e) => handleDragLeave(e)}
-                        onDrop={(e) => handleDrop(e, row, col)}
-                        style={cellStyle}
-                      >
-                        {cellColorIndex !== null && (
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              borderRadius: 6,
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {Array.from({ length: gridSize }, (_, row) => (
+                  <div key={row} style={{ display: "flex", flexDirection: "row" }}>
+                    {Array.from({ length: gridSize }, (_, col) => {
+                      const isBulldog = bulldogPositions.some((pos) => pos.row === row && pos.col === col)
+                      let letter: string | null = null
+                      if (row === center && col >= center - halfWord && col < center - halfWord + word.length) {
+                        letter = word[col - (center - halfWord)]
+                      }
+                      if (col === center && row >= center - halfWord && row < center - halfWord + word.length) {
+                        letter = word[row - (center - halfWord)]
+                      }
+                      const cellColorIndex = gridState[row][col]
+                      const isHovered = dragOverCell?.row === row && dragOverCell?.col === col
+                      const cellStyle: React.CSSProperties = {
+                        width: layoutConfig.cellSize, height: layoutConfig.cellSize,
+                        borderWidth: 1, borderStyle: "solid", borderColor: "#CCDAE466",
+                        borderRadius: 8, margin: 3,
+                        display: "flex", justifyContent: "center", alignItems: "center",
+                        backgroundColor: theme === "dark" ? "rgba(25, 25, 91, 0.7)" : "#ffffffff",
+                        transition: "all 0.15s cubic-bezier(0.4, 0, 0.2, 1)",
+                        position: "relative", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.05)",
+                      }
+                      const isHint = activeHint?.row === row && activeHint?.col === col
+                      const isScored = scoredCells.includes(`${row},${col}`)
+                      if (isHovered || isHint) {
+                        cellStyle.backgroundColor = theme === "dark" ? "rgba(100, 200, 255, 0.4)" : "rgba(100, 200, 255, 0.3)"
+                        cellStyle.borderColor = theme === "dark" ? "rgba(100, 200, 255, 0.8)" : "rgba(50, 150, 255, 0.6)"
+                        cellStyle.borderWidth = 2
+                        cellStyle.boxShadow = "0 0 12px rgba(74, 158, 255, 0.5)"
+                        cellStyle.transform = "scale(1.05)"
+                        cellStyle.zIndex = 10
+                      }
+                      if (isHint) {
+                        cellStyle.borderColor = "#FFD700"
+                        cellStyle.boxShadow = "0 0 20px rgba(255, 215, 0, 0.6)"
+                      }
+                      if (isScored) {
+                        cellStyle.borderColor = "rgba(255, 215, 0, 0.95)"
+                        cellStyle.borderWidth = 2
+                        cellStyle.animation = "scorePulse 0.5s ease-out"
+                        cellStyle.zIndex = 12
+                      }
+                      return (
+                        <div key={col}
+                          onDragOver={(e) => handleDragOver(e, row, col)}
+                          onDragEnter={(e) => handleDragEnter(e, row, col)}
+                          onDragLeave={(e) => handleDragLeave(e)}
+                          onDrop={(e) => handleDrop(e, row, col)}
+                          style={cellStyle}
+                        >
+                          {cellColorIndex !== null && (
+                            <div style={{
+                              width: "100%", height: "100%", borderRadius: 6,
                               background: `linear-gradient(to right bottom, ${colorGradients[cellColorIndex][0]}, ${colorGradients[cellColorIndex][1]})`,
-                              position: "absolute",
-                              top: 0,
-                              left: 0,
-                              zIndex: 0,
-                              boxShadow: "0 2px 5px rgba(0,0,0,0.2)"
-                            }}
-                          />
-                        )}
-
-                        {isHint && activeHint && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
+                              position: "absolute", top: 0, left: 0, zIndex: 0,
+                              boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+                            }} />
+                          )}
+                          {isHint && activeHint && (
+                            <div style={{
+                              position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
                               background: `linear-gradient(to right bottom, ${colorGradients[activeHint.colorIndex][0]}, ${colorGradients[activeHint.colorIndex][1]})`,
-                              borderRadius: 6,
-                              animation: "pulse 1.5s infinite",
-                              zIndex: 1,
-                            }}
-                          />
-                        )}
-
-                        {isScored && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              inset: 0,
-                              borderRadius: 6,
-                              overflow: "hidden",
-                              zIndex: 1,
-                              pointerEvents: "none",
-                            }}
-                          >
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: "-20%",
-                                bottom: "-20%",
-                                width: "60%",
+                              borderRadius: 6, animation: "pulse 1.5s infinite", zIndex: 1,
+                            }} />
+                          )}
+                          {isScored && (
+                            <div style={{ position: "absolute", inset: 0, borderRadius: 6, overflow: "hidden", zIndex: 1, pointerEvents: "none" }}>
+                              <div style={{
+                                position: "absolute", top: "-20%", bottom: "-20%", width: "60%",
                                 background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.85), rgba(255,255,255,0))",
                                 animation: "scoreShimmer 0.5s ease-out",
-                              }}
-                            />
+                              }} />
+                            </div>
+                          )}
+                          <div style={{ zIndex: 2, display: "flex", justifyContent: "center", alignItems: "center", pointerEvents: "none" }}>
+                            {isHint && activeHint && colorBlindEnabled && cellColorIndex === null && (
+                              <span style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "center", alignItems: "center", color: "#FFFFFF", fontWeight: "900", fontSize: layoutConfig.cellSize > 40 ? 18 : 15, textShadow: "0 1px 4px rgba(0,0,0,0.45)", userSelect: "none" }}>
+                                {getColorBlindToken(colorBlindMode, activeHint.colorIndex)}
+                              </span>
+                            )}
+                            {cellColorIndex !== null && colorBlindEnabled && !letter && (
+                              <span style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "center", alignItems: "center", color: "#FFFFFF", fontWeight: "900", fontSize: layoutConfig.cellSize > 40 ? 18 : 15, textShadow: "0 1px 4px rgba(0,0,0,0.45)", userSelect: "none" }}>
+                                {getColorBlindToken(colorBlindMode, cellColorIndex)}
+                              </span>
+                            )}
+                            {cellColorIndex !== null && colorBlindEnabled && letter && (
+                              <span style={{ position: "absolute", right: 4, bottom: 3, color: "#FFFFFF", fontWeight: "900", fontSize: 10, textShadow: "0 1px 4px rgba(0,0,0,0.45)", userSelect: "none" }}>
+                                {getColorBlindToken(colorBlindMode, cellColorIndex)}
+                              </span>
+                            )}
+                            {isBulldog && (
+                              <img src="/bulldog.png" style={{ width: layoutConfig.cellSize - 10, height: layoutConfig.cellSize - 10, objectFit: "contain", filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.3))" }} alt="bulldog" />
+                            )}
+                            {letter && (
+                              <span style={{ color: colors.text, fontSize: layoutConfig.cellSize > 40 ? 18 : 15, fontWeight: "800", fontFamily: "system-ui", textShadow: cellColorIndex !== null ? "0 1px 2px rgba(0,0,0,0.3)" : "none" }}>
+                                {letter}
+                              </span>
+                            )}
                           </div>
-                        )}
-
-                        <div style={{
-                          zIndex: 2,
-                          display: "flex",
-                          justifyContent: "center",
-                          alignItems: "center",
-                          pointerEvents: "none",
-                        }}>
-                          {isHint && activeHint && colorBlindEnabled && cellColorIndex === null && (
-                            <span
-                              style={{
-                                position: "absolute",
-                                inset: 0,
-                                display: "flex",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                color: "#FFFFFF",
-                                fontWeight: "900",
-                                fontSize: layoutConfig.cellSize > 40 ? 18 : 15,
-                                textShadow: "0 1px 4px rgba(0,0,0,0.45)",
-                                userSelect: "none",
-                              }}
-                            >
-                              {getColorBlindToken(colorBlindMode, activeHint.colorIndex)}
-                            </span>
-                          )}
-                          {cellColorIndex !== null && colorBlindEnabled && !letter && (
-                            <span
-                              style={{
-                                position: "absolute",
-                                inset: 0,
-                                display: "flex",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                color: "#FFFFFF",
-                                fontWeight: "900",
-                                fontSize: layoutConfig.cellSize > 40 ? 18 : 15,
-                                textShadow: "0 1px 4px rgba(0,0,0,0.45)",
-                                userSelect: "none",
-                              }}
-                            >
-                              {getColorBlindToken(colorBlindMode, cellColorIndex)}
-                            </span>
-                          )}
-                          {cellColorIndex !== null && colorBlindEnabled && letter && (
-                            <span
-                              style={{
-                                position: "absolute",
-                                right: 4,
-                                bottom: 3,
-                                color: "#FFFFFF",
-                                fontWeight: "900",
-                                fontSize: 10,
-                                textShadow: "0 1px 4px rgba(0,0,0,0.45)",
-                                userSelect: "none",
-                              }}
-                            >
-                              {getColorBlindToken(colorBlindMode, cellColorIndex)}
-                            </span>
-                          )}
-                          {isBulldog && (
-                            <img
-                              src="/bulldog.png"
-                              style={{
-                                width: layoutConfig.cellSize - 10,
-                                height: layoutConfig.cellSize - 10,
-                                objectFit: "contain",
-                                filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.3))"
-                              }}
-                              alt="bulldog"
-                            />
-                          )}
-                          {letter && (
-                            <span
-                              style={{
-                                color: colors.text,
-                                fontSize: layoutConfig.cellSize > 40 ? 18 : 15,
-                                fontWeight: "800",
-                                fontFamily: "system-ui",
-                                textShadow: cellColorIndex !== null ? "0 1px 2px rgba(0,0,0,0.3)" : "none"
-                              }}
-                            >
-                              {letter}
-                            </span>
-                          )}
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
+
+            {/* Blocks below board — tablet/mobile only */}
+            {layoutConfig.leftPanelW === 0 && (
+              <div id="tour-game-blocks" style={{
+                display: "flex", flexDirection: "row", flexWrap: "wrap",
+                alignItems: "center", justifyContent: "center",
+                gap: "clamp(8px, 1.5vw, 16px)",
+                padding: "10px clamp(12px, 2vw, 28px)",
+                background: theme === "dark" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.8)",
+                backdropFilter: "blur(16px)",
+                borderRadius: 18,
+                border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
+                boxShadow: theme === "dark" ? "0 6px 24px rgba(0,0,0,0.35)" : "0 6px 24px rgba(0,0,0,0.08)",
+                maxWidth: layoutConfig.boardSize, boxSizing: "border-box",
+              }}>
+                {colorGradients.map((gradient, i) => (
+                  <DraggableBlock key={`bot-${i}`} colorIndex={i} gradient={gradient}
+                    count={blockCounts[i]} layoutConfig={layoutConfig} onDragStart={handleDragStart} />
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Bottom Blocks Row */}
-          <div id="tour-game-blocks" style={{
-            display: "flex",
-            flexDirection: "row",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 20,
-            padding: "20px 40px",
-            backgroundColor: theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.5)",
-            borderRadius: 30,
-            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-            backdropFilter: "blur(10px)",
-            maxWidth: "100%",
-            boxSizing: "border-box",
-          }}>
-            {colorGradients.map((gradient, i) => (
-              <DraggableBlock
-                key={`bottom-${i}`}
-                colorIndex={i}
-                gradient={gradient}
-                count={blockCounts[i]}
-                layoutConfig={layoutConfig}
-                onDragStart={handleDragStart}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Right Panel: Controls */}
-        <div style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-          minWidth: 100,
-        }}>
-           <Pressable onPress={() => {
-            if (pause) setPause(false)
-            if (!isTimerRunning) setIsTimerRunning(true)
-          }}>
-            <div id="tour-game-btn-play" style={{
-              width: 80,
-              height: 80,
-              borderRadius: 25,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "linear-gradient(to right bottom, #8ed9fc, #3c8dea)",
-              cursor: 'pointer',
-              boxShadow: "0 8px 16px rgba(60, 141, 234, 0.3)",
-              transition: "transform 0.1s",
-            }}
-             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
-             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-            >
-              <Ionicons name="play" size={40} color="#fff" />
-            </div>
-          </Pressable>
-
-          <Pressable onPress={() => setPause(true)}>
-            <div id="tour-game-btn-pause" style={{
-              width: 80,
-              height: 80,
-              borderRadius: 25,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "linear-gradient(to right bottom, #ffee60, #ffa40b)",
-              cursor: 'pointer',
-              boxShadow: "0 8px 16px rgba(255, 164, 11, 0.3)",
-              transition: "transform 0.1s",
-            }}
-             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
-             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-            >
-              <Ionicons name="pause" size={40} color="#fff" />
-            </div>
-          </Pressable>
-
-         
-
-          <Pressable onPress={() => setRestartConfirmationVisible(true)}>
-             <div id="tour-game-btn-restart" style={{
-              width: 80,
-              height: 80,
-              borderRadius: 25,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
-              cursor: 'pointer',
-              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-               border: "1px solid rgba(0,0,0,0.05)",
-                transition: "transform 0.1s",
-            }}
-             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
-             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-            >
-              <Ionicons name="refresh" size={32} color={colors.text} />
-            </div>
-          </Pressable>
-
-          <Pressable onPress={() => setHomeConfirmationVisible(true)}>
-             <div id="tour-game-btn-home" style={{
-              width: 80,
-              height: 80,
-              borderRadius: 25,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
-              cursor: 'pointer',
-              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-               border: "1px solid rgba(0,0,0,0.05)",
-                transition: "transform 0.1s",
-            }}
-             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
-             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-            >
-              <Ionicons name="home" size={32} color={colors.text} />
-            </div>
-          </Pressable>
-
-          <Pressable onPress={() => setSettingsVisible(true)}>
-             <div id="tour-game-btn-settings" style={{
-              width: 80,
-              height: 80,
-              borderRadius: 25,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
-              cursor: 'pointer',
-              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-               border: "1px solid rgba(0,0,0,0.05)",
-                transition: "transform 0.1s",
-            }}
-             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
-             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-            >
-              <Ionicons name="settings-sharp" size={32} color={colors.text} />
-            </div>
-          </Pressable>
-
-          <Pressable onPress={openTutorial}>
-             <div style={{
-              width: 80,
-              height: 80,
-              borderRadius: 25,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
-              cursor: 'pointer',
-              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-               border: "1px solid rgba(0,0,0,0.05)",
-                transition: "transform 0.1s",
-            }}
-             onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
-             onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-            >
-              <Ionicons name="help-circle-outline" size={32} color={colors.text} />
-            </div>
-          </Pressable>
-
-          <Pressable onPress={() => setRulesVisible(true)}>
+          {/* ── RIGHT PANEL: Stats + Controls ── */}
+          {layoutConfig.rightPanelW > 0 && (
             <div style={{
-              width: 80,
-              height: 80,
-              borderRadius: 25,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: theme === "dark" ? "rgba(255,255,255,0.1)" : "#fff",
-              cursor: 'pointer',
-              boxShadow: "0 8px 16px rgba(0,0,0,0.05)",
-              border: "1px solid rgba(0,0,0,0.05)",
-              transition: "transform 0.1s",
-            }}
-              onMouseDown={e => e.currentTarget.style.transform = "scale(0.95)"}
-              onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-            >
-              <Ionicons name="book-outline" size={30} color={colors.text} />
+              width: layoutConfig.rightPanelW, flexShrink: 0,
+              display: "flex", flexDirection: "column", gap: 10,
+              justifyContent: "center", alignItems: "center",
+              paddingLeft: 8,
+            }}>
+
+              {/* Score card */}
+              <div id="tour-game-status-score" style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+                borderRadius: 16,
+                background: theme === "dark" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
+                border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
+                boxShadow: theme === "dark" ? "0 4px 16px rgba(0,0,0,0.3)" : "0 4px 16px rgba(0,0,0,0.06)",
+                width: "100%", maxWidth: layoutConfig.rightPanelW - 16,
+              }}>
+                <div style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #FFC300, #FF8C00)", boxShadow: "0 4px 10px rgba(255,140,0,0.35)" }}>
+                  <Ionicons name="trophy" size={22} color="#fff" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.2, color: colors.secondaryText, fontFamily: "system-ui" }}>Score</div>
+                  <div style={{ fontSize: "clamp(26px, 2.6vw, 36px)", fontWeight: 800, color: colors.accent, fontFamily: "system-ui", lineHeight: 1.1 }}>{score}</div>
+                </div>
+              </div>
+
+              {/* Timer card */}
+              <div id="tour-game-timer" style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+                borderRadius: 16,
+                background: theme === "dark" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
+                border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
+                boxShadow: theme === "dark" ? "0 4px 16px rgba(0,0,0,0.3)" : "0 4px 16px rgba(0,0,0,0.06)",
+                width: "100%", maxWidth: layoutConfig.rightPanelW - 16,
+              }}>
+                <div style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #3fa7e0, #0f6fb5)", boxShadow: "0 4px 10px rgba(63,167,224,0.35)" }}>
+                  <Ionicons name="time-outline" size={22} color="#fff" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.2, color: colors.secondaryText, fontFamily: "system-ui" }}>Time</div>
+                  <div style={{ fontSize: "clamp(26px, 2.6vw, 36px)", fontWeight: 800, color: "#95DEFE", fontFamily: "system-ui", lineHeight: 1.1 }}>{time}</div>
+                </div>
+              </div>
+
+              {/* Hints card */}
+              <div id="tour-game-status-hints" onClick={findHint} style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+                borderRadius: 16,
+                background: theme === "dark" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
+                border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
+                boxShadow: theme === "dark" ? "0 4px 16px rgba(0,0,0,0.3)" : "0 4px 16px rgba(0,0,0,0.06)",
+                cursor: hints > 0 ? "pointer" : "not-allowed", opacity: hints > 0 ? 1 : 0.6,
+                transition: "transform 0.15s",
+                width: "100%", maxWidth: layoutConfig.rightPanelW - 16,
+              }}
+                onMouseEnter={(e) => { if (hints > 0) e.currentTarget.style.transform = "scale(1.02)" }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)" }}
+              >
+                <div style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #d06ee0, #8b1fa8)", boxShadow: "0 4px 10px rgba(195,93,217,0.35)" }}>
+                  <Ionicons name="bulb-outline" size={22} color="#fff" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.2, color: colors.secondaryText, fontFamily: "system-ui" }}>Hints</div>
+                  <div style={{ position: "relative", height: 36, display: "flex", alignItems: "center" }}>
+                    <span style={{ position: "absolute", fontSize: "clamp(26px, 2.6vw, 36px)", fontWeight: 800, color: "#C35DD9", fontFamily: "system-ui", lineHeight: 1.1, opacity: noHintsFaceVisible ? 0 : 1, transition: "opacity 200ms ease" }}>{hints}</span>
+                    <span style={{ position: "absolute", fontSize: 15, fontWeight: 700, color: "#C35DD9", fontFamily: "system-ui", opacity: noHintsFaceVisible ? 1 : 0, transition: "opacity 200ms ease", whiteSpace: "nowrap" }}>(¬_¬)</span>
+                  </div>
+                </div>
+              </div>
+
+              {matchId && firstMoveCountdown != null ? (
+                <div style={{ padding: "8px 12px", borderRadius: 10, textAlign: "center", backgroundColor: firstMoveCountdown <= 5 ? "rgba(239,68,68,0.9)" : "rgba(34,197,94,0.9)" }}>
+                  <span style={{ fontFamily: "Geist-Bold", fontSize: 12, color: "#FFFFFF" }}>Move! {firstMoveCountdown}s</span>
+                </div>
+              ) : null}
+
+              <div style={{ height: 1, background: theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", margin: "2px 0", flexShrink: 0 }} />
+
+              {/* Play / Pause */}
+              <div style={{ display: "flex", gap: 8, width: "100%", maxWidth: layoutConfig.rightPanelW - 16 }}>
+                <Pressable onPress={() => { if (pause) setPause(false); if (!isTimerRunning) setIsTimerRunning(true) }} style={{ flex: 1 }}>
+                  <div id="tour-game-btn-play" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 6px", borderRadius: 14, cursor: "pointer", background: "linear-gradient(135deg, #8ed9fc 0%, #3c8dea 100%)", boxShadow: "0 4px 14px rgba(60,141,234,0.4)", transition: "transform 0.1s" }}
+                    onMouseDown={e => e.currentTarget.style.transform = "scale(0.93)"}
+                    onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                    onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                  >
+                    <Ionicons name="play" size={24} color="#fff" />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.95)", letterSpacing: 0.5, fontFamily: "system-ui" }}>PLAY</span>
+                  </div>
+                </Pressable>
+                <Pressable onPress={() => setPause(true)} style={{ flex: 1 }}>
+                  <div id="tour-game-btn-pause" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 6px", borderRadius: 14, cursor: "pointer", background: "linear-gradient(135deg, #ffee60 0%, #ffa40b 100%)", boxShadow: "0 4px 14px rgba(255,164,11,0.4)", transition: "transform 0.1s" }}
+                    onMouseDown={e => e.currentTarget.style.transform = "scale(0.93)"}
+                    onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                    onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                  >
+                    <Ionicons name="pause" size={24} color="#fff" />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.95)", letterSpacing: 0.5, fontFamily: "system-ui" }}>PAUSE</span>
+                  </div>
+                </Pressable>
+              </div>
+
+              {/* Restart / Home */}
+              <div style={{ display: "flex", gap: 8, width: "100%", maxWidth: layoutConfig.rightPanelW - 16 }}>
+                {[
+                  { id: "tour-game-btn-restart", icon: "refresh" as const, label: "RESTART", onPress: () => setRestartConfirmationVisible(true) },
+                  { id: "tour-game-btn-home",    icon: "home"    as const, label: "HOME",    onPress: () => setHomeConfirmationVisible(true) },
+                ].map(({ id, icon, label, onPress }) => (
+                  <Pressable key={id} onPress={onPress} style={{ flex: 1 }}>
+                    <div id={id} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "11px 6px", borderRadius: 14, cursor: "pointer", background: theme === "dark" ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)", border: theme === "dark" ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.08)", transition: "transform 0.1s" }}
+                      onMouseDown={e => e.currentTarget.style.transform = "scale(0.93)"}
+                      onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                      onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                    >
+                      <Ionicons name={icon} size={20} color={colors.text} />
+                      <span style={{ fontSize: 9, fontWeight: 700, color: colors.text, letterSpacing: 0.5, fontFamily: "system-ui", opacity: 0.8 }}>{label}</span>
+                    </div>
+                  </Pressable>
+                ))}
+              </div>
+
+              {/* Settings / Tour / Rules */}
+              <div style={{ display: "flex", gap: 8, width: "100%", maxWidth: layoutConfig.rightPanelW - 16 }}>
+                {[
+                  { icon: "settings-sharp" as const, onPress: () => setSettingsVisible(true), id: "tour-game-btn-settings", label: "SETTINGS" },
+                  { icon: "help-circle-outline" as const, onPress: openTutorial, id: undefined, label: "TOUR" },
+                  { icon: "book-outline" as const, onPress: () => setRulesVisible(true), id: undefined, label: "RULES" },
+                ].map(({ icon, onPress, id, label }, i) => (
+                  <Pressable key={i} onPress={onPress} style={{ flex: 1 }}>
+                    <div id={id} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "9px 4px", borderRadius: 14, cursor: "pointer", background: theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)", transition: "transform 0.1s" }}
+                      onMouseDown={e => e.currentTarget.style.transform = "scale(0.93)"}
+                      onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                      onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                    >
+                      <Ionicons name={icon} size={18} color={colors.text} />
+                      <span style={{ fontSize: 8, fontWeight: 700, color: colors.text, letterSpacing: 0.5, fontFamily: "system-ui", opacity: 0.7 }}>{label}</span>
+                    </div>
+                  </Pressable>
+                ))}
+              </div>
             </div>
-          </Pressable>
+          )}
+
+          {/* Mobile right panel: compact floating bottom bar */}
+          {layoutConfig.rightPanelW === 0 && (
+            <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200 }}>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-around",
+                padding: "6px 12px",
+                background: theme === "dark" ? "rgba(5,5,30,0.97)" : "rgba(255,255,255,0.97)",
+                borderTop: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+              }}>
+                <div id="tour-game-status-score" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <Ionicons name="trophy" size={13} color="#FFD700" />
+                  <span style={{ fontSize: 15, fontWeight: 800, color: colors.accent, fontFamily: "system-ui" }}>{score}</span>
+                </div>
+                <div id="tour-game-timer" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <Ionicons name="time-outline" size={13} color="#95DEFE" />
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "#95DEFE", fontFamily: "system-ui" }}>{time}</span>
+                </div>
+                <div id="tour-game-status-hints" onClick={findHint} style={{ display: "flex", alignItems: "center", gap: 5, cursor: hints > 0 ? "pointer" : "not-allowed", opacity: hints > 0 ? 1 : 0.5 }}>
+                  <Ionicons name="bulb-outline" size={13} color="#C35DD9" />
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "#C35DD9", fontFamily: "system-ui" }}>{noHintsFaceVisible ? "(¬_¬)" : hints}</span>
+                </div>
+                {[
+                  { id: "tour-game-btn-play",     icon: "play"                as const, onPress: () => { if (pause) setPause(false); if (!isTimerRunning) setIsTimerRunning(true) }, gradient: "linear-gradient(135deg,#8ed9fc,#3c8dea)" },
+                  { id: "tour-game-btn-pause",    icon: "pause"               as const, onPress: () => setPause(true),                      gradient: "linear-gradient(135deg,#ffee60,#ffa40b)" },
+                  { id: "tour-game-btn-restart",  icon: "refresh"             as const, onPress: () => setRestartConfirmationVisible(true), gradient: "" },
+                  { id: "tour-game-btn-home",     icon: "home"                as const, onPress: () => setHomeConfirmationVisible(true),    gradient: "" },
+                  { id: "tour-game-btn-settings", icon: "settings-sharp"      as const, onPress: () => setSettingsVisible(true),            gradient: "" },
+                  { id: undefined,                icon: "help-circle-outline" as const, onPress: openTutorial,                              gradient: "" },
+                  { id: undefined,                icon: "book-outline"        as const, onPress: () => setRulesVisible(true),               gradient: "" },
+                ].map(({ id, icon, onPress, gradient }, idx) => (
+                  <Pressable key={id ?? idx} onPress={onPress}>
+                    <div id={id} style={{ width: 34, height: 34, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", background: gradient || (theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.07)"), border: gradient ? "none" : (theme === "dark" ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.08)") }}>
+                      <Ionicons name={icon} size={15} color={gradient ? "#fff" : colors.text} />
+                    </div>
+                  </Pressable>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+
 
         {rulesVisible && (
           <div style={{
