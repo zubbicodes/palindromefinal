@@ -257,11 +257,27 @@ export async function acceptChallenge(
     .single();
   if (fetchErr || !c) throw new Error('Invalid or expired challenge');
 
+  const { data: m } = await supabase
+    .from('matches')
+    .select('mode')
+    .eq('id', c.match_id)
+    .single();
+
   await supabase.from('match_players').insert({ match_id: c.match_id, user_id: userId });
   await supabase
     .from('matches')
     .update({ status: 'active', started_at: new Date().toISOString() })
     .eq('id', c.match_id);
+
+  if (m?.mode === 'turn') {
+    await supabase.from('turn_match_states').update({
+      player2_user_id: userId,
+      current_turn_user_id: c.from_user_id,
+      turn_started_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('match_id', c.match_id);
+  }
+
   await supabase
     .from('challenges')
     .update({ status: 'accepted' })
