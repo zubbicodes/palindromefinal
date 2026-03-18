@@ -166,7 +166,8 @@ export async function areFriends(userId: string, otherId: string): Promise<boole
  */
 export async function challengeFriend(
   fromUserId: string,
-  toUserId: string
+  toUserId: string,
+  mode: 'race' | 'turn' = 'race'
 ): Promise<{ challenge: ChallengeRow; matchId: string }> {
   const supabase = getSupabaseClient();
   const isFriend = await areFriends(fromUserId, toUserId);
@@ -180,7 +181,7 @@ export async function challengeFriend(
     .from('matches')
     .insert({
       status: 'waiting',
-      mode: 'race',
+      mode,
       seed,
       invite_code: null,
       time_limit_seconds: 300,
@@ -191,6 +192,25 @@ export async function challengeFriend(
   if (matchErr) throw matchErr;
 
   await supabase.from('match_players').insert({ match_id: match.id, user_id: fromUserId });
+
+  // For turn mode, create the turn_match_states row
+  if (mode === 'turn') {
+    await supabase.from('turn_match_states').insert({
+      match_id: match.id,
+      player1_user_id: fromUserId,
+      player2_user_id: fromUserId, // placeholder until opponent joins
+      current_turn_user_id: null,
+      board: [],
+      player1_blocks: [8, 8, 8, 8, 8],
+      player2_blocks: [8, 8, 8, 8, 8],
+      player1_score: 0,
+      player2_score: 0,
+      player1_time_ms: 300000,
+      player2_time_ms: 300000,
+      move_number: 0,
+      bulldog_positions: [],
+    });
+  }
 
   const { data: challenge, error: chalErr } = await supabase
     .from('challenges')
@@ -207,7 +227,8 @@ export async function challengeFriend(
   try {
     const profile = await authService.getProfile(fromUserId);
     const name = profile?.full_name || profile?.username || 'A friend';
-    await createNotification(toUserId, 'challenge', `${name} challenged you to a match!`, 'Tap to accept.', {
+    const modeLabel = mode === 'turn' ? 'Turn mode' : 'Race mode';
+    await createNotification(toUserId, 'challenge', `${name} challenged you to ${modeLabel}!`, 'Tap to accept.', {
       challenge_id: challenge.id,
       match_id: match.id,
       from_user_id: fromUserId,

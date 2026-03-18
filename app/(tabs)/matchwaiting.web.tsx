@@ -41,7 +41,8 @@ export default function MatchWaitingWebScreen() {
       setMatch(m);
       if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
       if (m.status === 'active') {
-        router.replace({ pathname: '/gamelayout', params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
+        const dest = m.mode === 'turn' ? '/turngame' : '/gamelayout';
+        router.replace({ pathname: dest as any, params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
       } else if (m.status === 'cancelled') {
         router.replace(backTarget);
       }
@@ -53,7 +54,8 @@ export default function MatchWaitingWebScreen() {
         setMatch(m);
         if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
         if (m.status === 'active') {
-          router.replace({ pathname: '/gamelayout', params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
+          const dest = m.mode === 'turn' ? '/turngame' : '/gamelayout';
+          router.replace({ pathname: dest as any, params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
         } else if (m.status === 'cancelled') {
           router.replace(backTarget);
         }
