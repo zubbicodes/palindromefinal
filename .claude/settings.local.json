@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l \"D:\\\\StratonAlly\\\\Code\\\\palindromefinal\\\\app\\\\\\(tabs\\)\\\\gamelayout.web.tsx\")",
+      "Bash(head -100 \"D:\\\\StratonAlly\\\\Code\\\\palindromefinal\\\\app\\\\\\(tabs\\)\\\\gamelayout.web.tsx\")"
+    ]
+  }
+}

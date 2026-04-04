@@ -20,6 +20,10 @@ import {
   joinByInviteCode,
   type Match,
 } from '@/lib/matchmaking';
+import {
+  createTurnInviteMatch,
+  joinTurnByInviteCode,
+} from '@/lib/turnMatchmaking';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -54,6 +58,7 @@ export default function FriendsWebScreen() {
   const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [joinLoading, setJoinLoading] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<'race' | 'turn'>('race');
   const [recentMatches, setRecentMatches] = useState<Match[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
 
@@ -104,7 +109,8 @@ export default function FriendsWebScreen() {
 
   const navigateToMatch = useCallback((match: Match, inviteCode?: string) => {
     if (match.status === 'active') {
-      router.replace({ pathname: '/gamelayout', params: { matchId: match.id } });
+      const dest = match.mode === 'turn' ? '/turngame' : '/gamelayout';
+      router.replace({ pathname: dest as any, params: { matchId: match.id } });
     } else {
       router.replace({
         pathname: '/matchwaiting',
@@ -117,14 +123,19 @@ export default function FriendsWebScreen() {
     if (!userId) return;
     setCreateLoading(true);
     try {
-      const { match, inviteCode } = await createInviteMatch(userId);
-      navigateToMatch(match, inviteCode);
+      if (selectedMode === 'turn') {
+        const { match, inviteCode } = await createTurnInviteMatch(userId);
+        navigateToMatch(match, inviteCode);
+      } else {
+        const { match, inviteCode } = await createInviteMatch(userId);
+        navigateToMatch(match, inviteCode);
+      }
     } catch (e) {
       Alert.alert('Error', (e as Error).message ?? 'Could not create game.');
     } finally {
       setCreateLoading(false);
     }
-  }, [userId, navigateToMatch]);
+  }, [userId, navigateToMatch, selectedMode]);
 
   const handleJoinByCode = useCallback(async () => {
     if (!userId) return;
@@ -135,7 +146,15 @@ export default function FriendsWebScreen() {
     }
     setJoinLoading(true);
     try {
-      const match = await joinByInviteCode(userId, code);
+      // joinByInviteCode works for race; joinTurnByInviteCode for turn
+      // The code itself is mode-agnostic — the match's mode is set at creation
+      // Try both: first race, if fails try turn
+      let match: Match;
+      try {
+        match = await joinByInviteCode(userId, code);
+      } catch {
+        match = await joinTurnByInviteCode(userId, code);
+      }
       navigateToMatch(match);
     } catch (e) {
       Alert.alert('Could not join', (e as Error).message ?? 'Invalid or expired code.');
@@ -183,13 +202,13 @@ export default function FriendsWebScreen() {
       if (!userId) return;
       try {
         const { challengeFriend } = await import('@/lib/friends');
-        const { matchId } = await challengeFriend(userId, friendId);
+        const { matchId } = await challengeFriend(userId, friendId, selectedMode);
         router.replace({ pathname: '/matchwaiting', params: { matchId, returnTo: 'friends' } });
       } catch (e) {
         Alert.alert('Error', (e as Error).message ?? 'Could not challenge.');
       }
     },
-    [userId]
+    [userId, selectedMode]
   );
 
   const handleAcceptChallenge = useCallback(
@@ -198,7 +217,11 @@ export default function FriendsWebScreen() {
       if (!user) return;
       try {
         const { matchId } = await acceptChallenge(challengeId, user.id);
-        router.replace({ pathname: '/gamelayout', params: { matchId } });
+        // Check if the match is turn mode to route correctly
+        const { getMatch } = await import('@/lib/matchmaking');
+        const m = await getMatch(matchId);
+        const dest = m?.mode === 'turn' ? '/turngame' : '/gamelayout';
+        router.replace({ pathname: dest as any, params: { matchId } });
       } catch (e) {
         Alert.alert('Error', (e as Error).message ?? 'Could not accept challenge.');
       }
@@ -274,17 +297,47 @@ export default function FriendsWebScreen() {
         </View>
       )}
 
+      {/* Mode Selector */}
+      <View style={[styles.card, { backgroundColor: cardBg }]}>
+        <Text style={[styles.cardTitle, { color: text }]}>Game Mode</Text>
+        <Text style={[styles.cardSubtitle, { color: muted }]}>
+          Choose mode for Create, Join, and Challenge
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+          <Pressable
+            onPress={() => setSelectedMode('race')}
+            style={[styles.modeBtn, {
+              backgroundColor: selectedMode === 'race' ? '#1177FE' : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+              borderColor: selectedMode === 'race' ? '#1177FE' : 'transparent',
+            }]}
+          >
+            <Ionicons name="flash" size={18} color={selectedMode === 'race' ? '#fff' : muted} />
+            <Text style={{ fontFamily: 'Geist-Bold, system-ui', fontSize: 14, color: selectedMode === 'race' ? '#fff' : text, marginLeft: 6 }}>Race</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setSelectedMode('turn')}
+            style={[styles.modeBtn, {
+              backgroundColor: selectedMode === 'turn' ? '#7C3AED' : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+              borderColor: selectedMode === 'turn' ? '#7C3AED' : 'transparent',
+            }]}
+          >
+            <Ionicons name="swap-horizontal" size={18} color={selectedMode === 'turn' ? '#fff' : muted} />
+            <Text style={{ fontFamily: 'Geist-Bold, system-ui', fontSize: 14, color: selectedMode === 'turn' ? '#fff' : text, marginLeft: 6 }}>Turn</Text>
+          </Pressable>
+        </View>
+      </View>
+
       <View style={[styles.card, { backgroundColor: cardBg }]}>
         <Text style={[styles.cardTitle, { color: text }]}>Create game</Text>
         <Text style={[styles.cardSubtitle, { color: muted }]}>
-          Create a game and share the code with a friend
+          Create a {selectedMode === 'turn' ? 'turn-based' : 'race'} game and share the code
         </Text>
         <Pressable
           onPress={handleCreateGame}
           disabled={createLoading}
-          style={[styles.secondaryBtn, { borderColor: colors.accent, opacity: createLoading ? 0.7 : 1 }]}
+          style={[styles.secondaryBtn, { borderColor: selectedMode === 'turn' ? '#7C3AED' : colors.accent, opacity: createLoading ? 0.7 : 1 }]}
         >
-          <Text style={[styles.secondaryBtnText, { color: colors.accent }]}>
+          <Text style={[styles.secondaryBtnText, { color: selectedMode === 'turn' ? '#7C3AED' : colors.accent }]}>
             {createLoading ? 'Creating...' : 'Create & Get Code'}
           </Text>
         </Pressable>
@@ -563,6 +616,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   smallBtnText: { fontFamily: 'Geist-Bold, system-ui', fontSize: 12, color: '#FFFFFF' },
+  modeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 2,
+  },
   secondaryBtn: {
     height: 44,
     borderRadius: 12,
