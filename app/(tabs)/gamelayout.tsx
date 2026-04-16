@@ -186,8 +186,8 @@ const DraggableBlock = ({
           end={{ x: 1, y: 1 }}
           style={styles.gradientColorBlock}
         >
-          {token ? <Text style={styles.colorBlindBlockToken}>{token}</Text> : null}
-          <Text style={styles.blockText}>{blockCount}</Text>
+          {token ? <Text style={styles.colorBlindBlockTokenCorner}>{blockCount}</Text> : null}
+          <Text style={token ? styles.colorBlindBlockTokenCenter : styles.blockText}>{token ? token : blockCount}</Text>
         </LinearGradient>
       </View>
 
@@ -213,8 +213,9 @@ const DraggableBlock = ({
           style={styles.gradientColorBlock}
         >
           {/* Hide number when dragging for "picking one" look */}
-          {token ? <Text style={styles.colorBlindBlockToken}>{token}</Text> : null}
-          {!isDragging && <Text style={styles.blockText}>{blockCount}</Text>}
+          {token ? <Text style={styles.colorBlindBlockTokenCorner}>{blockCount}</Text> : null}
+          {!isDragging && <Text style={token ? styles.colorBlindBlockTokenCenter : styles.blockText}>{token ? token : blockCount}</Text>}
+          {isDragging && token && <Text style={styles.colorBlindBlockTokenCenter}>{token}</Text>}
         </LinearGradient>
       </Animated.View>
     </View>
@@ -256,8 +257,8 @@ const PaletteBlock = ({
           end={{ x: 1, y: 1 }}
           style={styles.gradientColorBlock}
         >
-          {token ? <Text style={styles.colorBlindBlockToken}>{token}</Text> : null}
-          <Text style={styles.blockText}>{blockCount}</Text>
+          {token ? <Text style={styles.colorBlindBlockTokenCorner}>{blockCount}</Text> : null}
+          <Text style={token ? styles.colorBlindBlockTokenCenter : styles.blockText}>{token ? token : blockCount}</Text>
         </LinearGradient>
       </View>
     </Pressable>
@@ -1959,9 +1960,10 @@ const styles = StyleSheet.create({
   colorBlockWrapper: { width: 50, height: 50, marginHorizontal: 4 },
   gradientColorBlock: { flex: 1, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   blockText: { color: '#fff', fontSize: 20, fontWeight: '500' },
-  colorBlindBlockToken: { position: 'absolute', top: 6, left: 8, color: '#FFFFFF', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  colorBlindBlockTokenCorner: { position: 'absolute', top: 5, left: 7, color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  colorBlindBlockTokenCenter: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   colorBlindTokenOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 2, justifyContent: 'center', alignItems: 'center' },
-  colorBlindTokenText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  colorBlindTokenText: { color: '#FFFFFF', fontSize: 26, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   colorBlindTokenCorner: { position: 'absolute', zIndex: 2, bottom: 3, right: 4, color: '#FFFFFF', fontSize: 10, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   controlsRow: { position: 'absolute', top: 720, width: 300, flexDirection: 'row', justifyContent: 'space-around' },
   gradientButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },

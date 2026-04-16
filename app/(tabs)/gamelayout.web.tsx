@@ -161,26 +161,27 @@ const DraggableBlock = ({
               <span
                 style={{
                   position: "absolute",
-                  top: 10,
-                  left: 12,
+                  top: 8,
+                  left: 10,
                   color: "#fff",
-                  fontWeight: "900",
-                  fontSize: 18,
-                  textShadow: "0 1px 4px rgba(0,0,0,0.45)",
+                  fontWeight: "700",
+                  fontSize: 14,
                   userSelect: "none",
                 }}
               >
-                {token}
+                {count}
               </span>
             ) : null}
             <span
               style={{
                 color: "#fff",
-                fontWeight: "700",
-                fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20,
+                fontWeight: token ? "900" : "700",
+                fontSize: token ? (layoutConfig.colorBlock.width > 90 ? 34 : 28) : (layoutConfig.colorBlock.width > 90 ? 24 : 20),
+                textShadow: token ? "0 1px 4px rgba(0,0,0,0.45)" : "none",
+                userSelect: "none",
               }}
             >
-              {count}
+              {token ? token : count}
             </span>
           </div>
         </div>
@@ -223,27 +224,27 @@ const DraggableBlock = ({
             <span
               style={{
                 position: "absolute",
-                top: 10,
-                left: 12,
+                top: 8,
+                left: 10,
                 color: "#fff",
-                fontWeight: "900",
-                fontSize: 18,
-                textShadow: "0 1px 4px rgba(0,0,0,0.45)",
+                fontWeight: "700",
+                fontSize: 14,
                 userSelect: "none",
               }}
             >
-              {token}
+              {count}
             </span>
           ) : null}
           <span
             style={{
               color: "#fff",
-              fontWeight: "700",
-              fontSize: layoutConfig.colorBlock.width > 90 ? 24 : 20,
+              fontWeight: token ? "900" : "700",
+              fontSize: token ? (layoutConfig.colorBlock.width > 90 ? 34 : 28) : (layoutConfig.colorBlock.width > 90 ? 24 : 20),
+              textShadow: token ? "0 1px 4px rgba(0,0,0,0.45)" : "none",
               userSelect: "none",
             }}
           >
-            {count}
+            {token ? token : count}
           </span>
         </div>
       </div>
@@ -1520,7 +1521,7 @@ export default function GameLayoutWeb() {
       scoredCellsTimerRef.current = setTimeout(() => {
         setScoredCells([])
         scoredCellsTimerRef.current = null
-      }, 500)
+      }, 2000)
 
       setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() })
       playSuccessSound()
@@ -1986,6 +1987,7 @@ export default function GameLayoutWeb() {
                       }
                       const isHint = activeHint?.row === row && activeHint?.col === col
                       const isScored = scoredCells.includes(`${row},${col}`)
+                      const scoreIndex = isScored ? scoredCells.indexOf(`${row},${col}`) : 0
                       if (isHovered || isHint) {
                         cellStyle.backgroundColor = theme === "dark" ? "rgba(100, 200, 255, 0.4)" : "rgba(100, 200, 255, 0.3)"
                         cellStyle.borderColor = theme === "dark" ? "rgba(100, 200, 255, 0.8)" : "rgba(50, 150, 255, 0.6)"
@@ -2001,7 +2003,7 @@ export default function GameLayoutWeb() {
                       if (isScored) {
                         cellStyle.borderColor = "rgba(255, 215, 0, 0.95)"
                         cellStyle.borderWidth = 2
-                        cellStyle.animation = "scorePulse 0.5s ease-out"
+                        cellStyle.animation = `scorePulse 0.8s ease-out ${scoreIndex * 0.15}s both`
                         cellStyle.zIndex = 12
                       }
                       return (
@@ -2032,18 +2034,18 @@ export default function GameLayoutWeb() {
                               <div style={{
                                 position: "absolute", top: "-20%", bottom: "-20%", width: "60%",
                                 background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.85), rgba(255,255,255,0))",
-                                animation: "scoreShimmer 0.5s ease-out",
+                                animation: `scoreShimmer 0.8s ease-out ${scoreIndex * 0.15}s both`,
                               }} />
                             </div>
                           )}
                           <div style={{ zIndex: 2, display: "flex", justifyContent: "center", alignItems: "center", pointerEvents: "none" }}>
                             {isHint && activeHint && colorBlindEnabled && cellColorIndex === null && (
-                              <span style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "center", alignItems: "center", color: "#FFFFFF", fontWeight: "900", fontSize: layoutConfig.cellSize > 40 ? 18 : 15, textShadow: "0 1px 4px rgba(0,0,0,0.45)", userSelect: "none" }}>
+                              <span style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "center", alignItems: "center", color: "#FFFFFF", fontWeight: "900", fontSize: layoutConfig.cellSize > 40 ? 28 : 22, textShadow: "0 1px 4px rgba(0,0,0,0.45)", userSelect: "none" }}>
                                 {getColorBlindToken(colorBlindMode, activeHint.colorIndex)}
                               </span>
                             )}
                             {cellColorIndex !== null && colorBlindEnabled && !letter && (
-                              <span style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "center", alignItems: "center", color: "#FFFFFF", fontWeight: "900", fontSize: layoutConfig.cellSize > 40 ? 18 : 15, textShadow: "0 1px 4px rgba(0,0,0,0.45)", userSelect: "none" }}>
+                              <span style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "center", alignItems: "center", color: "#FFFFFF", fontWeight: "900", fontSize: layoutConfig.cellSize > 40 ? 28 : 22, textShadow: "0 1px 4px rgba(0,0,0,0.45)", userSelect: "none" }}>
                                 {getColorBlindToken(colorBlindMode, cellColorIndex)}
                               </span>
                             )}

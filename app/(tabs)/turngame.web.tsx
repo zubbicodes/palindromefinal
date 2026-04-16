@@ -77,8 +77,8 @@ function DraggableBlock({ colorIndex, gradient, count, layoutConfig, onDragStart
         userSelect: "none", fontFamily: "Geist-Regular, system-ui",
       }}
     >
-      {token && <span style={{ position: "absolute", top: 4, left: 6, color: "#fff", fontWeight: "900", fontSize: 14, textShadow: "0 1px 3px rgba(0,0,0,0.4)", userSelect: "none" }}>{token}</span>}
-      <span style={{ color: "#fff", fontWeight: "700", fontSize: 18, userSelect: "none" }}>{count}</span>
+      {token && <span style={{ position: "absolute", top: 4, left: 6, color: "#fff", fontWeight: "700", fontSize: 12, userSelect: "none" }}>{count}</span>}
+      <span style={{ color: "#fff", fontWeight: token ? "900" : "700", fontSize: token ? 24 : 18, textShadow: token ? "0 1px 3px rgba(0,0,0,0.4)" : "none", userSelect: "none" }}>{token ? token : count}</span>
     </div>
   )
 }
@@ -293,11 +293,12 @@ export default function TurnGameWeb() {
   }, [turnState, gameOverInfo, userId])
 
   // ── Palindrome check (client-side for scoring) ──
-  const checkAndScore = useCallback((row: number, col: number, colorIdx: number, currentGrid: (number | null)[][]): number => {
+  const checkAndScore = useCallback((row: number, col: number, colorIdx: number, currentGrid: (number | null)[][]): { scoreFound: number, segment: {r: number, c: number}[] } => {
     let scoreFound = 0
+    let bestSegment: { r: number; c: number }[] = []
     const isOdd = (n: number) => n % 2 === 1
 
-    const checkLine = (lineIsRow: boolean): number => {
+    const checkLine = (lineIsRow: boolean) => {
       const line: { color: number; r: number; c: number }[] = []
       if (lineIsRow) {
         for (let c = 0; c < gridSize; c++) line.push({ color: currentGrid[row][c] ?? -1, r: row, c })
@@ -309,9 +310,10 @@ export default function TurnGameWeb() {
       while (start > 0 && line[start - 1].color !== -1) start--
       while (end < gridSize - 1 && line[end + 1].color !== -1) end++
       const segment = line.slice(start, end + 1)
-      if (segment.length < 3) return 0
+      if (segment.length < 3) return { score: 0, segment: [] }
       const targetPosInSegment = targetIndex - start
       let bestScore = 0
+      let localBestSeg: { r: number; c: number }[] = []
       for (let s = 0; s <= targetPosInSegment; s++) {
         for (let e = targetPosInSegment; e < segment.length; e++) {
           const len = e - s + 1
@@ -321,14 +323,25 @@ export default function TurnGameWeb() {
           if (cols.join(",") === [...cols].reverse().join(",")) {
             let sc = len
             if (sub.some(b => bulldogPositions.some(bp => bp.row === b.r && bp.col === b.c))) sc += 10
-            if (sc > bestScore) bestScore = sc
+            if (sc > bestScore) {
+              bestScore = sc
+              localBestSeg = sub.map(b => ({ r: b.r, c: b.c }))
+            }
           }
         }
       }
-      return bestScore
+      return { score: bestScore, segment: localBestSeg }
     }
-    scoreFound = Math.max(checkLine(true), checkLine(false))
-    return scoreFound
+    const rLine = checkLine(true)
+    const cLine = checkLine(false)
+    if (rLine.score > cLine.score) {
+      scoreFound = rLine.score
+      bestSegment = rLine.segment
+    } else {
+      scoreFound = cLine.score
+      bestSegment = cLine.segment
+    }
+    return { scoreFound, segment: bestSegment }
   }, [gridSize, bulldogPositions])
 
   // ── Handle drop ──
@@ -345,7 +358,7 @@ export default function TurnGameWeb() {
     // Client-side scoring check
     const tempGrid = board.map(r => [...r])
     tempGrid[row][col] = colorIndex
-    const scoreDelta = checkAndScore(row, col, colorIndex, tempGrid)
+    const { scoreFound: scoreDelta, segment } = checkAndScore(row, col, colorIndex, tempGrid)
 
     // Must score to place (same rule as single player after first move)
     if (scoreDelta <= 0) {
@@ -366,12 +379,10 @@ export default function TurnGameWeb() {
     setTimeout(() => setFeedback(null), 2000)
 
     // Highlight scored cells
-    const keys: string[] = []
-    // Simple highlight: just the placed cell for now
-    keys.push(`${row},${col}`)
+    const keys: string[] = segment.length > 0 ? segment.map(t => `${t.r},${t.c}`) : [`${row},${col}`]
     setScoredCells(keys)
     if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current)
-    scoredCellsTimerRef.current = setTimeout(() => { setScoredCells([]); scoredCellsTimerRef.current = null }, 500)
+    scoredCellsTimerRef.current = setTimeout(() => { setScoredCells([]); scoredCellsTimerRef.current = null }, 2000)
 
     try {
       playSuccessSound()
@@ -493,6 +504,7 @@ export default function TurnGameWeb() {
         @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-60px); opacity: 0; } }
         @keyframes pulse { 0%,100% { opacity: 0.5; transform: scale(0.97); } 50% { opacity: 1; transform: scale(1.03); } }
         @keyframes scorePulse { 0% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); } 35% { box-shadow: 0 0 22px rgba(255,215,0,0.85); transform: scale(1.06); } 100% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); } }
+        @keyframes scoreShimmer { 0% { opacity: 0; transform: translateX(-120%) skewX(-18deg); } 30% { opacity: 0.85; } 100% { opacity: 0; transform: translateX(120%) skewX(-18deg); } }
       `}</style>
 
       {/* Top Bar */}
@@ -560,6 +572,7 @@ export default function TurnGameWeb() {
                     const cellColor = board[row]?.[col] ?? null
                     const isHovered = dragOverCell?.row === row && dragOverCell?.col === col
                     const isScored = scoredCells.includes(`${row},${col}`)
+                    const scoreIndex = isScored ? scoredCells.indexOf(`${row},${col}`) : 0
                     const cellStyle: React.CSSProperties = {
                       width: layoutConfig.cellSize, height: layoutConfig.cellSize,
                       borderWidth: 1, borderStyle: "solid", borderColor: "#CCDAE466", borderRadius: 8, margin: 3,
@@ -568,7 +581,7 @@ export default function TurnGameWeb() {
                       transition: "all 0.15s", position: "relative", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.05)",
                     }
                     if (isHovered) { cellStyle.backgroundColor = isDark ? "rgba(100,200,255,0.4)" : "rgba(100,200,255,0.3)"; cellStyle.borderColor = isDark ? "rgba(100,200,255,0.8)" : "rgba(50,150,255,0.6)"; cellStyle.transform = "scale(1.05)" }
-                    if (isScored) { cellStyle.borderColor = "rgba(255,215,0,0.95)"; cellStyle.borderWidth = 2; cellStyle.animation = "scorePulse 0.5s ease-out" }
+                    if (isScored) { cellStyle.borderColor = "rgba(255,215,0,0.95)"; cellStyle.borderWidth = 2; cellStyle.animation = `scorePulse 0.8s ease-out ${scoreIndex * 0.15}s both` }
 
                     return (
                       <div key={col}
@@ -579,9 +592,18 @@ export default function TurnGameWeb() {
                         style={cellStyle}
                       >
                         {cellColor !== null && <div style={{ width: "100%", height: "100%", borderRadius: 6, background: `linear-gradient(to right bottom, ${colorGradients[cellColor][0]}, ${colorGradients[cellColor][1]})`, position: "absolute", top: 0, left: 0, boxShadow: "0 2px 5px rgba(0,0,0,0.2)" }} />}
+                        {isScored && (
+                          <div style={{ position: "absolute", inset: 0, borderRadius: 6, overflow: "hidden", zIndex: 1, pointerEvents: "none" }}>
+                            <div style={{
+                              position: "absolute", top: "-20%", bottom: "-20%", width: "60%",
+                              background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.85), rgba(255,255,255,0))",
+                              animation: `scoreShimmer 0.8s ease-out ${scoreIndex * 0.15}s both`,
+                            }} />
+                          </div>
+                        )}
                         <div style={{ zIndex: 2, display: "flex", justifyContent: "center", alignItems: "center", pointerEvents: "none" }}>
                           {cellColor !== null && colorBlindEnabled && !letter && (
-                            <span style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "center", alignItems: "center", color: "#fff", fontWeight: 900, fontSize: layoutConfig.cellSize > 40 ? 18 : 15, textShadow: "0 1px 4px rgba(0,0,0,0.45)", userSelect: "none" }}>
+                            <span style={{ position: "absolute", inset: 0, display: "flex", justifyContent: "center", alignItems: "center", color: "#fff", fontWeight: 900, fontSize: layoutConfig.cellSize > 40 ? 28 : 22, textShadow: "0 1px 4px rgba(0,0,0,0.45)", userSelect: "none" }}>
                               {COLOR_BLIND_TOKENS[colorBlindMode][cellColor]}
                             </span>
                           )}
