@@ -28,19 +28,19 @@ const getLayoutConfig = () => {
     const leftW = Math.min(220, Math.max(160, Math.floor(vw * 0.14)))
     const rightW = Math.min(220, Math.max(160, Math.floor(vw * 0.14)))
     const availW = vw - leftW - rightW - GAP * 2 - PAD * 2
-    const availH = vh - TOP_BAR - PAD * 2
+    const availH = vh - TOP_BAR - PAD * 2 - 40
     const boardSize = Math.max(Math.min(availW, availH, 600), 280)
-    const cellSize = Math.max(Math.floor((boardSize - 20) / 11), 22)
+    const cellSize = Math.max(Math.floor((boardSize - 108) / 11), 22)
     const squareSize = Math.min(leftW - 24, 70, Math.floor(availH / 8))
     return { boardSize, cellSize, colorBlock: { width: squareSize, height: squareSize }, leftPanelW: leftW, rightPanelW: rightW }
   }
   if (vw >= 600) {
-    const boardSize = Math.max(Math.min(vw - 60, Math.floor(vh * 0.5), 480), 240)
-    const cellSize = Math.max(Math.floor((boardSize - 18) / 11), 19)
+    const boardSize = Math.max(Math.min(vw - 60, Math.floor(vh * 0.44), 480), 240)
+    const cellSize = Math.max(Math.floor((boardSize - 108) / 11), 19)
     return { boardSize, cellSize, colorBlock: { width: 50, height: 46 }, leftPanelW: 0, rightPanelW: 0 }
   }
-  const boardSize = Math.max(Math.min(vw - 16, 360), 240)
-  const cellSize = Math.max(Math.floor((boardSize - 14) / 11), 18)
+  const boardSize = Math.max(Math.min(vw - 16, Math.floor(vh * 0.40), 360), 240)
+  const cellSize = Math.max(Math.floor((boardSize - 108) / 11), 15)
   return { boardSize, cellSize, colorBlock: { width: 44, height: 40 }, leftPanelW: 0, rightPanelW: 0 }
 }
 
@@ -546,7 +546,7 @@ export default function TurnGameWeb() {
             borderRadius: 24, padding: 10, display: "flex", justifyContent: "center", alignItems: "center",
             background: isDark ? "linear-gradient(145deg, rgba(18,18,75,0.92), rgba(8,8,44,0.97))" : "linear-gradient(145deg, #f4f6ff, #e8eaf0)",
             boxShadow: isDark ? "0 0 0 1px rgba(100,120,255,0.18), 0 20px 60px rgba(0,0,0,0.65)" : "0 0 0 1px rgba(0,0,0,0.07), 0 20px 60px rgba(0,0,0,0.13)",
-            width: layoutConfig.boardSize, height: layoutConfig.boardSize, position: "relative", flexShrink: 0,
+            width: "fit-content", height: "fit-content", position: "relative", flexShrink: 0,
           }}>
             {feedback && (
               <div style={{ position: "absolute", inset: 0, zIndex: 9999, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>

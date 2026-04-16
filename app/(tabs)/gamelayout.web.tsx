@@ -35,9 +35,9 @@ const getLayoutConfig = () => {
     const leftW  = Math.min(200, Math.max(140, Math.floor(vw * 0.13)))
     const rightW = Math.min(260, Math.max(180, Math.floor(vw * 0.16)))
     const availW = vw - leftW - rightW - GAP * 2 - PAD * 2
-    const availH = vh - TOP_BAR - PAD * 2
+    const availH = vh - TOP_BAR - PAD * 2 - 40
     const boardSize = Math.max(Math.min(availW, availH, 600), 280)
-    const cellSize  = Math.max(Math.floor((boardSize - 20) / 11), 22)
+    const cellSize  = Math.max(Math.floor((boardSize - 108) / 11), 22)
     // Larger color blocks - use more of the left panel width
     const squareSize = Math.min(leftW - 24, 90, Math.floor(availH / 7))
     return {
@@ -54,9 +54,9 @@ const getLayoutConfig = () => {
     // Tablet 2-column: BOARD | RIGHT  (blocks below board)
     const rightW = Math.min(190, Math.max(150, Math.floor(vw * 0.23)))
     const availW = vw - rightW - GAP * 3 - PAD * 2
-    const availH = Math.floor(vh * 0.56)
+    const availH = Math.floor(vh * 0.52)
     const boardSize = Math.max(Math.min(availW, availH, 480), 240)
-    const cellSize  = Math.max(Math.floor((boardSize - 18) / 11), 19)
+    const cellSize  = Math.max(Math.floor((boardSize - 108) / 11), 19)
     return {
       boardSize, cellSize,
       colorBlock:        { width: 58, height: 54 },
@@ -68,8 +68,8 @@ const getLayoutConfig = () => {
   }
 
   // Mobile single-column
-  const boardSize = Math.max(Math.min(vw - 16, 360), 240)
-  const cellSize  = Math.max(Math.floor((boardSize - 14) / 11), 18)
+  const boardSize = Math.max(Math.min(vw - 16, Math.floor(vh * 0.45), 360), 240)
+  const cellSize  = Math.max(Math.floor((boardSize - 108) / 11), 15)
   return {
     boardSize, cellSize,
     colorBlock:        { width: 48, height: 44 },
@@ -1943,7 +1943,7 @@ export default function GameLayoutWeb() {
                 boxShadow: theme === "dark"
                   ? "0 0 0 1px rgba(100,120,255,0.18), 0 20px 60px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.04)"
                   : "0 0 0 1px rgba(0,0,0,0.07), 0 20px 60px rgba(0,0,0,0.13), inset 0 1px 0 rgba(255,255,255,0.9)",
-                width: layoutConfig.boardSize, height: layoutConfig.boardSize,
+                width: "fit-content", height: "fit-content",
                 zIndex: 1, position: "relative", flexShrink: 0,
               }}
             >
