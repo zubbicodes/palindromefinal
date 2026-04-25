@@ -1,6 +1,7 @@
 import { authService } from '@/authService';
 import { useThemeContext } from '@/context/ThemeContext';
 import { findOrCreateQuickMatch, getRecentMatches, type Match } from '@/lib/matchmaking';
+import { findOrCreateTurnMatch } from '@/lib/turnMatchmaking';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -23,6 +24,7 @@ export default function MultiplayerLobbyScreen() {
   const isDark = theme === 'dark';
   const [userId, setUserId] = useState<string | null>(null);
   const [raceLoading, setRaceLoading] = useState(false);
+  const [turnLoading, setTurnLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [recentMatches, setRecentMatches] = useState<Match[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
@@ -91,6 +93,26 @@ export default function MultiplayerLobbyScreen() {
     }
   }, [userId]);
 
+  const handleTurnMode = useCallback(async () => {
+    if (!userId) {
+      Alert.alert('Sign in required', 'Please sign in to play online.');
+      return;
+    }
+    setTurnLoading(true);
+    try {
+      const match = await findOrCreateTurnMatch(userId);
+      if (match.status === 'active') {
+        router.replace({ pathname: '/turngame' as any, params: { matchId: match.id } });
+      } else {
+        router.replace({ pathname: '/matchwaiting', params: { matchId: match.id, mode: 'turn' } });
+      }
+    } catch (e) {
+      Alert.alert('Error', (e as Error).message ?? 'Could not find or create turn match.');
+    } finally {
+      setTurnLoading(false);
+    }
+  }, [userId]);
+
   const goBack = useCallback(() => router.back(), []);
 
   const openRecentMatch = useCallback((match: Match) => {
@@ -137,11 +159,12 @@ export default function MultiplayerLobbyScreen() {
     {
       key: 'turn',
       title: 'Turn mode',
-      subtitle: 'Coming soon',
-      description: 'Take turns on the same board. You go, they go—alternating play for a different kind of challenge.',
+      subtitle: 'Take turns on a shared board',
+      description: 'Chess-clock style! 5 minutes each. Place a block, score a palindrome, then opponent plays.',
       icon: 'swap-horizontal',
-      gradient: ['#6b7280', '#9ca3af'],
-      onPress: showComingSoon,
+      gradient: ['#A855F7', '#EC4899'],
+      onPress: handleTurnMode,
+      loading: turnLoading,
     },
     {
       key: 'aggressive',

@@ -31,6 +31,7 @@ import { useSound } from '@/hooks/use-sound';
 import { DEFAULT_GAME_GRADIENTS } from '@/lib/gameColors';
 import { createInitialState } from '@/lib/gameEngine';
 import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, submitScore, subscribeToMatch, updateLiveScore, type Match, type MatchPlayer } from '@/lib/matchmaking';
+import { saveSinglePlayerRun } from '@/lib/singlePlayer';
 
 const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
   symbols: ['●', '▲', '■', '◆', '★'],
@@ -483,6 +484,10 @@ export default function GameLayout() {
   const [bulldogPositions, setBulldogPositions] = useState<{ row: number; col: number }[]>([]);
   const [pause, setPause] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [gameOver, setGameOver] = useState<{ status: 'win' | 'lose'; message: string } | null>(null);
+  const [restartConfirmationVisible, setRestartConfirmationVisible] = useState(false);
+  const [homeConfirmationVisible, setHomeConfirmationVisible] = useState(false);
+  const [rulesVisible, setRulesVisible] = useState(false);
   
   // Track initial colors for game logic
   const [initialColorCount, setInitialColorCount] = useState<number>(3); // 2 or 3 distinct colors
@@ -629,10 +634,22 @@ export default function GameLayout() {
   const [activeHint, setActiveHint] = useState<{ row: number; col: number; colorIndex: number } | null>(null);
   const [feedback, setFeedback] = useState<{ text: string, color: string, id: number } | null>(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [, setSecondsElapsed] = useState(0);
+  const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null);
   const [, setDraggedColor] = useState<number | null>(null);
   const [wrongForcedTries, setWrongForcedTries] = useState(0);
+
+  const [scoredCells, setScoredCells] = useState<string[]>([]);
+  const scoredCellsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (scoredCellsTimerRef.current) {
+        clearTimeout(scoredCellsTimerRef.current);
+        scoredCellsTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const [boardLayout, setBoardLayout] = useState<BoardLayout | null>(null);
   const boardRef = useRef<View | null>(null);
@@ -641,6 +658,8 @@ export default function GameLayout() {
   const hintsRef = useRef(hints);
   const wrongForcedTriesRef = useRef(wrongForcedTries);
   const scoreRef = useRef(score);
+  const secondsElapsedRef = useRef(secondsElapsed);
+  const singlePlayerSavedRef = useRef(false);
   const multiplayerFirstMoveAtRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -662,6 +681,10 @@ export default function GameLayout() {
   useEffect(() => {
     scoreRef.current = score;
   }, [score]);
+
+  useEffect(() => {
+    secondsElapsedRef.current = secondsElapsed;
+  }, [secondsElapsed]);
 
   useEffect(() => {
     setPickTargetCell(null);
@@ -708,8 +731,7 @@ export default function GameLayout() {
     setBulldogPositions(newPositions);
   }, [center, gridSize, halfWord, word]);
 
-  useEffect(() => {
-    if (matchId) return;
+  const initializeGame = useCallback(() => {
     spawnBulldogs();
 
     // Pre-place 3 random colors matching web logic
@@ -720,42 +742,82 @@ export default function GameLayout() {
       { row: 5, col: 4 },
       { row: 5, col: 5 },
     ];
-    
-    // Decide whether to use 3 colors or 2 colors
+
     const useThreeColors = Math.random() < 0.5;
     const availableColors = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5);
-    
-    let initialColors: number[];
-    if (useThreeColors) {
-      // 3 different colors
-      initialColors = [availableColors[0], availableColors[1], availableColors[2]];
-    } else {
-      // 2 colors: first color repeated (A, B, A pattern)
-      initialColors = [availableColors[0], availableColors[1], availableColors[0]];
-    }
 
-    setGridState(prev => {
-      const newGrid = prev.map(r => [...r]);
-      indPositions.forEach((pos, idx) => {
-        newGrid[pos.row][pos.col] = initialColors[idx];
-      });
-      return newGrid;
-    });
+    const initialColors: number[] = useThreeColors
+      ? [availableColors[0], availableColors[1], availableColors[2]]
+      : [availableColors[0], availableColors[1], availableColors[0]];
 
-    setBlockCounts(prev => {
-      const next = [...prev];
-      initialColors.forEach(colorIdx => {
-        next[colorIdx] = Math.max(0, next[colorIdx] - 1);
-      });
-      return next;
+    const freshGrid: (number | null)[][] = Array.from({ length: gridSize }, () =>
+      Array(gridSize).fill(null)
+    );
+    indPositions.forEach((pos, idx) => {
+      freshGrid[pos.row][pos.col] = initialColors[idx];
     });
-    
-    // Track distinct colors for game logic
+    setGridState(freshGrid);
+
+    const freshCounts = [16, 16, 16, 16, 16];
+    initialColors.forEach((colorIdx) => {
+      freshCounts[colorIdx] = Math.max(0, freshCounts[colorIdx] - 1);
+    });
+    setBlockCounts(freshCounts);
+
     const distinctColors = new Set(initialColors);
     setInitialColorCount(distinctColors.size);
     setHighestPalindromeMade(0);
     setCanMakeShorterPalindrome(false);
-  }, [spawnBulldogs, matchId]);
+
+    setScore(0);
+    setHints(2);
+    setTime('00:00');
+    setSecondsElapsed(0);
+    setIsTimerRunning(false);
+    setPause(false);
+    setGameOver(null);
+    setFeedback(null);
+    setDragOverCell(null);
+    setActiveHint(null);
+    setWrongForcedTries(0);
+    wrongForcedTriesRef.current = 0;
+    singlePlayerSavedRef.current = false;
+    setScoredCells([]);
+    if (scoredCellsTimerRef.current) {
+      clearTimeout(scoredCellsTimerRef.current);
+      scoredCellsTimerRef.current = null;
+    }
+  }, [spawnBulldogs, gridSize]);
+
+  useEffect(() => {
+    if (matchId) return;
+    initializeGame();
+  }, [initializeGame, matchId]);
+
+  const persistSinglePlayerRun = useCallback(async () => {
+    if (matchId) return;
+    if (singlePlayerSavedRef.current) return;
+    const finalScore = scoreRef.current;
+    const finalTimeSeconds = secondsElapsedRef.current;
+    if (finalScore <= 0 && finalTimeSeconds <= 0) return;
+    try {
+      const user = await authService.getSessionUser();
+      if (!user) return;
+      singlePlayerSavedRef.current = true;
+      await saveSinglePlayerRun(user.id, finalScore, finalTimeSeconds);
+    } catch (e) {
+      singlePlayerSavedRef.current = false;
+      console.error('Failed to save single-player run:', e);
+    }
+  }, [matchId]);
+
+  useEffect(() => {
+    if (matchId) return;
+    if (!gameOver) return;
+    setIsTimerRunning(false);
+    setPause(false);
+    void persistSinglePlayerRun();
+  }, [gameOver, matchId, persistSinglePlayerRun]);
 
   useEffect(() => {
     if (!matchId || multiplayerInitDone.current) return;
@@ -1039,6 +1101,14 @@ export default function GameLayout() {
         playSuccessSound();
         setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
         setTimeout(() => setFeedback(null), 2000);
+
+        const keys = scoredSegment.map((tile) => `${tile.r},${tile.c}`);
+        setScoredCells(keys);
+        if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current);
+        scoredCellsTimerRef.current = setTimeout(() => {
+          setScoredCells([]);
+          scoredCellsTimerRef.current = null;
+        }, 2000);
       }
     }
 
@@ -1080,6 +1150,10 @@ export default function GameLayout() {
   const handleDrop = (row: number, col: number, colorIndex: number) => {
     setDragOverCell(null);
     setDraggedColor(null);
+
+    if (gameOver || pause || settingsVisible) {
+      return false;
+    }
 
     if (gridStateRef.current[row][col] !== null) {
       playErrorSound();
@@ -1198,6 +1272,17 @@ export default function GameLayout() {
         if (user) submitScore(matchId, user.id, newScore);
       });
     }
+    if (!matchId) {
+      if (nextBlockCounts.every((c) => c === 0)) {
+        setIsTimerRunning(false);
+        setPause(false);
+        setGameOver({ status: 'win', message: 'All counters used.' });
+      } else if (newGrid.every((r) => r.every((cell) => cell !== null))) {
+        setIsTimerRunning(false);
+        setPause(false);
+        setGameOver({ status: 'lose', message: 'Board is full.' });
+      }
+    }
     return true;
   };
 
@@ -1264,6 +1349,15 @@ export default function GameLayout() {
                 shadowOpacity: 0.8,
                 shadowRadius: 10,
                 elevation: 3,
+              },
+              scoredCells.includes(`${row},${col}`) && {
+                borderColor: '#FACC15',
+                borderWidth: 2,
+                shadowColor: '#FACC15',
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.9,
+                shadowRadius: 10,
+                elevation: 4,
               },
             ]}
             onPress={() => {
@@ -1586,7 +1680,14 @@ export default function GameLayout() {
       </View>
 
       <View ref={controlsRowRef} collapsable={false} style={styles.controlsRow}>
-        <Pressable ref={playBtnRef as any} collapsable={false} onPress={() => console.log('Play')}>
+        <Pressable
+          ref={playBtnRef as any}
+          collapsable={false}
+          onPress={() => {
+            if (pause) setPause(false);
+            if (!isTimerRunning) setIsTimerRunning(true);
+          }}
+        >
           <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.gradientButton}>
             <Ionicons name="play" size={20} color="#1a63cc" />
           </LinearGradient>
@@ -1598,9 +1699,27 @@ export default function GameLayout() {
           </LinearGradient>
         </Pressable>
 
-        <Pressable ref={profileBtnRef as any} collapsable={false} onPress={() => router.push('/profile')}>
-          <LinearGradient colors={['#8ed9fc', '#3c8dea']} style={styles.gradientButton}>
-            <Ionicons name="list" size={20} color="#1a63cc" />
+        <Pressable
+          collapsable={false}
+          onPress={() => {
+            if (matchId) return;
+            setRestartConfirmationVisible(true);
+          }}
+          disabled={!!matchId}
+          style={({ pressed }) => [pressed && { transform: [{ scale: 0.96 }] }, matchId && { opacity: 0.4 }]}
+        >
+          <LinearGradient colors={['#22c55e', '#16a34a']} style={styles.gradientButton}>
+            <Ionicons name="refresh" size={20} color="#FFFFFF" />
+          </LinearGradient>
+        </Pressable>
+
+        <Pressable
+          collapsable={false}
+          onPress={() => setHomeConfirmationVisible(true)}
+          style={({ pressed }) => [pressed && { transform: [{ scale: 0.96 }] }]}
+        >
+          <LinearGradient colors={['#f59e0b', '#d97706']} style={styles.gradientButton}>
+            <Ionicons name="home" size={20} color="#FFFFFF" />
           </LinearGradient>
         </Pressable>
 
@@ -1610,11 +1729,9 @@ export default function GameLayout() {
           </LinearGradient>
         </Pressable>
 
-        <Pressable
-          onPress={openTutorial}
-        >
+        <Pressable onPress={() => setRulesVisible(true)}>
           <LinearGradient colors={['#111111', '#3C3C3C']} style={styles.gradientButton}>
-            <Ionicons name="help-circle-outline" size={20} color="#FFFFFF" />
+            <Ionicons name="book-outline" size={20} color="#FFFFFF" />
           </LinearGradient>
         </Pressable>
       </View>
@@ -1862,7 +1979,7 @@ export default function GameLayout() {
       )}
 
       {/* Pause Overlay */}
-      {pause && (
+      {pause && !gameOver && (
         <View style={StyleSheet.absoluteFill}>
           <BlurView
             intensity={20}
@@ -1877,6 +1994,343 @@ export default function GameLayout() {
                 <Text style={styles.resumeButtonText}>Resume</Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      )}
+
+      {/* Game Over Modal (single-player only) */}
+      {!matchId && gameOver && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+          <BlurView
+            intensity={20}
+            tint={theme === 'dark' ? 'dark' : 'light'}
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.gameOverOverlay}>
+            <LinearGradient
+              colors={
+                theme === 'dark'
+                  ? ['#000017', '#000074']
+                  : ['#FFFFFF', '#FFFFFF']
+              }
+              style={styles.gameOverCard}
+            >
+              <View
+                style={[
+                  styles.gameOverIconCircle,
+                  gameOver.status === 'win'
+                    ? { backgroundColor: '#16a34a' }
+                    : { backgroundColor: '#ef4444' },
+                ]}
+              >
+                <Ionicons
+                  name={gameOver.status === 'win' ? 'trophy' : 'alert'}
+                  size={34}
+                  color="#FFFFFF"
+                />
+              </View>
+
+              <Text
+                style={[
+                  styles.gameOverTitle,
+                  { color: theme === 'dark' ? '#FFFFFF' : '#0F172A' },
+                ]}
+              >
+                {gameOver.status === 'win' ? 'You win!' : 'Game over'}
+              </Text>
+
+              <Text
+                style={[
+                  styles.gameOverMessage,
+                  { color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(15,23,42,0.75)' },
+                ]}
+              >
+                {gameOver.message}
+              </Text>
+
+              <View
+                style={[
+                  styles.gameOverScoreChip,
+                  {
+                    backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                    borderColor: theme === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.gameOverScoreLabel,
+                    { color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(15,23,42,0.7)' },
+                  ]}
+                >
+                  Final score
+                </Text>
+                <Text style={styles.gameOverScoreValue}>{score}</Text>
+              </View>
+
+              <View style={styles.gameOverButtonRow}>
+                <Pressable
+                  onPress={async () => {
+                    await persistSinglePlayerRun();
+                    initializeGame();
+                  }}
+                  style={({ pressed }) => [
+                    styles.gameOverPrimaryButton,
+                    pressed && { transform: [{ scale: 0.98 }] },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={['#1177FE', '#48B7FF']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.gameOverPrimaryGradient}
+                  >
+                    <Text style={styles.gameOverPrimaryText}>Play again</Text>
+                  </LinearGradient>
+                </Pressable>
+
+                <Pressable
+                  onPress={async () => {
+                    await persistSinglePlayerRun();
+                    setGameOver(null);
+                    router.push('/main');
+                  }}
+                  style={({ pressed }) => [
+                    styles.gameOverSecondaryButton,
+                    {
+                      backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                    },
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.gameOverSecondaryText,
+                      { color: theme === 'dark' ? '#FFFFFF' : '#0F172A' },
+                    ]}
+                  >
+                    Home
+                  </Text>
+                </Pressable>
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+      )}
+
+      {/* Rules / How to Play Modal */}
+      {rulesVisible && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+          <BlurView
+            intensity={20}
+            tint={theme === 'dark' ? 'dark' : 'light'}
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.rulesOverlay}>
+            <LinearGradient
+              colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF', '#FFFFFF']}
+              style={[styles.rulesCard, { maxHeight: windowHeight * 0.78 }]}
+            >
+              <View style={styles.rulesHeader}>
+                <View style={styles.rulesHeaderLeft}>
+                  <Ionicons name="book-outline" size={22} color="#0060FF" />
+                  <Text style={[styles.rulesTitle, { color: theme === 'dark' ? '#FFFFFF' : '#0F172A' }]}>
+                    How to Play
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => setRulesVisible(false)}
+                  style={[
+                    styles.rulesCloseButton,
+                    { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
+                  ]}
+                >
+                  <Text style={[styles.rulesCloseIcon, { color: theme === 'dark' ? '#FFFFFF' : '#0F172A' }]}>
+                    ×
+                  </Text>
+                </Pressable>
+              </View>
+
+              <ScrollView
+                style={styles.rulesScroll}
+                contentContainerStyle={styles.rulesScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {[
+                  {
+                    title: 'Goal',
+                    body: 'Place blocks to form color palindromes. Use all counters.',
+                  },
+                  {
+                    title: 'Palindrome',
+                    body: 'A sequence that reads the same forwards and backwards. Only odd lengths count (3, 5, 7, ...).',
+                  },
+                  {
+                    title: 'Valid Move',
+                    body: 'Your placement must create a palindrome in a row, column, or a single 90° right-angle (L-shape).',
+                  },
+                  {
+                    title: 'First Move',
+                    body: 'At the start you place two blocks. After the second placement you must have created a 5+ palindrome.',
+                  },
+                  {
+                    title: 'Scoring',
+                    body: 'Each scoring placement adds the palindrome length to your score. Placing on a Bulldog cell adds a +10 bonus.',
+                  },
+                  {
+                    title: 'Hints & Timer',
+                    body: 'You start with 2 hints — they highlight a strong move. The timer starts on your first placement and tracks your pace.',
+                  },
+                ].map((section) => (
+                  <View
+                    key={section.title}
+                    style={[
+                      styles.rulesSection,
+                      {
+                        backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                        borderColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.rulesSectionTitle, { color: theme === 'dark' ? '#FFFFFF' : '#0F172A' }]}>
+                      {section.title}
+                    </Text>
+                    <Text style={[styles.rulesSectionBody, { color: theme === 'dark' ? 'rgba(255,255,255,0.82)' : 'rgba(15,23,42,0.78)' }]}>
+                      {section.body}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+
+              <View style={styles.rulesFooter}>
+                <Pressable
+                  onPress={() => setRulesVisible(false)}
+                  style={({ pressed }) => [pressed && { transform: [{ scale: 0.98 }] }]}
+                >
+                  <LinearGradient colors={['#1177FE', '#48B7FF']} style={styles.rulesDoneButton}>
+                    <Text style={styles.rulesDoneText}>Got it</Text>
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+      )}
+
+      {/* Restart Confirmation Modal (single-player only) */}
+      {!matchId && restartConfirmationVisible && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+          <BlurView
+            intensity={20}
+            tint={theme === 'dark' ? 'dark' : 'light'}
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.confirmOverlay}>
+            <LinearGradient
+              colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF', '#FFFFFF']}
+              style={styles.confirmCard}
+            >
+              <View style={[styles.confirmIconCircle, { backgroundColor: '#f59e0b' }]}>
+                <Ionicons name="refresh" size={28} color="#FFFFFF" />
+              </View>
+              <Text style={[styles.confirmTitle, { color: theme === 'dark' ? '#FFFFFF' : '#0F172A' }]}>
+                Restart Game?
+              </Text>
+              <Text style={[styles.confirmMessage, { color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(15,23,42,0.75)' }]}>
+                Are you sure you want to restart? Current progress will be lost.
+              </Text>
+              <View style={styles.confirmButtonRow}>
+                <Pressable
+                  onPress={() => setRestartConfirmationVisible(false)}
+                  style={({ pressed }) => [
+                    styles.confirmSecondaryButton,
+                    { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' },
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Text style={[styles.confirmSecondaryText, { color: theme === 'dark' ? '#FFFFFF' : '#0F172A' }]}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    await persistSinglePlayerRun();
+                    setRestartConfirmationVisible(false);
+                    initializeGame();
+                  }}
+                  style={({ pressed }) => [
+                    styles.confirmPrimaryButton,
+                    pressed && { transform: [{ scale: 0.98 }] },
+                  ]}
+                >
+                  <LinearGradient colors={['#f59e0b', '#d97706']} style={styles.confirmPrimaryGradient}>
+                    <Text style={styles.confirmPrimaryText}>Restart</Text>
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+      )}
+
+      {/* Home Confirmation Modal */}
+      {homeConfirmationVisible && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+          <BlurView
+            intensity={20}
+            tint={theme === 'dark' ? 'dark' : 'light'}
+            experimentalBlurMethod="dimezisBlurView"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.confirmOverlay}>
+            <LinearGradient
+              colors={theme === 'dark' ? ['#000017', '#000074'] : ['#FFFFFF', '#FFFFFF']}
+              style={styles.confirmCard}
+            >
+              <View style={[styles.confirmIconCircle, { backgroundColor: '#ef4444' }]}>
+                <Ionicons name="home" size={28} color="#FFFFFF" />
+              </View>
+              <Text style={[styles.confirmTitle, { color: theme === 'dark' ? '#FFFFFF' : '#0F172A' }]}>
+                Leave Game?
+              </Text>
+              <Text style={[styles.confirmMessage, { color: theme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(15,23,42,0.75)' }]}>
+                {matchId
+                  ? 'Leaving will forfeit the match.'
+                  : 'Are you sure you want to go home? Current progress will be lost.'}
+              </Text>
+              <View style={styles.confirmButtonRow}>
+                <Pressable
+                  onPress={() => setHomeConfirmationVisible(false)}
+                  style={({ pressed }) => [
+                    styles.confirmSecondaryButton,
+                    { backgroundColor: theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' },
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <Text style={[styles.confirmSecondaryText, { color: theme === 'dark' ? '#FFFFFF' : '#0F172A' }]}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    if (!matchId) await persistSinglePlayerRun();
+                    setHomeConfirmationVisible(false);
+                    router.push('/main');
+                  }}
+                  style={({ pressed }) => [
+                    styles.confirmPrimaryButton,
+                    pressed && { transform: [{ scale: 0.98 }] },
+                  ]}
+                >
+                  <LinearGradient colors={['#ef4444', '#dc2626']} style={styles.confirmPrimaryGradient}>
+                    <Text style={styles.confirmPrimaryText}>Leave</Text>
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            </LinearGradient>
           </View>
         </View>
       )}
@@ -2036,6 +2490,277 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     fontFamily: 'Geist-Regular',
+  },
+
+  gameOverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  gameOverCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 28,
+    padding: 26,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 16,
+  },
+  gameOverIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  gameOverTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    fontFamily: 'Geist-Bold',
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  gameOverMessage: {
+    marginTop: 6,
+    fontSize: 15,
+    fontFamily: 'Geist-Regular',
+    textAlign: 'center',
+    lineHeight: 21,
+  },
+  gameOverScoreChip: {
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  gameOverScoreLabel: {
+    fontSize: 14,
+    fontFamily: 'Geist-Regular',
+    fontWeight: '600',
+  },
+  gameOverScoreValue: {
+    fontSize: 18,
+    fontFamily: 'Geist-Bold',
+    fontWeight: '800',
+    color: '#0060FF',
+  },
+  gameOverButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginTop: 18,
+  },
+  gameOverPrimaryButton: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#1177FE',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  gameOverPrimaryGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gameOverPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Geist-Bold',
+    fontWeight: '700',
+  },
+  gameOverSecondaryButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gameOverSecondaryText: {
+    fontSize: 16,
+    fontFamily: 'Geist-Regular',
+    fontWeight: '700',
+  },
+
+  confirmOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 14,
+  },
+  confirmIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  confirmTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: 'Geist-Bold',
+    textAlign: 'center',
+  },
+  confirmMessage: {
+    marginTop: 6,
+    fontSize: 14,
+    fontFamily: 'Geist-Regular',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  confirmButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginTop: 20,
+  },
+  confirmSecondaryButton: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmSecondaryText: {
+    fontSize: 15,
+    fontFamily: 'Geist-Regular',
+    fontWeight: '700',
+  },
+  confirmPrimaryButton: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  confirmPrimaryGradient: {
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Geist-Bold',
+    fontWeight: '700',
+  },
+
+  rulesOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  rulesCard: {
+    width: '100%',
+    maxWidth: 520,
+    borderRadius: 28,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 16,
+  },
+  rulesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  rulesHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  rulesTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    fontFamily: 'Geist-Bold',
+  },
+  rulesCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rulesCloseIcon: {
+    fontSize: 22,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  rulesScroll: {
+    flexGrow: 0,
+  },
+  rulesScrollContent: {
+    gap: 10,
+    paddingBottom: 4,
+  },
+  rulesSection: {
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  rulesSectionTitle: {
+    fontSize: 14,
+    fontFamily: 'Geist-Bold',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  rulesSectionBody: {
+    fontSize: 13,
+    fontFamily: 'Geist-Regular',
+    lineHeight: 18,
+  },
+  rulesFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 14,
+  },
+  rulesDoneButton: {
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+  },
+  rulesDoneText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Geist-Bold',
+    fontWeight: '700',
   },
 
   feedbackContainer: {
