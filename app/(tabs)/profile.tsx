@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Switch } from 'react-native-switch';
+import ColorPicker from 'react-native-wheel-color-picker';
 
 const { width } = Dimensions.get('window');
 
@@ -460,8 +461,35 @@ export default function ProfileScreen() {
                 <Text style={[styles.colorSelectorTitle, { color: isDark ? '#FFFFFF' : '#111111' }]}>
                   Editing block {selectedColorIndex + 1}
                 </Text>
+
+                <View style={styles.colorWheelWrap}>
+                  <ColorPicker
+                    color={editingColors[selectedColorIndex][0]}
+                    onColorChangeComplete={(color: string) => {
+                      const hex = normalizeHex(color);
+                      setHexInputValue(hex);
+                      setEditingColors((prev) => {
+                        const next = [...prev];
+                        next[selectedColorIndex] = gradientFromHex(hex);
+                        return next;
+                      });
+                      setColorsSaved(false);
+                    }}
+                    thumbSize={28}
+                    sliderSize={24}
+                    noSnap
+                    row={false}
+                    swatches={false}
+                  />
+                </View>
+
                 <View style={styles.hexInputRow}>
-                  <View style={[styles.hexPreviewSwatch, { backgroundColor: editingColors[selectedColorIndex][0] }]} />
+                  <LinearGradient
+                    colors={editingColors[selectedColorIndex]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.hexPreviewSwatch}
+                  />
                   <TextInput
                     style={[
                       styles.hexColorInput,
@@ -476,8 +504,9 @@ export default function ProfileScreen() {
                     value={hexInputValue}
                     onChangeText={(text) => {
                       setHexInputValue(text);
-                      const hex = normalizeHex(text || '#000000');
-                      if (/^#?[0-9a-fA-F]{3}$/.test(text.replace(/^#/, '')) || /^#?[0-9a-fA-F]{6}$/.test(text.replace(/^#/, ''))) {
+                      const cleaned = text.replace(/^#/, '');
+                      if (/^[0-9a-fA-F]{3}$/.test(cleaned) || /^[0-9a-fA-F]{6}$/.test(cleaned)) {
+                        const hex = normalizeHex(text);
                         setEditingColors((prev) => {
                           const next = [...prev];
                           next[selectedColorIndex] = gradientFromHex(hex);
@@ -739,6 +768,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
     fontFamily: 'Geist-Bold',
+  },
+  colorWheelWrap: {
+    height: 240,
+    width: '100%',
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hexInputRow: {
     flexDirection: 'row',
