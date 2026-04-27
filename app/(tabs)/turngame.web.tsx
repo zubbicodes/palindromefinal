@@ -5,7 +5,7 @@ import { ColorBlindMode, useSettings } from "@/context/SettingsContext"
 import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
-import { createInitialState, checkPalindromes, GRID_SIZE, NUM_COLORS } from "@/lib/gameEngine"
+import { checkPalindromes, GRID_SIZE, NUM_COLORS } from "@/lib/gameEngine"
 import {
   getTurnMatchState, initTurnBoard, submitTurnMove,
   forfeitTurnMatch, subscribeToTurnState,
@@ -207,7 +207,6 @@ export default function TurnGameWeb() {
 
       // Init board if needed
       if (m.status === "active" && (!s.board || (Array.isArray(s.board) && s.board.length === 0))) {
-        const initial = createInitialState(m.seed)
         await initTurnBoard(matchId, m.seed)
         setBoardInitialized(true)
         // Refetch after init
@@ -293,56 +292,14 @@ export default function TurnGameWeb() {
   }, [turnState, gameOverInfo, userId])
 
   // ── Palindrome check (client-side for scoring) ──
-  const checkAndScore = useCallback((row: number, col: number, colorIdx: number, currentGrid: (number | null)[][]): { scoreFound: number, segment: {r: number, c: number}[] } => {
-    let scoreFound = 0
-    let bestSegment: { r: number; c: number }[] = []
-    const isOdd = (n: number) => n % 2 === 1
-
-    const checkLine = (lineIsRow: boolean) => {
-      const line: { color: number; r: number; c: number }[] = []
-      if (lineIsRow) {
-        for (let c = 0; c < gridSize; c++) line.push({ color: currentGrid[row][c] ?? -1, r: row, c })
-      } else {
-        for (let r = 0; r < gridSize; r++) line.push({ color: currentGrid[r][col] ?? -1, r, c: col })
-      }
-      const targetIndex = lineIsRow ? col : row
-      let start = targetIndex, end = targetIndex
-      while (start > 0 && line[start - 1].color !== -1) start--
-      while (end < gridSize - 1 && line[end + 1].color !== -1) end++
-      const segment = line.slice(start, end + 1)
-      if (segment.length < 3) return { score: 0, segment: [] }
-      const targetPosInSegment = targetIndex - start
-      let bestScore = 0
-      let localBestSeg: { r: number; c: number }[] = []
-      for (let s = 0; s <= targetPosInSegment; s++) {
-        for (let e = targetPosInSegment; e < segment.length; e++) {
-          const len = e - s + 1
-          if (len < 3 || !isOdd(len)) continue
-          const sub = segment.slice(s, e + 1)
-          const cols = sub.map(c => c.color)
-          if (cols.join(",") === [...cols].reverse().join(",")) {
-            let sc = len
-            if (sub.some(b => bulldogPositions.some(bp => bp.row === b.r && bp.col === b.c))) sc += 10
-            if (sc > bestScore) {
-              bestScore = sc
-              localBestSeg = sub.map(b => ({ r: b.r, c: b.c }))
-            }
-          }
-        }
-      }
-      return { score: bestScore, segment: localBestSeg }
+  const checkAndScore = useCallback((row: number, col: number, _colorIdx: number, currentGrid: (number | null)[][]): { scoreFound: number, segment: {r: number, c: number}[], segmentLength: number } => {
+    const result = checkPalindromes(currentGrid, row, col, bulldogPositions, 3)
+    return {
+      scoreFound: result.score,
+      segment: result.segment ? result.segment.map((t) => ({ r: t.r, c: t.c })) : [],
+      segmentLength: result.segmentLength ?? 0,
     }
-    const rLine = checkLine(true)
-    const cLine = checkLine(false)
-    if (rLine.score > cLine.score) {
-      scoreFound = rLine.score
-      bestSegment = rLine.segment
-    } else {
-      scoreFound = cLine.score
-      bestSegment = cLine.segment
-    }
-    return { scoreFound, segment: bestSegment }
-  }, [gridSize, bulldogPositions])
+  }, [bulldogPositions])
 
   // ── Handle drop ──
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, row: number, col: number) => {
@@ -358,7 +315,7 @@ export default function TurnGameWeb() {
     // Client-side scoring check
     const tempGrid = board.map(r => [...r])
     tempGrid[row][col] = colorIndex
-    const { scoreFound: scoreDelta, segment } = checkAndScore(row, col, colorIndex, tempGrid)
+    const { scoreFound: scoreDelta, segment, segmentLength } = checkAndScore(row, col, colorIndex, tempGrid)
 
     // Must score to place (same rule as single player after first move)
     if (scoreDelta <= 0) {
@@ -372,9 +329,9 @@ export default function TurnGameWeb() {
 
     // Show feedback
     let text = "GOOD!", color = "#4ADE80"
-    if (scoreDelta >= 15) { text = "LEGENDARY!"; color = "#F472B6" }
-    else if (scoreDelta >= 7) { text = "AMAZING!"; color = "#A78BFA" }
-    else if (scoreDelta >= 5) { text = "GREAT!"; color = "#60A5FA" }
+    if (segmentLength >= 9) { text = "LEGENDARY!"; color = "#F472B6" }
+    else if (segmentLength === 7) { text = "AMAZING!"; color = "#A78BFA" }
+    else if (segmentLength === 5) { text = "GREAT!"; color = "#60A5FA" }
     setFeedback({ text, color, id: Date.now() })
     setTimeout(() => setFeedback(null), 2000)
 
@@ -558,7 +515,7 @@ export default function TurnGameWeb() {
             {/* Not your turn overlay */}
             {!isMyTurn && !isGameOver && (
               <div style={{ position: "absolute", inset: 0, zIndex: 100, borderRadius: 24, background: "rgba(0,0,0,0.15)", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "all" }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.5)", padding: "8px 20px", borderRadius: 12 }}>Opponent's turn...</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.5)", padding: "8px 20px", borderRadius: 12 }}>Opponent&apos;s turn...</span>
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column" }}>

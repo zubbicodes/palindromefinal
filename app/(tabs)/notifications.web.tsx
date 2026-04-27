@@ -194,8 +194,7 @@ export default function NotificationsWeb() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: 60,
-              paddingHorizontal: 24,
+              padding: '60px 24px',
             }}
           >
             <Ionicons name="notifications-off-outline" size={48} color={muted} />

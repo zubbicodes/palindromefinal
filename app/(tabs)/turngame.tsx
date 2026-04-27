@@ -3,7 +3,7 @@ import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useThemeContext } from '@/context/ThemeContext';
 import { useSound } from '@/hooks/use-sound';
 import { DEFAULT_GAME_GRADIENTS } from '@/lib/gameColors';
-import { GRID_SIZE, NUM_COLORS, createInitialState } from '@/lib/gameEngine';
+import { GRID_SIZE, NUM_COLORS, checkPalindromes } from '@/lib/gameEngine';
 import { getMatch, type Match } from '@/lib/matchmaking';
 import {
   forfeitTurnMatch,
@@ -499,59 +499,15 @@ export default function TurnGameNative() {
       col: number,
       _colorIdx: number,
       currentGrid: (number | null)[][]
-    ): { scoreFound: number; segment: { r: number; c: number }[] } => {
-      let scoreFound = 0;
-      let bestSegment: { r: number; c: number }[] = [];
-      const isOdd = (n: number) => n % 2 === 1;
-
-      const checkLine = (lineIsRow: boolean) => {
-        const line: { color: number; r: number; c: number }[] = [];
-        if (lineIsRow) {
-          for (let c = 0; c < gridSize; c++) line.push({ color: currentGrid[row][c] ?? -1, r: row, c });
-        } else {
-          for (let r = 0; r < gridSize; r++) line.push({ color: currentGrid[r][col] ?? -1, r, c: col });
-        }
-        const targetIndex = lineIsRow ? col : row;
-        let start = targetIndex;
-        let end = targetIndex;
-        while (start > 0 && line[start - 1].color !== -1) start--;
-        while (end < gridSize - 1 && line[end + 1].color !== -1) end++;
-        const segment = line.slice(start, end + 1);
-        if (segment.length < 3) return { score: 0, segment: [] as { r: number; c: number }[] };
-        const targetPosInSegment = targetIndex - start;
-        let bestScore = 0;
-        let localBest: { r: number; c: number }[] = [];
-        for (let s = 0; s <= targetPosInSegment; s++) {
-          for (let e = targetPosInSegment; e < segment.length; e++) {
-            const len = e - s + 1;
-            if (len < 3 || !isOdd(len)) continue;
-            const sub = segment.slice(s, e + 1);
-            const cols = sub.map((c) => c.color);
-            if (cols.join(',') === [...cols].reverse().join(',')) {
-              let sc = len;
-              if (sub.some((b) => bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c))) sc += 10;
-              if (sc > bestScore) {
-                bestScore = sc;
-                localBest = sub.map((b) => ({ r: b.r, c: b.c }));
-              }
-            }
-          }
-        }
-        return { score: bestScore, segment: localBest };
+    ): { scoreFound: number; segment: { r: number; c: number }[]; segmentLength: number } => {
+      const result = checkPalindromes(currentGrid, row, col, bulldogPositions, 3);
+      return {
+        scoreFound: result.score,
+        segment: result.segment ? result.segment.map((t) => ({ r: t.r, c: t.c })) : [],
+        segmentLength: result.segmentLength ?? 0,
       };
-
-      const rLine = checkLine(true);
-      const cLine = checkLine(false);
-      if (rLine.score >= cLine.score) {
-        scoreFound = rLine.score;
-        bestSegment = rLine.segment;
-      } else {
-        scoreFound = cLine.score;
-        bestSegment = cLine.segment;
-      }
-      return { scoreFound, segment: bestSegment };
     },
-    [gridSize, bulldogPositions]
+    [bulldogPositions]
   );
 
   // ── Handle drop ──
@@ -581,7 +537,7 @@ export default function TurnGameNative() {
 
       const tempGrid = board.map((r) => [...r]);
       tempGrid[row][col] = colorIndex;
-      const { scoreFound: scoreDelta, segment } = checkAndScore(row, col, colorIndex, tempGrid);
+      const { scoreFound: scoreDelta, segment, segmentLength } = checkAndScore(row, col, colorIndex, tempGrid);
 
       if (scoreDelta <= 0) {
         playErrorSound();
@@ -596,13 +552,13 @@ export default function TurnGameNative() {
 
       let text = 'GOOD!';
       let color = '#4ADE80';
-      if (scoreDelta >= 15) {
+      if (segmentLength >= 9) {
         text = 'LEGENDARY!';
         color = '#F472B6';
-      } else if (scoreDelta >= 7) {
+      } else if (segmentLength === 7) {
         text = 'AMAZING!';
         color = '#A78BFA';
-      } else if (scoreDelta >= 5) {
+      } else if (segmentLength === 5) {
         text = 'GREAT!';
         color = '#60A5FA';
       }
