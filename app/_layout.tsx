@@ -75,7 +75,8 @@ export default function RootLayout() {
     const inTabsGroup = segments[0] === '(tabs)';
     const routeName = segments[1] ?? 'index';
     const isAuthScreen = inTabsGroup && (routeName === 'index' || routeName === 'signup');
-    const isPublicRoute = isAuthScreen || segments[0] === 'auth';
+    const isLegalRoute = segments[0] === 'privacy' || segments[0] === 'terms';
+    const isPublicRoute = isAuthScreen || segments[0] === 'auth' || isLegalRoute;
 
     if (!user && !isPublicRoute) {
       router.replace('/');

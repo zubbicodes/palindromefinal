@@ -20,7 +20,7 @@ import {
   type TextStyle,
 } from 'react-native';
 
-type GameMode = 'race' | 'turn' | 'aggressive';
+type GameMode = 'race' | 'turn';
 
 const BREAKPOINT_TWO_COL = 900;
 
@@ -30,7 +30,6 @@ export default function MultiplayerLobbyWebScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [raceLoading, setRaceLoading] = useState(false);
   const [turnLoading, setTurnLoading] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [recentMatches, setRecentMatches] = useState<Match[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [opponentNames, setOpponentNames] = useState<Record<string, string>>({});
@@ -77,14 +76,6 @@ export default function MultiplayerLobbyWebScreen() {
     })();
     return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => {
-    if (!toastMessage) return;
-    const t = setTimeout(() => setToastMessage(null), 1800);
-    return () => clearTimeout(t);
-  }, [toastMessage]);
-
-  const showComingSoon = useCallback(() => setToastMessage('Coming Soon'), []);
 
   const handleRaceMode = useCallback(async () => {
     if (!userId) {
@@ -188,15 +179,6 @@ export default function MultiplayerLobbyWebScreen() {
       gradient: ['#7C3AED', '#A78BFA'],
       onPress: handleTurnMode,
       loading: turnLoading,
-    },
-    {
-      key: 'aggressive',
-      title: 'Aggressive mode',
-      subtitle: 'Coming soon',
-      description: 'Faster pace, higher stakes. Same race rules with a twist—landing soon.',
-      icon: 'flame',
-      gradient: ['#6b7280', '#9ca3af'],
-      onPress: showComingSoon,
     },
   ];
 
@@ -364,25 +346,6 @@ export default function MultiplayerLobbyWebScreen() {
           </div>
           </div>
         </ScrollView>
-
-        {toastMessage ? (
-          <div
-            style={{
-              position: 'fixed',
-              bottom: 24,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              padding: '14px 24px',
-              borderRadius: 12,
-              background: 'rgba(0,0,0,0.85)',
-              color: '#FFFFFF',
-              fontFamily: 'Geist-Bold, system-ui',
-              fontSize: 14,
-            }}
-          >
-            {toastMessage}
-          </div>
-        ) : null}
       </View>
     </div>
   );

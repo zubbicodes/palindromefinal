@@ -29,6 +29,7 @@ declare
   v_next_turn uuid;
   v_now timestamptz := now();
   v_elapsed_ms integer;
+  v_player_count integer;
   v_max_score integer;
   v_winner_count integer;
   v_finished_reason text := null;
@@ -168,11 +169,11 @@ begin
   end if;
 
   if v_finished_reason is null and (
-    select coalesce(sum((value)::integer), 0) from jsonb_array_elements_text(
-      case when p_user_id = v_state.player1_user_id then v_player1_blocks else v_player2_blocks end
-    )
+    select coalesce(sum((value)::integer), 0) from jsonb_array_elements_text(v_player1_blocks)
+  ) = 0 and (
+    select coalesce(sum((value)::integer), 0) from jsonb_array_elements_text(v_player2_blocks)
   ) = 0 then
-    v_finished_reason := 'score';
+    v_finished_reason := 'blocks_used';
   end if;
 
   if v_finished_reason is not null and v_winner is null then
@@ -207,6 +208,10 @@ begin
         finished_at = coalesce(finished_at, v_now)
     where id = p_match_id;
 
+    select count(*) into v_player_count
+    from public.match_players
+    where match_id = p_match_id;
+
     update public.match_players
     set score = case
           when user_id = v_state.player1_user_id then v_state.player1_score
@@ -238,114 +243,3 @@ end;
 $$;
 
 grant execute on function public.submit_turn_move(uuid, uuid, integer, integer, integer, integer, integer) to authenticated;
-
-create or replace function public.expire_turn_clock(
-  p_match_id uuid,
-  p_timed_out_user_id uuid
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_state public.turn_match_states%rowtype;
-  v_match public.matches%rowtype;
-  v_now timestamptz := now();
-  v_elapsed_ms integer;
-  v_winner uuid;
-  v_max_score integer;
-  v_winner_count integer;
-  v_result jsonb;
-begin
-  select * into v_match
-  from public.matches
-  where id = p_match_id
-  for update;
-
-  if not found or v_match.mode <> 'turn' then
-    raise exception 'Invalid turn match';
-  end if;
-
-  select * into v_state
-  from public.turn_match_states
-  where match_id = p_match_id
-  for update;
-
-  if not found then
-    raise exception 'Turn state not found';
-  end if;
-
-  if v_state.finished_reason is not null or v_match.status = 'finished' then
-    select to_jsonb(tms.*) into v_result
-    from public.turn_match_states tms
-    where tms.match_id = p_match_id;
-    return v_result;
-  end if;
-
-  if v_state.current_turn_user_id <> p_timed_out_user_id then
-    raise exception 'This player is not on turn';
-  end if;
-
-  v_elapsed_ms := greatest(
-    0,
-    least(
-      300000,
-      floor(extract(epoch from (v_now - coalesce(v_state.turn_started_at, v_now))) * 1000)::integer
-    )
-  );
-
-  if p_timed_out_user_id = v_state.player1_user_id then
-    v_state.player1_time_ms := greatest(0, coalesce(v_state.player1_time_ms, 300000) - v_elapsed_ms);
-    v_winner := v_state.player2_user_id;
-  elsif p_timed_out_user_id = v_state.player2_user_id then
-    v_state.player2_time_ms := greatest(0, coalesce(v_state.player2_time_ms, 300000) - v_elapsed_ms);
-    v_winner := v_state.player1_user_id;
-  else
-    raise exception 'Timed out user is not a participant';
-  end if;
-
-  update public.turn_match_states
-  set player1_time_ms = v_state.player1_time_ms,
-      player2_time_ms = v_state.player2_time_ms,
-      current_turn_user_id = null,
-      winner_user_id = v_winner,
-      finished_reason = 'timeout',
-      updated_at = v_now
-  where match_id = p_match_id;
-
-  update public.matches
-  set status = 'finished',
-      finished_at = coalesce(finished_at, v_now)
-  where id = p_match_id;
-
-  update public.match_players
-  set score = case
-        when user_id = v_state.player1_user_id then v_state.player1_score
-        when user_id = v_state.player2_user_id then v_state.player2_score
-        else score
-      end,
-      submitted_at = coalesce(submitted_at, v_now)
-  where match_id = p_match_id;
-
-  select max(score) into v_max_score
-  from public.match_players
-  where match_id = p_match_id;
-
-  select count(*) into v_winner_count
-  from public.match_players
-  where match_id = p_match_id and score = v_max_score;
-
-  update public.match_players
-  set is_winner = case when user_id = v_winner then true else false end
-  where match_id = p_match_id;
-
-  select to_jsonb(tms.*) into v_result
-  from public.turn_match_states tms
-  where tms.match_id = p_match_id;
-
-  return v_result;
-end;
-$$;
-
-grant execute on function public.expire_turn_clock(uuid, uuid) to authenticated;

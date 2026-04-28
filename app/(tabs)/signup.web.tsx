@@ -446,6 +446,10 @@ const handleSignUp = async () => {
                 <label htmlFor="agree">
                   I agree to the{' '}
                   <span
+                    onClick={(e) => {
+                      e.preventDefault();
+                      router.push('/terms');
+                    }}
                     style={{
                       color: '#FF0000',
                       fontWeight: 600,
@@ -457,6 +461,10 @@ const handleSignUp = async () => {
                   </span>{' '}
                   and{' '}
                   <span
+                    onClick={(e) => {
+                      e.preventDefault();
+                      router.push('/privacy');
+                    }}
                     style={{
                       color: '#FF0000',
                       fontWeight: 600,
