@@ -56,6 +56,12 @@ function formatTime(ms: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
+function getTurnStartedAtMs(state: TurnMatchState | null): number {
+  if (!state?.turn_started_at) return Date.now()
+  const parsed = Date.parse(state.turn_started_at)
+  return Number.isFinite(parsed) ? parsed : Date.now()
+}
+
 // ── Draggable Block ─────────────────────────────────────
 function DraggableBlock({ colorIndex, gradient, count, layoutConfig, onDragStart, disabled }: {
   colorIndex: number; gradient: readonly [string, string]; count: number
@@ -207,8 +213,8 @@ export default function TurnGameWeb() {
       setTurnState(readyState)
       setLocalTimeP1(readyState.player1_time_ms)
       setLocalTimeP2(readyState.player2_time_ms)
-      turnStartedLocal.current = Date.now()
-      lastMoveTime.current = Date.now()
+      turnStartedLocal.current = getTurnStartedAtMs(readyState)
+      lastMoveTime.current = getTurnStartedAtMs(readyState)
 
       // Init board if needed
       if (m.status === "active" && (!readyState.board || (Array.isArray(readyState.board) && readyState.board.length === 0))) {
@@ -221,7 +227,8 @@ export default function TurnGameWeb() {
           setTurnState(s2)
           setLocalTimeP1(s2.player1_time_ms)
           setLocalTimeP2(s2.player2_time_ms)
-          turnStartedLocal.current = Date.now()
+          turnStartedLocal.current = getTurnStartedAtMs(s2)
+          lastMoveTime.current = getTurnStartedAtMs(s2)
         }
       } else {
         setBoardInitialized(true)
@@ -248,7 +255,8 @@ export default function TurnGameWeb() {
       setTurnState(s)
       setLocalTimeP1(s.player1_time_ms)
       setLocalTimeP2(s.player2_time_ms)
-      turnStartedLocal.current = Date.now()
+      turnStartedLocal.current = getTurnStartedAtMs(s)
+      lastMoveTime.current = getTurnStartedAtMs(s)
       if (s.finished_reason && !gameOverInfo) {
         const isP1 = userId === s.player1_user_id
         setGameOverInfo({
@@ -332,7 +340,7 @@ export default function TurnGameWeb() {
     }
 
     playDropSound()
-    const timeSpent = Date.now() - lastMoveTime.current
+    const timeSpent = Math.max(0, Date.now() - getTurnStartedAtMs(turnState))
     lastMoveTime.current = Date.now()
 
     // Show feedback
@@ -355,7 +363,8 @@ export default function TurnGameWeb() {
       setTurnState(newState)
       setLocalTimeP1(newState.player1_time_ms)
       setLocalTimeP2(newState.player2_time_ms)
-      turnStartedLocal.current = Date.now()
+      turnStartedLocal.current = getTurnStartedAtMs(newState)
+      lastMoveTime.current = getTurnStartedAtMs(newState)
     } catch (err) {
       console.error("Move submit error:", err)
       playErrorSound()
