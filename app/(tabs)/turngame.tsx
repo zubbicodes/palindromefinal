@@ -26,7 +26,6 @@ import {
   Image,
   PanResponder,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -272,8 +271,8 @@ export default function TurnGameNative() {
   const { matchId: routeMatchId } = useLocalSearchParams<{ matchId?: string }>();
   const matchId = typeof routeMatchId === 'string' ? routeMatchId : Array.isArray(routeMatchId) ? routeMatchId[0] : undefined;
 
-  const { theme, colors } = useThemeContext();
-  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, customGameColors } = useSettings();
+  const { theme } = useThemeContext();
+  const { hapticsEnabled, colorBlindEnabled, colorBlindMode, customGameColors } = useSettings();
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
@@ -328,14 +327,17 @@ export default function TurnGameNative() {
   const isPlayer1 = turnState ? userId === turnState.player1_user_id : false;
   const isMyTurn = turnState ? turnState.current_turn_user_id === userId : false;
   const isGameOver = turnState ? turnState.finished_reason !== null : false;
-  const myBlocks = turnState ? (isPlayer1 ? turnState.player1_blocks : turnState.player2_blocks) : [8, 8, 8, 8, 8];
+  const myBlocks = useMemo(
+    () => (turnState ? (isPlayer1 ? turnState.player1_blocks : turnState.player2_blocks) : [8, 8, 8, 8, 8]),
+    [isPlayer1, turnState]
+  );
   const myScore = turnState ? (isPlayer1 ? turnState.player1_score : turnState.player2_score) : 0;
   const opScore = turnState ? (isPlayer1 ? turnState.player2_score : turnState.player1_score) : 0;
   const board: (number | null)[][] =
     turnState?.board?.length === gridSize
       ? turnState.board
       : Array.from({ length: gridSize }, () => Array(gridSize).fill(null));
-  const bulldogPositions = turnState?.bulldog_positions ?? [];
+  const bulldogPositions = useMemo(() => turnState?.bulldog_positions ?? [], [turnState]);
 
   // ── Layout ──
   const boardSize = useMemo(() => {

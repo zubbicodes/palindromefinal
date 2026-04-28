@@ -511,7 +511,6 @@ export default function GameLayout() {
   const blocksBoxRef = useRef<View | null>(null);
   const playBtnRef = useRef<View | null>(null);
   const pauseBtnRef = useRef<View | null>(null);
-  const profileBtnRef = useRef<View | null>(null);
   const settingsBtnRef = useRef<View | null>(null);
   const controlsRowRef = useRef<View | null>(null);
 
@@ -553,10 +552,6 @@ export default function GameLayout() {
       Animated.timing(noHintsAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
     ]).start();
   }, [noHintsAnim]);
-
-  const openTutorial = useCallback(() => {
-    tourRef.current?.start?.();
-  }, []);
 
   const tourSteps = useMemo<TourStep[]>(() => {
     const stepsCount = 6;
@@ -814,7 +809,7 @@ export default function GameLayout() {
       });
     });
     return unsub;
-  }, [matchId, router, returnTo]);
+  }, [matchId, returnTo]);
 
   // Timer useEffect (single player: count up)
   useEffect(() => {

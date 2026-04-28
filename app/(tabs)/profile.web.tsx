@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { Switch } from 'react-native-switch';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { height: screenHeight } = Dimensions.get('window');
 const MAX_CONTENT_WIDTH = 800;
 
 const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
@@ -52,7 +52,7 @@ export default function ProfileScreenWeb() {
 
   useEffect(() => {
     if (selectedColorIndex !== null) setPickerHex(editingColors[selectedColorIndex][0]);
-  }, [selectedColorIndex]);
+  }, [editingColors, selectedColorIndex]);
 
   const commitPickerColor = useCallback((hex: string) => {
     const idx = selectedIndexRef.current;

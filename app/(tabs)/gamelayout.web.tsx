@@ -587,7 +587,7 @@ export default function GameLayoutWeb() {
   const noHintsFaceTimerRef = useRef<any>(null)
 
   const [opponentScore, setOpponentScore] = useState<number | null>(null)
-  const [opponentName, setOpponentName] = useState<string>("Opponent")
+  const [, setOpponentName] = useState<string>("Opponent")
   const [opponentAvatar, setOpponentAvatar] = useState<string | null>(null)
   const [multiplayerTimeLimit, setMultiplayerTimeLimit] = useState<number | null>(null)
   const [multiplayerJoinedAt, setMultiplayerJoinedAt] = useState<number | null>(null)

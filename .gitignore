@@ -10,6 +10,11 @@ dist/
 web-build/
 expo-env.d.ts
 
+# generated local tool/cache output
+.qoder/
+supabase/.temp/
+.claude/
+
 # Native
 .kotlin/
 *.orig.*

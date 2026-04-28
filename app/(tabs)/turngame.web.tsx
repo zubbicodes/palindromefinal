@@ -11,11 +11,11 @@ import {
   forfeitTurnMatch, subscribeToTurnState,
   type TurnMatchState, TURN_TIME_LIMIT_MS,
 } from "@/lib/turnMatchmaking"
-import { getMatch, subscribeToMatch, type Match, type MatchPlayer } from "@/lib/matchmaking"
+import { getMatch, type Match } from "@/lib/matchmaking"
 import { Ionicons } from "@expo/vector-icons"
 import { BlurView } from "expo-blur"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Image, Pressable, StyleSheet } from "react-native"
 
 // ── Layout helpers ──────────────────────────────────────
@@ -130,7 +130,7 @@ export default function TurnGameWeb() {
   const matchId = typeof routeMatchId === "string" ? routeMatchId : undefined
 
   const { theme, colors } = useThemeContext()
-  const { soundEnabled, colorBlindEnabled, colorBlindMode, customGameColors } = useSettings()
+  const { colorBlindEnabled, colorBlindMode, customGameColors } = useSettings()
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound()
 
   // ── State ──
@@ -157,7 +157,7 @@ export default function TurnGameWeb() {
   const [, forceUpdate] = useState(0)
 
   const gridSize = GRID_SIZE
-  const colorGradients = customGameColors ?? [...DEFAULT_GAME_GRADIENTS]
+  const colorGradients = useMemo(() => customGameColors ?? [...DEFAULT_GAME_GRADIENTS], [customGameColors])
   const center = Math.floor(gridSize / 2)
   const word = " PALINDROME"
   const halfWord = Math.floor(word.length / 2)
@@ -166,11 +166,14 @@ export default function TurnGameWeb() {
   const isPlayer1 = turnState ? userId === turnState.player1_user_id : false
   const isMyTurn = turnState ? turnState.current_turn_user_id === userId : false
   const isGameOver = turnState ? turnState.finished_reason !== null : false
-  const myBlocks = turnState ? (isPlayer1 ? turnState.player1_blocks : turnState.player2_blocks) : [8, 8, 8, 8, 8]
+  const myBlocks = useMemo(
+    () => (turnState ? (isPlayer1 ? turnState.player1_blocks : turnState.player2_blocks) : [8, 8, 8, 8, 8]),
+    [isPlayer1, turnState]
+  )
   const myScore = turnState ? (isPlayer1 ? turnState.player1_score : turnState.player2_score) : 0
   const opScore = turnState ? (isPlayer1 ? turnState.player2_score : turnState.player1_score) : 0
   const board: (number | null)[][] = turnState?.board?.length === gridSize ? turnState.board : Array.from({ length: gridSize }, () => Array(gridSize).fill(null))
-  const bulldogPositions = turnState?.bulldog_positions ?? []
+  const bulldogPositions = useMemo(() => turnState?.bulldog_positions ?? [], [turnState])
 
   // ── Layout ──
   useEffect(() => { const h = () => forceUpdate(n => n + 1); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h) }, [])

@@ -61,7 +61,8 @@ export default function MatchWaitingScreen() {
         setMatch(m);
         if (m.invite_code) setInviteCodeFromMatch(m.invite_code);
         if (m.status === 'active') {
-          router.replace({ pathname: '/gamelayout', params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
+          const target = m.mode === 'turn' ? '/turngame' : '/gamelayout';
+          router.replace({ pathname: target as any, params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
         } else if (m.status === 'cancelled') {
           router.replace(backTarget);
         }
@@ -72,7 +73,7 @@ export default function MatchWaitingScreen() {
       clearInterval(poll);
       unsubRef.current?.();
     };
-  }, [matchId, router, backTarget]);
+  }, [matchId, router, backTarget, returnTo]);
 
   const handleCancel = useCallback(async () => {
     if (!matchId) return;
@@ -103,7 +104,8 @@ export default function MatchWaitingScreen() {
     );
   }, [handleCancel]);
 
-  const displayCode = (inviteCodeParam ?? inviteCodeFromMatch ?? match?.invite_code ?? '').toString().toUpperCase();
+  const rawDisplayCode = (inviteCodeParam ?? inviteCodeFromMatch ?? match?.invite_code ?? '').toString().toUpperCase();
+  const displayCode = rawDisplayCode.startsWith('CHAL') ? '' : rawDisplayCode;
   const text = isDark ? '#FFFFFF' : '#111111';
   const muted = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(17,17,17,0.6)';
 
