@@ -385,6 +385,19 @@ export async function forfeitTurnMatch(matchId: string, userId: string): Promise
 }
 
 /**
+ * Expire the currently active player's clock and finish the match as timeout.
+ */
+export async function expireTurnClock(matchId: string, timedOutUserId: string): Promise<TurnMatchState> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc('expire_turn_clock', {
+    p_match_id: matchId,
+    p_timed_out_user_id: timedOutUserId,
+  });
+  if (error) throw error;
+  return parseTurnState(data);
+}
+
+/**
  * Subscribe to turn match state changes (real-time).
  * Returns unsubscribe function.
  */

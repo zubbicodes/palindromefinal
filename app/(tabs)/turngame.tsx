@@ -7,6 +7,7 @@ import { GRID_SIZE, NUM_COLORS, checkPalindromes } from '@/lib/gameEngine';
 import { getMatch, type Match } from '@/lib/matchmaking';
 import {
   forfeitTurnMatch,
+  expireTurnClock,
   ensureTurnMatchReady,
   getTurnMatchState,
   initTurnBoard,
@@ -52,6 +53,30 @@ function getTurnStartedAtMs(state: TurnMatchState | null): number {
   if (!state?.turn_started_at) return Date.now();
   const parsed = Date.parse(state.turn_started_at);
   return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+type GameOverInfo = { winner: string | null; reason: string | null; myScore: number; opScore: number };
+
+function getGameOverTitle(info: GameOverInfo, userId: string | null): string {
+  if (info.winner === userId) return 'You Win!';
+  if (info.winner === null) return "It's a Draw!";
+  return 'You Lose!';
+}
+
+function getGameOverReason(info: GameOverInfo, userId: string | null): string {
+  const didWin = info.winner === userId;
+  const didDraw = info.winner === null;
+  if (info.reason === 'timeout') return didWin ? 'Opponent lost on time' : 'You lost on time';
+  if (info.reason === 'forfeit') return didWin ? 'Opponent forfeited' : 'You forfeited';
+  if (info.reason === 'score' || info.reason === 'blocks_used') {
+    if (didDraw) return 'Draw by score';
+    return didWin ? 'You won by score' : 'You lost by score';
+  }
+  if (info.reason === 'board_full') {
+    if (didDraw) return 'Board full, draw by score';
+    return didWin ? 'Board full, you won by score' : 'Board full, you lost by score';
+  }
+  return didDraw ? 'Draw' : didWin ? 'You won by score' : 'You lost by score';
 }
 
 type BoardLayout = { x: number; y: number; width: number; height: number };
@@ -309,7 +334,7 @@ export default function TurnGameNative() {
   const [opponentAvatar, setOpponentAvatar] = useState<string | null>(null);
   const [boardInitialized, setBoardInitialized] = useState(false);
   const [forfeitConfirm, setForfeitConfirm] = useState(false);
-  const [gameOverInfo, setGameOverInfo] = useState<{ winner: string | null; reason: string | null; myScore: number; opScore: number } | null>(null);
+  const [gameOverInfo, setGameOverInfo] = useState<GameOverInfo | null>(null);
 
   const [localTimeP1, setLocalTimeP1] = useState(TURN_TIME_LIMIT_MS);
   const [localTimeP2, setLocalTimeP2] = useState(TURN_TIME_LIMIT_MS);
@@ -320,6 +345,7 @@ export default function TurnGameNative() {
   const [feedback, setFeedback] = useState<{ text: string; color: string; id: number } | null>(null);
   const [scoredCells, setScoredCells] = useState<string[]>([]);
   const scoredCellsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutSubmittingRef = useRef(false);
 
   const gridSize = GRID_SIZE;
   const colorGradients = useMemo(
@@ -479,24 +505,35 @@ export default function TurnGameNative() {
   useEffect(() => {
     if (!turnState || isGameOver || !turnState.current_turn_user_id) return;
     const interval = setInterval(() => {
-      const elapsed = Date.now() - turnStartedLocal.current;
+      const elapsed = Math.max(0, Date.now() - turnStartedLocal.current);
       const isP1Turn = turnState.current_turn_user_id === turnState.player1_user_id;
+      const activeUserId = turnState.current_turn_user_id;
+      const expireActiveClock = () => {
+        if (!matchId || !activeUserId || timeoutSubmittingRef.current) return;
+        timeoutSubmittingRef.current = true;
+        expireTurnClock(matchId, activeUserId)
+          .then((s) => {
+            setTurnState(s);
+            setLocalTimeP1(s.player1_time_ms);
+            setLocalTimeP2(s.player2_time_ms);
+          })
+          .catch((e) => console.error(e))
+          .finally(() => {
+            timeoutSubmittingRef.current = false;
+          });
+      };
       if (isP1Turn) {
         const newTime = Math.max(0, turnState.player1_time_ms - elapsed);
         setLocalTimeP1(newTime);
-        if (newTime <= 0 && isMyTurn && matchId && userId) {
-          forfeitTurnMatch(matchId, userId).catch((e) => console.error(e));
-        }
+        if (newTime <= 0) expireActiveClock();
       } else {
         const newTime = Math.max(0, turnState.player2_time_ms - elapsed);
         setLocalTimeP2(newTime);
-        if (newTime <= 0 && isMyTurn && matchId && userId) {
-          forfeitTurnMatch(matchId, userId).catch((e) => console.error(e));
-        }
+        if (newTime <= 0) expireActiveClock();
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [turnState, isGameOver, isMyTurn, matchId, userId]);
+  }, [turnState, isGameOver, matchId]);
 
   // Cleanup scoredCells timer
   useEffect(() => {
@@ -554,8 +591,9 @@ export default function TurnGameNative() {
       const tempGrid = board.map((r) => [...r]);
       tempGrid[row][col] = colorIndex;
       const { scoreFound: scoreDelta, segment, segmentLength } = checkAndScore(row, col, colorIndex, tempGrid);
+      const isLastOwnBlock = myBlocks.reduce((total, count) => total + count, 0) === 1;
 
-      if (scoreDelta <= 0) {
+      if (scoreDelta <= 0 && !isLastOwnBlock) {
         playErrorSound();
         triggerHaptic('error');
         return;
@@ -568,7 +606,10 @@ export default function TurnGameNative() {
 
       let text = 'GOOD!';
       let color = '#4ADE80';
-      if (segmentLength >= 9) {
+      if (scoreDelta <= 0) {
+        text = 'DONE!';
+        color = '#95DEFE';
+      } else if (segmentLength >= 9) {
         text = 'LEGENDARY!';
         color = '#F472B6';
       } else if (segmentLength === 7) {
@@ -954,20 +995,10 @@ export default function TurnGameNative() {
                   />
                 </View>
                 <Text style={[styles.gameOverTitle, { color: isDark ? '#FFFFFF' : '#0F172A' }]}>
-                  {gameOverInfo.winner === userId
-                    ? 'You Win!'
-                    : gameOverInfo.winner === null
-                      ? "It's a Draw!"
-                      : 'You Lose!'}
+                  {getGameOverTitle(gameOverInfo, userId)}
                 </Text>
                 <Text style={[styles.gameOverReason, { color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(15,23,42,0.7)' }]}>
-                  {gameOverInfo.reason === 'timeout'
-                    ? 'Time ran out'
-                    : gameOverInfo.reason === 'forfeit'
-                      ? 'Player forfeited'
-                      : gameOverInfo.reason === 'board_full'
-                        ? 'Board is full'
-                        : 'All blocks used'}
+                  {getGameOverReason(gameOverInfo, userId)}
                 </Text>
                 <View style={styles.gameOverScoreRow}>
                   <View
