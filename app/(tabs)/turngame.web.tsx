@@ -8,7 +8,7 @@ import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
 import { checkPalindromes, GRID_SIZE, NUM_COLORS } from "@/lib/gameEngine"
 import {
   getTurnMatchState, initTurnBoard, submitTurnMove,
-  forfeitTurnMatch, subscribeToTurnState,
+  forfeitTurnMatch, subscribeToTurnState, ensureTurnMatchReady,
   type TurnMatchState, TURN_TIME_LIMIT_MS,
 } from "@/lib/turnMatchmaking"
 import { getMatch, type Match } from "@/lib/matchmaking"
@@ -202,15 +202,18 @@ export default function TurnGameWeb() {
       setMatch(m)
       const s = await getTurnMatchState(matchId)
       if (cancelled || !s) return
-      setTurnState(s)
-      setLocalTimeP1(s.player1_time_ms)
-      setLocalTimeP2(s.player2_time_ms)
+      const readyState = (await ensureTurnMatchReady(matchId, m.seed)) ?? s
+      if (cancelled) return
+      setTurnState(readyState)
+      setLocalTimeP1(readyState.player1_time_ms)
+      setLocalTimeP2(readyState.player2_time_ms)
       turnStartedLocal.current = Date.now()
       lastMoveTime.current = Date.now()
 
       // Init board if needed
-      if (m.status === "active" && (!s.board || (Array.isArray(s.board) && s.board.length === 0))) {
+      if (m.status === "active" && (!readyState.board || (Array.isArray(readyState.board) && readyState.board.length === 0))) {
         await initTurnBoard(matchId, m.seed)
+        await ensureTurnMatchReady(matchId, m.seed)
         setBoardInitialized(true)
         // Refetch after init
         const s2 = await getTurnMatchState(matchId)
@@ -226,7 +229,9 @@ export default function TurnGameWeb() {
 
       // Load opponent profile
       const user = await authService.getSessionUser()
-      const opId = s.player1_user_id === user?.id ? s.player2_user_id : s.player1_user_id
+      const latestState = (await getTurnMatchState(matchId)) ?? readyState
+      if (!cancelled) setTurnState(latestState)
+      const opId = latestState.player1_user_id === user?.id ? latestState.player2_user_id : latestState.player1_user_id
       if (opId && opId !== user?.id) {
         const opProfile = await authService.getProfile(opId)
         if (opProfile?.full_name && !cancelled) setOpponentName(opProfile.full_name)

@@ -7,6 +7,7 @@ import { GRID_SIZE, NUM_COLORS, checkPalindromes } from '@/lib/gameEngine';
 import { getMatch, type Match } from '@/lib/matchmaking';
 import {
   forfeitTurnMatch,
+  ensureTurnMatchReady,
   getTurnMatchState,
   initTurnBoard,
   submitTurnMove,
@@ -396,15 +397,18 @@ export default function TurnGameNative() {
       setMatch(m);
       const s = await getTurnMatchState(matchId);
       if (cancelled || !s) return;
-      setTurnState(s);
-      setLocalTimeP1(s.player1_time_ms);
-      setLocalTimeP2(s.player2_time_ms);
+      const readyState = (await ensureTurnMatchReady(matchId, m.seed)) ?? s;
+      if (cancelled) return;
+      setTurnState(readyState);
+      setLocalTimeP1(readyState.player1_time_ms);
+      setLocalTimeP2(readyState.player2_time_ms);
       turnStartedLocal.current = Date.now();
       lastMoveTime.current = Date.now();
 
-      if (m.status === 'active' && (!s.board || (Array.isArray(s.board) && s.board.length === 0))) {
+      if (m.status === 'active' && (!readyState.board || (Array.isArray(readyState.board) && readyState.board.length === 0))) {
         try {
           await initTurnBoard(matchId, m.seed);
+          await ensureTurnMatchReady(matchId, m.seed);
         } catch (e) {
           console.error('initTurnBoard failed:', e);
         }
@@ -423,7 +427,9 @@ export default function TurnGameNative() {
       }
 
       const user = await authService.getSessionUser();
-      const opId = s.player1_user_id === user?.id ? s.player2_user_id : s.player1_user_id;
+      const latestState = (await getTurnMatchState(matchId)) ?? readyState;
+      if (!cancelled) setTurnState(latestState);
+      const opId = latestState.player1_user_id === user?.id ? latestState.player2_user_id : latestState.player1_user_id;
       if (opId && opId !== user?.id) {
         const opProfile = await authService.getProfile(opId);
         if (cancelled) return;

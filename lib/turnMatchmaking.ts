@@ -284,6 +284,69 @@ export async function initTurnBoard(matchId: string, seed: string): Promise<void
 }
 
 /**
+ * Repair/normalize an active turn match so both clients agree whose turn it is.
+ * This protects older matches/RPCs that left current_turn_user_id null or kept
+ * player2_user_id as the player1 placeholder.
+ */
+export async function ensureTurnMatchReady(matchId: string, seed?: string): Promise<TurnMatchState | null> {
+  const supabase = getSupabaseClient();
+
+  const { data, error } = await supabase.rpc('normalize_turn_match', {
+    p_match_id: matchId,
+  });
+
+  if (!error && data) {
+    const normalized = parseTurnState(data);
+    if ((!normalized.board || normalized.board.length === 0) && seed) {
+      await initTurnBoard(matchId, seed);
+      await supabase.rpc('normalize_turn_match', { p_match_id: matchId });
+      return getTurnMatchState(matchId);
+    }
+    return normalized;
+  }
+
+  if (error?.code && !['42883', 'PGRST202'].includes(error.code)) {
+    throw error;
+  }
+
+  const match = await getMatchWithPlayers(matchId);
+  let state = await getTurnMatchState(matchId);
+  if (!state || match.status !== 'active') return state;
+
+  const playerIds = (match.match_players ?? []).map((p) => p.user_id);
+  const player1 = state.player1_user_id || playerIds[0];
+  const player2 =
+    playerIds.find((id) => id !== player1) ??
+    (state.player2_user_id !== player1 ? state.player2_user_id : null);
+
+  if (!player1 || !player2) return state;
+
+  if ((!state.board || state.board.length === 0) && seed) {
+    await initTurnBoard(matchId, seed);
+    state = await getTurnMatchState(matchId);
+    if (!state) return null;
+  }
+
+  const validTurn =
+    state.current_turn_user_id === player1 || state.current_turn_user_id === player2;
+  const currentTurn = validTurn ? state.current_turn_user_id : player1;
+
+  const { error: updateErr } = await supabase
+    .from('turn_match_states')
+    .update({
+      player1_user_id: player1,
+      player2_user_id: player2,
+      current_turn_user_id: currentTurn,
+      turn_started_at: state.turn_started_at ?? new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('match_id', matchId);
+
+  if (updateErr) throw updateErr;
+  return getTurnMatchState(matchId);
+}
+
+/**
  * Submit a move via RPC (server-authoritative).
  */
 export async function submitTurnMove(
