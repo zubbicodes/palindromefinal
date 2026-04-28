@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type GameMode = 'race' | 'turn' | 'aggressive';
+type GameMode = 'race' | 'turn';
 
 export default function MultiplayerLobbyScreen() {
   const { theme, colors } = useThemeContext();
@@ -25,7 +25,6 @@ export default function MultiplayerLobbyScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const [raceLoading, setRaceLoading] = useState(false);
   const [turnLoading, setTurnLoading] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [recentMatches, setRecentMatches] = useState<Match[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [opponentNames, setOpponentNames] = useState<Record<string, string>>({});
@@ -61,16 +60,6 @@ export default function MultiplayerLobbyScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    if (!toastMessage) return;
-    const t = setTimeout(() => setToastMessage(null), 1800);
-    return () => clearTimeout(t);
-  }, [toastMessage]);
-
-  const showComingSoon = useCallback(() => {
-    setToastMessage('Coming Soon');
   }, []);
 
   const handleRaceMode = useCallback(async () => {
@@ -165,15 +154,6 @@ export default function MultiplayerLobbyScreen() {
       gradient: ['#A855F7', '#EC4899'],
       onPress: handleTurnMode,
       loading: turnLoading,
-    },
-    {
-      key: 'aggressive',
-      title: 'Aggressive mode',
-      subtitle: 'Coming soon',
-      description: 'Faster pace, higher stakes. Same race rules with a twist—landing soon.',
-      icon: 'flame',
-      gradient: ['#6b7280', '#9ca3af'],
-      onPress: showComingSoon,
     },
   ];
 
@@ -277,12 +257,6 @@ export default function MultiplayerLobbyScreen() {
             )}
           </View>
         </ScrollView>
-
-        {toastMessage ? (
-          <View style={[styles.toast, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.75)' }]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </View>
-        ) : null}
       </SafeAreaView>
     </LinearGradient>
   );
@@ -349,16 +323,4 @@ const styles = StyleSheet.create({
   recentRowRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   resultBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   resultBadgeText: { fontFamily: 'Geist-Bold', fontSize: 12 },
-  toast: {
-    position: 'absolute',
-    bottom: 24,
-    left: 24,
-    right: 24,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toastText: { fontFamily: 'Geist-Bold', fontSize: 14, color: '#FFFFFF' },
 });

@@ -554,6 +554,40 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <View
+          style={[
+            styles.legalLinksContainer,
+            {
+              backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.92)',
+              borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={[styles.legalLinkRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)' }]}
+            onPress={() => router.push('/privacy' as any)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="shield-outline" size={20} color={isDark ? '#FFFFFF' : '#0060FF'} />
+            <Text style={[styles.legalLinkText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
+              Privacy Policy
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={isDark ? 'rgba(255,255,255,0.65)' : '#0060FF'} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.legalLinkRow, { borderBottomWidth: 0 }]}
+            onPress={() => router.push('/terms' as any)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="document-text-outline" size={20} color={isDark ? '#FFFFFF' : '#0060FF'} />
+            <Text style={[styles.legalLinkText, { color: isDark ? '#FFFFFF' : '#111111' }]}>
+              Terms & Conditions
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={isDark ? 'rgba(255,255,255,0.65)' : '#0060FF'} />
+          </TouchableOpacity>
+        </View>
+
         {/* ✅ Gradient Logout Button */}
         <TouchableOpacity
           style={[
@@ -697,6 +731,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
+  },
+  legalLinksContainer: {
+    width: '100%',
+    maxWidth: 440,
+    borderWidth: 1,
+    borderRadius: 16,
+    marginTop: 20,
+    overflow: 'hidden',
+  },
+  legalLinkRow: {
+    minHeight: 54,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: 1,
+  },
+  legalLinkText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Geist-Regular',
   },
   twoColumnRow: {
     flexDirection: 'row',

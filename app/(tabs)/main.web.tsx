@@ -461,7 +461,7 @@ export default function MainWeb() {
         onClick: () => router.push('/profile'),
       },
     ],
-    [router],
+    [],
   );
 
   const isCompact = windowWidth < 980;

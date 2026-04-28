@@ -50,7 +50,7 @@ function getIconForType(type: NotificationRow['type']): keyof typeof Ionicons.gl
 export default function NotificationsScreen() {
   const { theme, colors } = useThemeContext();
   const isDark = theme === 'dark';
-  const [userId, setUserId] = useState<string | null>(null);
+  const [, setUserId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
 

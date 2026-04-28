@@ -5,17 +5,17 @@ import { ColorBlindMode, useSettings } from "@/context/SettingsContext"
 import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
-import { createInitialState, checkPalindromes, GRID_SIZE, NUM_COLORS } from "@/lib/gameEngine"
+import { checkPalindromes, GRID_SIZE, NUM_COLORS } from "@/lib/gameEngine"
 import {
   getTurnMatchState, initTurnBoard, submitTurnMove,
-  forfeitTurnMatch, subscribeToTurnState,
+  forfeitTurnMatch, subscribeToTurnState, ensureTurnMatchReady, expireTurnClock,
   type TurnMatchState, TURN_TIME_LIMIT_MS,
 } from "@/lib/turnMatchmaking"
-import { getMatch, subscribeToMatch, type Match, type MatchPlayer } from "@/lib/matchmaking"
+import { getMatch, type Match } from "@/lib/matchmaking"
 import { Ionicons } from "@expo/vector-icons"
 import { BlurView } from "expo-blur"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Image, Pressable, StyleSheet } from "react-native"
 
 // ── Layout helpers ──────────────────────────────────────
@@ -54,6 +54,36 @@ function formatTime(ms: number): string {
   const m = Math.floor(totalSec / 60)
   const s = totalSec % 60
   return `${m}:${s.toString().padStart(2, "0")}`
+}
+
+function getTurnStartedAtMs(state: TurnMatchState | null): number {
+  if (!state?.turn_started_at) return Date.now()
+  const parsed = Date.parse(state.turn_started_at)
+  return Number.isFinite(parsed) ? parsed : Date.now()
+}
+
+type GameOverInfo = { winner: string | null; reason: string | null; myScore: number; opScore: number }
+
+function getGameOverTitle(info: GameOverInfo, userId: string | null): string {
+  if (info.winner === userId) return "You Win!"
+  if (info.winner === null) return "It's a Draw!"
+  return "You Lose!"
+}
+
+function getGameOverReason(info: GameOverInfo, userId: string | null): string {
+  const didWin = info.winner === userId
+  const didDraw = info.winner === null
+  if (info.reason === "timeout") return didWin ? "Opponent lost on time" : "You lost on time"
+  if (info.reason === "forfeit") return didWin ? "Opponent forfeited" : "You forfeited"
+  if (info.reason === "score" || info.reason === "blocks_used") {
+    if (didDraw) return "Draw by score"
+    return didWin ? "You won by score" : "You lost by score"
+  }
+  if (info.reason === "board_full") {
+    if (didDraw) return "Board full, draw by score"
+    return didWin ? "Board full, you won by score" : "Board full, you lost by score"
+  }
+  return didDraw ? "Draw" : didWin ? "You won by score" : "You lost by score"
 }
 
 // ── Draggable Block ─────────────────────────────────────
@@ -130,7 +160,7 @@ export default function TurnGameWeb() {
   const matchId = typeof routeMatchId === "string" ? routeMatchId : undefined
 
   const { theme, colors } = useThemeContext()
-  const { soundEnabled, colorBlindEnabled, colorBlindMode, customGameColors } = useSettings()
+  const { colorBlindEnabled, colorBlindMode, customGameColors } = useSettings()
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound()
 
   // ── State ──
@@ -143,7 +173,7 @@ export default function TurnGameWeb() {
   const [opponentAvatar, setOpponentAvatar] = useState<string | null>(null)
   const [boardInitialized, setBoardInitialized] = useState(false)
   const [forfeitConfirm, setForfeitConfirm] = useState(false)
-  const [gameOverInfo, setGameOverInfo] = useState<{ winner: string | null; reason: string | null; myScore: number; opScore: number } | null>(null)
+  const [gameOverInfo, setGameOverInfo] = useState<GameOverInfo | null>(null)
 
   const [localTimeP1, setLocalTimeP1] = useState(TURN_TIME_LIMIT_MS)
   const [localTimeP2, setLocalTimeP2] = useState(TURN_TIME_LIMIT_MS)
@@ -154,10 +184,11 @@ export default function TurnGameWeb() {
   const [feedback, setFeedback] = useState<{ text: string; color: string; id: number } | null>(null)
   const [scoredCells, setScoredCells] = useState<string[]>([])
   const scoredCellsTimerRef = useRef<any>(null)
+  const timeoutSubmittingRef = useRef(false)
   const [, forceUpdate] = useState(0)
 
   const gridSize = GRID_SIZE
-  const colorGradients = customGameColors ?? [...DEFAULT_GAME_GRADIENTS]
+  const colorGradients = useMemo(() => customGameColors ?? [...DEFAULT_GAME_GRADIENTS], [customGameColors])
   const center = Math.floor(gridSize / 2)
   const word = " PALINDROME"
   const halfWord = Math.floor(word.length / 2)
@@ -166,11 +197,14 @@ export default function TurnGameWeb() {
   const isPlayer1 = turnState ? userId === turnState.player1_user_id : false
   const isMyTurn = turnState ? turnState.current_turn_user_id === userId : false
   const isGameOver = turnState ? turnState.finished_reason !== null : false
-  const myBlocks = turnState ? (isPlayer1 ? turnState.player1_blocks : turnState.player2_blocks) : [8, 8, 8, 8, 8]
+  const myBlocks = useMemo(
+    () => (turnState ? (isPlayer1 ? turnState.player1_blocks : turnState.player2_blocks) : [8, 8, 8, 8, 8]),
+    [isPlayer1, turnState]
+  )
   const myScore = turnState ? (isPlayer1 ? turnState.player1_score : turnState.player2_score) : 0
   const opScore = turnState ? (isPlayer1 ? turnState.player2_score : turnState.player1_score) : 0
   const board: (number | null)[][] = turnState?.board?.length === gridSize ? turnState.board : Array.from({ length: gridSize }, () => Array(gridSize).fill(null))
-  const bulldogPositions = turnState?.bulldog_positions ?? []
+  const bulldogPositions = useMemo(() => turnState?.bulldog_positions ?? [], [turnState])
 
   // ── Layout ──
   useEffect(() => { const h = () => forceUpdate(n => n + 1); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h) }, [])
@@ -199,16 +233,18 @@ export default function TurnGameWeb() {
       setMatch(m)
       const s = await getTurnMatchState(matchId)
       if (cancelled || !s) return
-      setTurnState(s)
-      setLocalTimeP1(s.player1_time_ms)
-      setLocalTimeP2(s.player2_time_ms)
-      turnStartedLocal.current = Date.now()
-      lastMoveTime.current = Date.now()
+      const readyState = (await ensureTurnMatchReady(matchId, m.seed)) ?? s
+      if (cancelled) return
+      setTurnState(readyState)
+      setLocalTimeP1(readyState.player1_time_ms)
+      setLocalTimeP2(readyState.player2_time_ms)
+      turnStartedLocal.current = getTurnStartedAtMs(readyState)
+      lastMoveTime.current = getTurnStartedAtMs(readyState)
 
       // Init board if needed
-      if (m.status === "active" && (!s.board || (Array.isArray(s.board) && s.board.length === 0))) {
-        const initial = createInitialState(m.seed)
+      if (m.status === "active" && (!readyState.board || (Array.isArray(readyState.board) && readyState.board.length === 0))) {
         await initTurnBoard(matchId, m.seed)
+        await ensureTurnMatchReady(matchId, m.seed)
         setBoardInitialized(true)
         // Refetch after init
         const s2 = await getTurnMatchState(matchId)
@@ -216,7 +252,8 @@ export default function TurnGameWeb() {
           setTurnState(s2)
           setLocalTimeP1(s2.player1_time_ms)
           setLocalTimeP2(s2.player2_time_ms)
-          turnStartedLocal.current = Date.now()
+          turnStartedLocal.current = getTurnStartedAtMs(s2)
+          lastMoveTime.current = getTurnStartedAtMs(s2)
         }
       } else {
         setBoardInitialized(true)
@@ -224,7 +261,9 @@ export default function TurnGameWeb() {
 
       // Load opponent profile
       const user = await authService.getSessionUser()
-      const opId = s.player1_user_id === user?.id ? s.player2_user_id : s.player1_user_id
+      const latestState = (await getTurnMatchState(matchId)) ?? readyState
+      if (!cancelled) setTurnState(latestState)
+      const opId = latestState.player1_user_id === user?.id ? latestState.player2_user_id : latestState.player1_user_id
       if (opId && opId !== user?.id) {
         const opProfile = await authService.getProfile(opId)
         if (opProfile?.full_name && !cancelled) setOpponentName(opProfile.full_name)
@@ -241,7 +280,8 @@ export default function TurnGameWeb() {
       setTurnState(s)
       setLocalTimeP1(s.player1_time_ms)
       setLocalTimeP2(s.player2_time_ms)
-      turnStartedLocal.current = Date.now()
+      turnStartedLocal.current = getTurnStartedAtMs(s)
+      lastMoveTime.current = getTurnStartedAtMs(s)
       if (s.finished_reason && !gameOverInfo) {
         const isP1 = userId === s.player1_user_id
         setGameOverInfo({
@@ -259,25 +299,35 @@ export default function TurnGameWeb() {
   useEffect(() => {
     if (!turnState || isGameOver || !turnState.current_turn_user_id) return
     const interval = setInterval(() => {
-      const elapsed = Date.now() - turnStartedLocal.current
+      const elapsed = Math.max(0, Date.now() - turnStartedLocal.current)
       const isP1Turn = turnState.current_turn_user_id === turnState.player1_user_id
+      const activeUserId = turnState.current_turn_user_id
+      const expireActiveClock = () => {
+        if (!matchId || !activeUserId || timeoutSubmittingRef.current) return
+        timeoutSubmittingRef.current = true
+        expireTurnClock(matchId, activeUserId)
+          .then((s) => {
+            setTurnState(s)
+            setLocalTimeP1(s.player1_time_ms)
+            setLocalTimeP2(s.player2_time_ms)
+          })
+          .catch(console.error)
+          .finally(() => {
+            timeoutSubmittingRef.current = false
+          })
+      }
       if (isP1Turn) {
         const newTime = Math.max(0, turnState.player1_time_ms - elapsed)
         setLocalTimeP1(newTime)
-        if (newTime <= 0 && isMyTurn) {
-          // Time's up - forfeit
-          forfeitTurnMatch(matchId!, userId!).catch(console.error)
-        }
+        if (newTime <= 0) expireActiveClock()
       } else {
         const newTime = Math.max(0, turnState.player2_time_ms - elapsed)
         setLocalTimeP2(newTime)
-        if (newTime <= 0 && isMyTurn) {
-          forfeitTurnMatch(matchId!, userId!).catch(console.error)
-        }
+        if (newTime <= 0) expireActiveClock()
       }
     }, 100)
     return () => clearInterval(interval)
-  }, [turnState, isGameOver, isMyTurn, matchId, userId])
+  }, [turnState, isGameOver, matchId])
 
   // ── Game over detection ──
   useEffect(() => {
@@ -293,56 +343,14 @@ export default function TurnGameWeb() {
   }, [turnState, gameOverInfo, userId])
 
   // ── Palindrome check (client-side for scoring) ──
-  const checkAndScore = useCallback((row: number, col: number, colorIdx: number, currentGrid: (number | null)[][]): { scoreFound: number, segment: {r: number, c: number}[] } => {
-    let scoreFound = 0
-    let bestSegment: { r: number; c: number }[] = []
-    const isOdd = (n: number) => n % 2 === 1
-
-    const checkLine = (lineIsRow: boolean) => {
-      const line: { color: number; r: number; c: number }[] = []
-      if (lineIsRow) {
-        for (let c = 0; c < gridSize; c++) line.push({ color: currentGrid[row][c] ?? -1, r: row, c })
-      } else {
-        for (let r = 0; r < gridSize; r++) line.push({ color: currentGrid[r][col] ?? -1, r, c: col })
-      }
-      const targetIndex = lineIsRow ? col : row
-      let start = targetIndex, end = targetIndex
-      while (start > 0 && line[start - 1].color !== -1) start--
-      while (end < gridSize - 1 && line[end + 1].color !== -1) end++
-      const segment = line.slice(start, end + 1)
-      if (segment.length < 3) return { score: 0, segment: [] }
-      const targetPosInSegment = targetIndex - start
-      let bestScore = 0
-      let localBestSeg: { r: number; c: number }[] = []
-      for (let s = 0; s <= targetPosInSegment; s++) {
-        for (let e = targetPosInSegment; e < segment.length; e++) {
-          const len = e - s + 1
-          if (len < 3 || !isOdd(len)) continue
-          const sub = segment.slice(s, e + 1)
-          const cols = sub.map(c => c.color)
-          if (cols.join(",") === [...cols].reverse().join(",")) {
-            let sc = len
-            if (sub.some(b => bulldogPositions.some(bp => bp.row === b.r && bp.col === b.c))) sc += 10
-            if (sc > bestScore) {
-              bestScore = sc
-              localBestSeg = sub.map(b => ({ r: b.r, c: b.c }))
-            }
-          }
-        }
-      }
-      return { score: bestScore, segment: localBestSeg }
+  const checkAndScore = useCallback((row: number, col: number, _colorIdx: number, currentGrid: (number | null)[][]): { scoreFound: number, segment: {r: number, c: number}[], segmentLength: number } => {
+    const result = checkPalindromes(currentGrid, row, col, bulldogPositions, 3)
+    return {
+      scoreFound: result.score,
+      segment: result.segment ? result.segment.map((t) => ({ r: t.r, c: t.c })) : [],
+      segmentLength: result.segmentLength ?? 0,
     }
-    const rLine = checkLine(true)
-    const cLine = checkLine(false)
-    if (rLine.score > cLine.score) {
-      scoreFound = rLine.score
-      bestSegment = rLine.segment
-    } else {
-      scoreFound = cLine.score
-      bestSegment = cLine.segment
-    }
-    return { scoreFound, segment: bestSegment }
-  }, [gridSize, bulldogPositions])
+  }, [bulldogPositions])
 
   // ── Handle drop ──
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, row: number, col: number) => {
@@ -358,23 +366,24 @@ export default function TurnGameWeb() {
     // Client-side scoring check
     const tempGrid = board.map(r => [...r])
     tempGrid[row][col] = colorIndex
-    const { scoreFound: scoreDelta, segment } = checkAndScore(row, col, colorIndex, tempGrid)
+    const { scoreFound: scoreDelta, segment, segmentLength } = checkAndScore(row, col, colorIndex, tempGrid)
+    const isLastOwnBlock = myBlocks.reduce((total, count) => total + count, 0) === 1
 
-    // Must score to place (same rule as single player after first move)
-    if (scoreDelta <= 0) {
+    if (scoreDelta <= 0 && !isLastOwnBlock) {
       playErrorSound()
       return
     }
 
     playDropSound()
-    const timeSpent = Date.now() - lastMoveTime.current
+    const timeSpent = Math.max(0, Date.now() - getTurnStartedAtMs(turnState))
     lastMoveTime.current = Date.now()
 
     // Show feedback
     let text = "GOOD!", color = "#4ADE80"
-    if (scoreDelta >= 15) { text = "LEGENDARY!"; color = "#F472B6" }
-    else if (scoreDelta >= 7) { text = "AMAZING!"; color = "#A78BFA" }
-    else if (scoreDelta >= 5) { text = "GREAT!"; color = "#60A5FA" }
+    if (scoreDelta <= 0) { text = "DONE!"; color = "#95DEFE" }
+    else if (segmentLength >= 9) { text = "LEGENDARY!"; color = "#F472B6" }
+    else if (segmentLength === 7) { text = "AMAZING!"; color = "#A78BFA" }
+    else if (segmentLength === 5) { text = "GREAT!"; color = "#60A5FA" }
     setFeedback({ text, color, id: Date.now() })
     setTimeout(() => setFeedback(null), 2000)
 
@@ -390,7 +399,8 @@ export default function TurnGameWeb() {
       setTurnState(newState)
       setLocalTimeP1(newState.player1_time_ms)
       setLocalTimeP2(newState.player2_time_ms)
-      turnStartedLocal.current = Date.now()
+      turnStartedLocal.current = getTurnStartedAtMs(newState)
+      lastMoveTime.current = getTurnStartedAtMs(newState)
     } catch (err) {
       console.error("Move submit error:", err)
       playErrorSound()
@@ -439,10 +449,10 @@ export default function TurnGameWeb() {
                   <Ionicons name={gameOverInfo.winner === userId ? "trophy" : gameOverInfo.winner === null ? "remove" : "close-circle"} size={34} color="#fff" />
                 </div>
                 <h2 style={{ fontSize: 26, fontWeight: 800, color: colors.text, margin: 0, textAlign: "center" }}>
-                  {gameOverInfo.winner === userId ? "You Win!" : gameOverInfo.winner === null ? "It's a Draw!" : "You Lose!"}
+                  {getGameOverTitle(gameOverInfo, userId)}
                 </h2>
                 <p style={{ fontSize: 14, color: colors.text, opacity: 0.7, margin: 0, textAlign: "center" }}>
-                  {gameOverInfo.reason === "timeout" ? "Time ran out" : gameOverInfo.reason === "forfeit" ? "Player forfeited" : gameOverInfo.reason === "board_full" ? "Board is full" : "All blocks used"}
+                  {getGameOverReason(gameOverInfo, userId)}
                 </p>
                 <div style={{ display: "flex", gap: 20, width: "100%", marginTop: 8 }}>
                   <div style={{ flex: 1, padding: "10px", borderRadius: 16, background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)", textAlign: "center" }}>
@@ -558,7 +568,7 @@ export default function TurnGameWeb() {
             {/* Not your turn overlay */}
             {!isMyTurn && !isGameOver && (
               <div style={{ position: "absolute", inset: 0, zIndex: 100, borderRadius: 24, background: "rgba(0,0,0,0.15)", display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "all" }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.5)", padding: "8px 20px", borderRadius: 12 }}>Opponent's turn...</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.5)", padding: "8px 20px", borderRadius: 12 }}>Opponent&apos;s turn...</span>
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column" }}>

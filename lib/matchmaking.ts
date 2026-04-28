@@ -274,6 +274,21 @@ export async function submitScore(
   score: number
 ): Promise<void> {
   const supabase = getSupabaseClient();
+  const safeScore = Math.max(0, Math.floor(score));
+
+  const { error: rpcError } = await supabase.rpc('submit_race_score', {
+    p_match_id: matchId,
+    p_user_id: userId,
+    p_score: safeScore,
+  });
+
+  if (!rpcError) return;
+
+  // Older databases may not have the RPC yet. Keep the client-side path as a
+  // compatibility fallback, but the migration-backed RPC is the authoritative path.
+  if (rpcError.code && !['42883', 'PGRST202'].includes(rpcError.code)) {
+    throw rpcError;
+  }
 
   const { data: row } = await supabase
     .from('match_players')
@@ -288,7 +303,7 @@ export async function submitScore(
   const { error } = await supabase
     .from('match_players')
     .update({
-      score,
+      score: safeScore,
       submitted_at: new Date().toISOString(),
     })
     .eq('match_id', matchId)

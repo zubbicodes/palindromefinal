@@ -5,7 +5,7 @@ import { ColorBlindMode, useSettings } from "@/context/SettingsContext"
 import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
-import { createInitialState } from "@/lib/gameEngine"
+import { checkPalindromes, createInitialState, createSinglePlayerInitialState } from "@/lib/gameEngine"
 import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, submitScore, subscribeToMatch, updateLiveScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
 import { saveSinglePlayerRun } from "@/lib/singlePlayer"
 import { Ionicons } from "@expo/vector-icons"
@@ -587,7 +587,7 @@ export default function GameLayoutWeb() {
   const noHintsFaceTimerRef = useRef<any>(null)
 
   const [opponentScore, setOpponentScore] = useState<number | null>(null)
-  const [opponentName, setOpponentName] = useState<string>("Opponent")
+  const [, setOpponentName] = useState<string>("Opponent")
   const [opponentAvatar, setOpponentAvatar] = useState<string | null>(null)
   const [multiplayerTimeLimit, setMultiplayerTimeLimit] = useState<number | null>(null)
   const [multiplayerJoinedAt, setMultiplayerJoinedAt] = useState<number | null>(null)
@@ -845,52 +845,11 @@ export default function GameLayoutWeb() {
 
   const colorGradients = customGameColors ?? [...DEFAULT_GAME_GRADIENTS]
 
-  const spawnBulldogs = useCallback(() => {
-    const totalBulldogs = 5
-    const blockedPositions = new Set<string>()
-    for (let i = 0; i < word.length; i++) {
-      blockedPositions.add(`${center},${center - halfWord + i}`)
-      blockedPositions.add(`${center - halfWord + i},${center}`)
-    }
-
-    const newPositions: { row: number; col: number }[] = []
-    while (newPositions.length < totalBulldogs) {
-      const row = Math.floor(Math.random() * gridSize)
-      const col = Math.floor(Math.random() * gridSize)
-      const key = `${row},${col}`
-      if (!blockedPositions.has(key) && !newPositions.some((p) => p.row === row && p.col === col)) {
-        newPositions.push({ row, col })
-      }
-    }
-    setBulldogPositions(newPositions)
-  }, [center, gridSize, halfWord, word])
-
   const initializeGame = useCallback(() => {
-    spawnBulldogs()
-
-    // Pre-place 3 random colors on horizontal 'I', 'N', 'D' (coordinates (5,3), (5,4), (5,5))
-    const indPositions = [
-      { row: 5, col: 3 },
-      { row: 5, col: 4 },
-      { row: 5, col: 5 },
-    ]
-    
-    const availableColors = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5)
-    const initialColors: number[] = [availableColors[0], availableColors[1], availableColors[2]]
-
-    setGridState(() => {
-      const newGrid = Array.from({ length: gridSize }, () => Array(gridSize).fill(null))
-      indPositions.forEach((pos, idx) => {
-        newGrid[pos.row][pos.col] = initialColors[idx]
-      })
-      return newGrid
-    })
-
-    const initialCounts = [16, 16, 16, 16, 16]
-    initialColors.forEach(colorIdx => {
-      initialCounts[colorIdx] = Math.max(0, initialCounts[colorIdx] - 1)
-    })
-    setBlockCounts(initialCounts)
+    const initialState = createSinglePlayerInitialState()
+    setGridState(initialState.grid.map((r) => [...r]))
+    setBlockCounts([...initialState.blockCounts])
+    setBulldogPositions([...initialState.bulldogPositions])
     setFirstMovePlacements([])
     setFirstMoveActive(true)
     setGameOver(null)
@@ -905,7 +864,7 @@ export default function GameLayoutWeb() {
     setFeedback(null)
     setDragOverCell(null)
     setActiveHint(null)
-  }, [spawnBulldogs, gridSize])
+  }, [])
 
   useEffect(() => {
     if (matchId) return
@@ -927,6 +886,8 @@ export default function GameLayoutWeb() {
       setBlockCounts([...initialState.blockCounts])
       setBulldogPositions([...initialState.bulldogPositions])
       setScore(initialState.score)
+      setFirstMoveActive(false)
+      setFirstMovePlacements([])
       const user = await authService.getSessionUser()
       const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id)
       if (other) {
@@ -1316,206 +1277,25 @@ export default function GameLayoutWeb() {
     return true
   }
 
-  const checkAndProcessPalindromes = (row: number, col: number, colorIdx: number, currentGrid: (number | null)[][], dryRun = false, minLength = 3) => {
-    let scoreFound = 0
-    let rowPalindromeLength = 0
-    let colPalindromeLength = 0
-    let rightAnglePalindromeLength = 0
-    let rowSegment: { color: number; r: number; c: number }[] | null = null
-    let colSegment: { color: number; r: number; c: number }[] | null = null
-    let rightAngleSegment: { color: number; r: number; c: number }[] | null = null
+  const checkAndProcessPalindromes = (row: number, col: number, _colorIdx: number, currentGrid: (number | null)[][], dryRun = false, minLength = 3) => {
+    const result = checkPalindromes(currentGrid, row, col, bulldogPositions, minLength)
+    const scoreFound = result.score
 
-    const isOdd = (n: number) => n % 2 === 1
-    const isInside = (r: number, c: number) => r >= 0 && r < gridSize && c >= 0 && c < gridSize
-
-    const checkLine = (lineIsRow: boolean): { length: number; segment: typeof rowSegment } => {
-      const line: { color: number; r: number; c: number }[] = []
-      if (lineIsRow) {
-        for (let c = 0; c < gridSize; c++) {
-          if (currentGrid[row][c] !== null) {
-            line.push({ color: currentGrid[row][c]!, r: row, c: c })
-          } else {
-            line.push({ color: -1, r: row, c: c })
-          }
-        }
-      } else {
-        for (let r = 0; r < gridSize; r++) {
-          if (currentGrid[r][col] !== null) {
-            line.push({ color: currentGrid[r][col]!, r: r, c: col })
-          } else {
-            line.push({ color: -1, r: r, c: col })
-          }
-        }
-      }
-
-      const targetIndex = lineIsRow ? col : row
-
-      let start = targetIndex
-      let end = targetIndex
-
-      while (start > 0 && line[start - 1].color !== -1) start--
-      while (end < gridSize - 1 && line[end + 1].color !== -1) end++
-
-      const segment = line.slice(start, end + 1)
-      if (segment.length < minLength) return { length: 0, segment: null }
-
-      // Find the longest palindrome within the segment that includes the placed tile
-      const targetPosInSegment = targetIndex - start
-      let bestLength = 0
-      let bestSegment: typeof segment | null = null
-
-      for (let s = 0; s <= targetPosInSegment; s++) {
-        for (let e = targetPosInSegment; e < segment.length; e++) {
-          const len = e - s + 1
-          if (len < minLength || !isOdd(len) || len <= bestLength) continue
-          const sub = segment.slice(s, e + 1)
-          const colors = sub.map((c) => c.color)
-          const isPal = colors.join(",") === [...colors].reverse().join(",")
-          if (isPal) {
-            bestLength = len
-            bestSegment = sub
-          }
-        }
-      }
-
-      return { length: bestLength, segment: bestSegment }
-    }
-
-    const checkRightAngle = (): { length: number; segment: typeof rowSegment } => {
-      const pairs = [
-        { a: { dr: -1, dc: 0 }, b: { dr: 0, dc: -1 } },
-        { a: { dr: -1, dc: 0 }, b: { dr: 0, dc: 1 } },
-        { a: { dr: 1, dc: 0 }, b: { dr: 0, dc: -1 } },
-        { a: { dr: 1, dc: 0 }, b: { dr: 0, dc: 1 } },
-      ] as const
-
-      let bestLen = 0
-      let bestSegment: { color: number; r: number; c: number }[] | null = null
-
-      const tryCorner = (cornerRow: number, cornerCol: number) => {
-        const cornerColor = currentGrid[cornerRow][cornerCol]
-        if (cornerColor == null) return
-
-        for (const pair of pairs) {
-          let d = 1
-          let lastValid = 0
-          while (true) {
-            const ar = cornerRow + pair.a.dr * d
-            const ac = cornerCol + pair.a.dc * d
-            const br = cornerRow + pair.b.dr * d
-            const bc = cornerCol + pair.b.dc * d
-            if (!isInside(ar, ac) || !isInside(br, bc)) break
-            const aColor = currentGrid[ar][ac]
-            const bColor = currentGrid[br][bc]
-            if (aColor == null || bColor == null) break
-            if (aColor !== bColor) break
-            lastValid = d
-            d++
-          }
-
-          const length = lastValid > 0 ? lastValid * 2 + 1 : 0
-          if (length < minLength || !isOdd(length)) continue
-
-          let includesPlaced = cornerRow === row && cornerCol === col
-          if (!includesPlaced) {
-            for (let dist = 1; dist <= lastValid; dist++) {
-              const aR = cornerRow + pair.a.dr * dist
-              const aC = cornerCol + pair.a.dc * dist
-              const bR = cornerRow + pair.b.dr * dist
-              const bC = cornerCol + pair.b.dc * dist
-              if ((aR === row && aC === col) || (bR === row && bC === col)) {
-                includesPlaced = true
-                break
-              }
-            }
-          }
-          if (!includesPlaced) continue
-
-          if (length > bestLen) {
-            const tiles: { color: number; r: number; c: number }[] = []
-            for (let dist = lastValid; dist >= 1; dist--) {
-              const rA = cornerRow + pair.a.dr * dist
-              const cA = cornerCol + pair.a.dc * dist
-              tiles.push({ color: currentGrid[rA][cA] as number, r: rA, c: cA })
-            }
-            tiles.push({ color: cornerColor as number, r: cornerRow, c: cornerCol })
-            for (let dist = 1; dist <= lastValid; dist++) {
-              const rB = cornerRow + pair.b.dr * dist
-              const cB = cornerCol + pair.b.dc * dist
-              tiles.push({ color: currentGrid[rB][cB] as number, r: rB, c: cB })
-            }
-            bestLen = length
-            bestSegment = tiles
-          }
-        }
-      }
-
-      for (let cornerCol = 0; cornerCol < gridSize; cornerCol++) {
-        tryCorner(row, cornerCol)
-      }
-      for (let cornerRow = 0; cornerRow < gridSize; cornerRow++) {
-        if (cornerRow === row) continue
-        tryCorner(cornerRow, col)
-      }
-
-      return { length: bestLen, segment: bestSegment }
-    }
-
-    const rowResult = checkLine(true)
-    const colResult = checkLine(false)
-    rowPalindromeLength = rowResult.length
-    colPalindromeLength = colResult.length
-    rowSegment = rowResult.segment
-    colSegment = colResult.segment
-
-    const rightAngleResult = checkRightAngle()
-    rightAnglePalindromeLength = rightAngleResult.length
-    rightAngleSegment = rightAngleResult.segment
-
-    const scoreFor = (length: number, segment: typeof rowSegment) => {
-      if (!segment || length < minLength) return { score: 0, hasBulldog: false }
-      let hasBulldog = false
-      segment.forEach((b) => {
-        if (bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)) {
-          hasBulldog = true
-        }
-      })
-      return { score: length + (hasBulldog ? 10 : 0), hasBulldog }
-    }
-
-    const candidates = [
-      { kind: "row" as const, length: rowPalindromeLength, segment: rowSegment },
-      { kind: "col" as const, length: colPalindromeLength, segment: colSegment },
-      { kind: "rightAngle" as const, length: rightAnglePalindromeLength, segment: rightAngleSegment },
-    ]
-      .map((c) => {
-        const s = scoreFor(c.length, c.segment)
-        return { ...c, score: s.score, hasBulldog: s.hasBulldog }
-      })
-      .filter((c) => c.score > 0)
-
-    if (!candidates.length) return 0
-
-    candidates.sort((a, b) => (b.length !== a.length ? b.length - a.length : b.score - a.score))
-    const best = candidates[0]
-
-    scoreFound = best.score
-
-    if (!dryRun) {
+    if (scoreFound > 0 && !dryRun) {
       let feedbackText = "GOOD!"
       let feedbackColor = "#4ADE80"
-      if (best.length === 5) {
+      if (result.segmentLength === 5) {
         feedbackText = "GREAT!"
         feedbackColor = "#60A5FA"
-      } else if (best.length === 7) {
+      } else if (result.segmentLength === 7) {
         feedbackText = "AMAZING!"
         feedbackColor = "#A78BFA"
-      } else if (best.length >= 9) {
+      } else if ((result.segmentLength ?? 0) >= 9) {
         feedbackText = "LEGENDARY!"
         feedbackColor = "#F472B6"
       }
 
-      const keys = best.segment ? best.segment.map((t) => `${t.r},${t.c}`) : []
+      const keys = result.segment ? result.segment.map((t) => `${t.r},${t.c}`) : []
       setScoredCells(keys)
       if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current)
       scoredCellsTimerRef.current = setTimeout(() => {

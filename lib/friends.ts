@@ -34,6 +34,16 @@ export interface HeadToHeadStats {
   theirWins: number;
 }
 
+const CHALLENGE_CODE_PREFIX = 'CHAL';
+
+function generatePrivateChallengeCode(): string {
+  const suffix =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID().replace(/-/g, '')
+      : `${Date.now()}${Math.random().toString(36).slice(2, 12)}`;
+  return `${CHALLENGE_CODE_PREFIX}${suffix}`.toUpperCase();
+}
+
 /**
  * Send a friend request.
  */
@@ -183,7 +193,7 @@ export async function challengeFriend(
       status: 'waiting',
       mode,
       seed,
-      invite_code: null,
+      invite_code: generatePrivateChallengeCode(),
       time_limit_seconds: 300,
       created_by: fromUserId,
     })
@@ -191,11 +201,17 @@ export async function challengeFriend(
     .single();
   if (matchErr) throw matchErr;
 
-  await supabase.from('match_players').insert({ match_id: match.id, user_id: fromUserId });
+  const { error: playerErr } = await supabase
+    .from('match_players')
+    .insert({ match_id: match.id, user_id: fromUserId });
+  if (playerErr) {
+    await supabase.from('matches').update({ status: 'cancelled' }).eq('id', match.id);
+    throw playerErr;
+  }
 
   // For turn mode, create the turn_match_states row
   if (mode === 'turn') {
-    await supabase.from('turn_match_states').insert({
+    const { error: turnStateErr } = await supabase.from('turn_match_states').insert({
       match_id: match.id,
       player1_user_id: fromUserId,
       player2_user_id: fromUserId, // placeholder until opponent joins
@@ -210,6 +226,10 @@ export async function challengeFriend(
       move_number: 0,
       bulldog_positions: [],
     });
+    if (turnStateErr) {
+      await supabase.from('matches').update({ status: 'cancelled' }).eq('id', match.id);
+      throw turnStateErr;
+    }
   }
 
   const { data: challenge, error: chalErr } = await supabase
@@ -222,7 +242,10 @@ export async function challengeFriend(
     })
     .select()
     .single();
-  if (chalErr) throw chalErr;
+  if (chalErr) {
+    await supabase.from('matches').update({ status: 'cancelled' }).eq('id', match.id);
+    throw chalErr;
+  }
 
   try {
     const profile = await authService.getProfile(fromUserId);
@@ -263,25 +286,35 @@ export async function acceptChallenge(
     .eq('id', c.match_id)
     .single();
 
-  await supabase.from('match_players').insert({ match_id: c.match_id, user_id: userId });
-  await supabase
+  const { error: playerErr } = await supabase
+    .from('match_players')
+    .upsert(
+      { match_id: c.match_id, user_id: userId },
+      { onConflict: 'match_id,user_id', ignoreDuplicates: true }
+    );
+  if (playerErr) throw playerErr;
+
+  const { error: matchErr } = await supabase
     .from('matches')
     .update({ status: 'active', started_at: new Date().toISOString() })
     .eq('id', c.match_id);
+  if (matchErr) throw matchErr;
 
   if (m?.mode === 'turn') {
-    await supabase.from('turn_match_states').update({
+    const { error: turnStateErr } = await supabase.from('turn_match_states').update({
       player2_user_id: userId,
       current_turn_user_id: c.from_user_id,
       turn_started_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('match_id', c.match_id);
+    if (turnStateErr) throw turnStateErr;
   }
 
-  await supabase
+  const { error: challengeErr } = await supabase
     .from('challenges')
     .update({ status: 'accepted' })
     .eq('id', challengeId);
+  if (challengeErr) throw challengeErr;
 
   return { matchId: c.match_id };
 }
@@ -291,6 +324,14 @@ export async function acceptChallenge(
  */
 export async function declineChallenge(challengeId: string, userId: string): Promise<void> {
   const supabase = getSupabaseClient();
+  const { data: challenge } = await supabase
+    .from('challenges')
+    .select('match_id')
+    .eq('id', challengeId)
+    .eq('to_user_id', userId)
+    .eq('status', 'pending')
+    .maybeSingle();
+
   const { error } = await supabase
     .from('challenges')
     .update({ status: 'declined' })
@@ -298,6 +339,14 @@ export async function declineChallenge(challengeId: string, userId: string): Pro
     .eq('to_user_id', userId)
     .eq('status', 'pending');
   if (error) throw error;
+
+  if (challenge?.match_id) {
+    await supabase
+      .from('matches')
+      .update({ status: 'cancelled', finished_at: new Date().toISOString() })
+      .eq('id', challenge.match_id)
+      .eq('status', 'waiting');
+  }
 }
 
 /**
@@ -378,7 +427,7 @@ export async function getHeadToHeadStats(
   const supabase = getSupabaseClient();
   const { data: matches } = await supabase
     .from('match_players')
-    .select('match_id, user_id, is_winner')
+    .select('match_id, user_id, score, is_winner')
     .or(`user_id.eq.${myId},user_id.eq.${friendId}`);
 
   if (!matches?.length) return { totalMatches: 0, myWins: 0, theirWins: 0 };
@@ -404,8 +453,17 @@ export async function getHeadToHeadStats(
     const theirRow = matches.find((r) => r.match_id === m.match_id && r.user_id === friendId);
     if (!myRow || !theirRow) continue;
 
-    if (myRow.is_winner) myWins++;
-    else if (theirRow.is_winner) theirWins++;
+    const myScore = typeof myRow.score === 'number' ? myRow.score : null;
+    const theirScore = typeof theirRow.score === 'number' ? theirRow.score : null;
+
+    if (myScore !== null && theirScore !== null) {
+      if (myScore > theirScore) myWins++;
+      else if (theirScore > myScore) theirWins++;
+    } else if (myRow.is_winner) {
+      myWins++;
+    } else if (theirRow.is_winner) {
+      theirWins++;
+    }
   }
 
   return {

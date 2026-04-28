@@ -66,7 +66,7 @@ export default function MatchWaitingWebScreen() {
       clearInterval(poll);
       unsubRef.current?.();
     };
-  }, [matchId, router, backTarget]);
+  }, [matchId, router, backTarget, returnTo]);
 
   const handleCancel = useCallback(async () => {
     if (!matchId) return;
@@ -86,7 +86,8 @@ export default function MatchWaitingWebScreen() {
     }
   }, [matchId, router, backTarget]);
 
-  const displayCode = (inviteCodeParam ?? inviteCodeFromMatch ?? match?.invite_code ?? '').toString().toUpperCase();
+  const rawDisplayCode = (inviteCodeParam ?? inviteCodeFromMatch ?? match?.invite_code ?? '').toString().toUpperCase();
+  const displayCode = rawDisplayCode.startsWith('CHAL') ? '' : rawDisplayCode;
   const text = isDark ? '#FFFFFF' : '#111111';
   const muted = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(17,17,17,0.6)';
 

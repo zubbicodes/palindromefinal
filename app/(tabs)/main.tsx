@@ -229,10 +229,7 @@ export default function MainScreen() {
   const insets = useSafeAreaInsets();
 
   const [displayName, setDisplayName] = useState<string>('Player');
-  const [userId, setUserId] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const toastOpacity = useRef(new Animated.Value(0)).current;
-  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [, setUserId] = useState<string | null>(null);
   const tourRef = useRef<any>(null);
   const topbarRef = useRef<View | null>(null);
   const singleRef = useRef<any>(null);
@@ -240,7 +237,6 @@ export default function MainScreen() {
   const practiceRef = useRef<any>(null);
   const settingsRef = useRef<any>(null);
 
-  const columns = 1;
   const isCompact = width < 420;
   const float = useRef(new Animated.Value(0)).current;
 
@@ -352,31 +348,6 @@ export default function MainScreen() {
     tourRef.current?.start?.();
   }, []);
 
-  const showToast = useCallback(
-    (message: string) => {
-      setToastMessage(message);
-      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-
-      toastOpacity.stopAnimation();
-      toastOpacity.setValue(0);
-
-      Animated.timing(toastOpacity, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: true,
-      }).start();
-
-      toastTimeoutRef.current = setTimeout(() => {
-        Animated.timing(toastOpacity, {
-          toValue: 0,
-          duration: 180,
-          useNativeDriver: true,
-        }).start(() => setToastMessage(null));
-      }, 1600);
-    },
-    [toastOpacity],
-  );
-
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -390,12 +361,6 @@ export default function MainScreen() {
     })();
     return () => {
       cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
   }, []);
 
@@ -647,11 +612,6 @@ export default function MainScreen() {
           </View>
         </ScrollView>
 
-        {toastMessage ? (
-          <Animated.View pointerEvents="none" style={[styles.toast, { opacity: toastOpacity }]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </Animated.View>
-        ) : null}
       </SafeAreaView>
     </LinearGradient>
     </>

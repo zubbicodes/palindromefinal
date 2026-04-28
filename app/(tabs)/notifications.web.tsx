@@ -40,7 +40,7 @@ function getIconForType(type: NotificationRow['type']): keyof typeof Ionicons.gl
 export default function NotificationsWeb() {
   const { theme, colors } = useThemeContext();
   const isDark = theme === 'dark';
-  const [userId, setUserId] = useState<string | null>(null);
+  const [, setUserId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -194,8 +194,7 @@ export default function NotificationsWeb() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: 60,
-              paddingHorizontal: 24,
+              padding: '60px 24px',
             }}
           >
             <Ionicons name="notifications-off-outline" size={48} color={muted} />

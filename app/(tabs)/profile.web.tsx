@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { Switch } from 'react-native-switch';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { height: screenHeight } = Dimensions.get('window');
 const MAX_CONTENT_WIDTH = 800;
 
 const COLOR_BLIND_TOKENS: Record<ColorBlindMode, readonly string[]> = {
@@ -52,7 +52,7 @@ export default function ProfileScreenWeb() {
 
   useEffect(() => {
     if (selectedColorIndex !== null) setPickerHex(editingColors[selectedColorIndex][0]);
-  }, [selectedColorIndex]);
+  }, [editingColors, selectedColorIndex]);
 
   const commitPickerColor = useCallback((hex: string) => {
     const idx = selectedIndexRef.current;
@@ -547,7 +547,7 @@ export default function ProfileScreenWeb() {
           <View style={styles.legalLinksContainer}>
             <TouchableOpacity
               style={[styles.legalLink, { borderColor: colors.border }]}
-              onPress={() => alert('Privacy Policy - Coming Soon')}
+              onPress={() => router.push('/privacy' as any)}
             >
               <Ionicons name="shield-outline" size={18} color={colors.primary} />
               <Text style={[styles.legalLinkText, { color: colors.text }]}>Privacy Policy</Text>
@@ -556,7 +556,7 @@ export default function ProfileScreenWeb() {
 
             <TouchableOpacity
               style={[styles.legalLink, { borderColor: colors.border }]}
-              onPress={() => alert('Terms & Conditions - Coming Soon')}
+              onPress={() => router.push('/terms' as any)}
             >
               <Ionicons name="document-text-outline" size={18} color={colors.primary} />
               <Text style={[styles.legalLinkText, { color: colors.text }]}>Terms & Conditions</Text>
