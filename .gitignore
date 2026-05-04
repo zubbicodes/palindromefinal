@@ -2,13 +2,50 @@
 
 # dependencies
 node_modules/
+
+# environment and local secrets
 .env
+.env.*
+!.env.example
+!.env.sample
+*.env
+*.env.*
+!.env.example
+!.env.sample
+
+# credentials, keys, and service config
+keystore/
+*.jks
+*.p8
+*.p12
+*.pfx
+*.key
+*.keystore
+*.pem
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+credentials.json
+service-account*.json
+firebase-adminsdk*.json
+*.credentials.json
+*.secret.json
+secrets/
+private/
+
+# local Expo/EAS credentials
+eas.json
+eas.local.json
+credentials.local.json
 
 # Expo
 .expo/
 dist/
 web-build/
 expo-env.d.ts
+*.apk
+*.aab
+*.ipa
 
 # generated local tool/cache output
 .qoder/
@@ -18,12 +55,6 @@ supabase/.temp/
 # Native
 .kotlin/
 *.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.keystore
-*.mobileprovision
 
 # Metro
 .metro-health-check*
@@ -32,10 +63,11 @@ supabase/.temp/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
+logs/
 
 # macOS
 .DS_Store
-*.pem
 
 # local env files
 .env*.local
