@@ -149,28 +149,11 @@ export function createInitialState(seed: string): GameState {
     initialColors.push(availableColors[0], availableColors[1], availableColors[0]);
   }
 
-  // Place them horizontally in a row (consecutive columns)
-  // Pick a random row and starting column that avoids blocked positions
-  let startRow: number;
-  let startCol: number;
-  let positionsValid = false;
-  do {
-    startRow = Math.floor(rng() * GRID_SIZE);
-    startCol = Math.floor(rng() * (GRID_SIZE - INITIAL_BLOCK_COUNT + 1));
-    positionsValid = true;
-    for (let i = 0; i < INITIAL_BLOCK_COUNT; i++) {
-      const key = `${startRow},${startCol + i}`;
-      if (blocked.has(key) || bulldogPositions.some(p => p.row === startRow && p.col === startCol + i)) {
-        positionsValid = false;
-        break;
-      }
-    }
-  } while (!positionsValid);
-
-  const initialPositions = Array.from({ length: INITIAL_BLOCK_COUNT }, (_, i) => ({
-    row: startRow,
-    col: startCol + i,
-  }));
+  const initialPositions = [
+    { row: 5, col: 3 },
+    { row: 5, col: 4 },
+    { row: 5, col: 5 },
+  ];
 
   const grid = createGrid();
   initialPositions.forEach((pos, idx) => {
