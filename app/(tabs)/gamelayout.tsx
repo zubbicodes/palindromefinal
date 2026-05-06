@@ -581,7 +581,7 @@ export default function GameLayout() {
     return [
       step({
         title: 'Score',
-        description: 'Your score increases when you create palindromes. Longer lines score higher.',
+        description: 'Your score increases when you create odd-length palindromes with at least two colors.',
       }),
       step({
         title: 'Timer',
@@ -597,7 +597,7 @@ export default function GameLayout() {
       }),
       step({
         title: 'Game Board',
-        description: 'Place blocks to form palindromes in a row or column (3+ blocks).',
+        description: 'Place blocks to form multi-color palindromes in a row or column. Only 3, 5, 7, ... count.',
       }),
       step({
         title: 'Controls',
@@ -2029,15 +2029,15 @@ export default function GameLayout() {
                   },
                   {
                     title: 'Palindrome',
-                    body: 'A sequence that reads the same forwards and backwards. Only odd lengths count (3, 5, 7, ...).',
+                    body: 'A sequence that reads the same forwards and backwards. Only odd lengths count (3, 5, 7, ...), and all-one-color lines do not score.',
                   },
                   {
                     title: 'Valid Move',
-                    body: 'Your placement must create a palindrome in a row, column, or a single 90° right-angle (L-shape).',
+                    body: 'Your placement must create a multi-color odd palindrome in a row, column, or a single 90° right-angle (L-shape).',
                   },
                   {
                     title: 'First Move',
-                    body: 'At the start you place two blocks. After the second placement you must have created a 5+ palindrome.',
+                    body: 'At the start you place two blocks. After the second placement you must have created a multi-color 5+ odd palindrome.',
                   },
                   {
                     title: 'Scoring',
