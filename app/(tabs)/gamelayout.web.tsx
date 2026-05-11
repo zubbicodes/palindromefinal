@@ -572,6 +572,7 @@ export default function GameLayoutWeb() {
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [pause, setPause] = useState(false)
   const [gameOver, setGameOver] = useState<{ status: "win" | "lose"; message: string } | null>(null)
+  const pendingGameOverRef = useRef<{ status: "win" | "lose"; message: string } | null>(null)
   const [firstMoveActive, setFirstMoveActive] = useState(false)
   const [firstMovePlacements, setFirstMovePlacements] = useState<{ row: number; col: number; colorIndex: number }[]>([])
 
@@ -785,6 +786,23 @@ export default function GameLayoutWeb() {
     if (syncDisplayedScore) setScore(scoreRef.current)
   }, [])
 
+  const finishGameOver = useCallback((nextGameOver: { status: "win" | "lose"; message: string } | null) => {
+    if (!nextGameOver) return
+    pendingGameOverRef.current = null
+    setPause(false)
+    setIsTimerRunning(false)
+    setGameOver(nextGameOver)
+  }, [])
+
+  const queueGameOver = useCallback((nextGameOver: { status: "win" | "lose"; message: string } | null) => {
+    if (!nextGameOver) return
+    if (scoringInProgressRef.current) {
+      pendingGameOverRef.current = nextGameOver
+      return
+    }
+    finishGameOver(nextGameOver)
+  }, [finishGameOver])
+
   // Timer State
   const [secondsElapsed, setSecondsElapsed] = useState(0)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
@@ -864,6 +882,7 @@ export default function GameLayoutWeb() {
     setFirstMovePlacements([])
     setFirstMoveActive(true)
     setGameOver(null)
+    pendingGameOverRef.current = null
     singlePlayerSavedRef.current = false
 
     scoreRef.current = 0
@@ -1180,18 +1199,14 @@ export default function GameLayoutWeb() {
         setWrongForcedTries(0)
       }
       if (nextBlockCounts.every((c) => c === 0)) {
-        setPause(false)
-        setIsTimerRunning(false)
-        setGameOver({ status: "win", message: "All counters used." })
+        queueGameOver({ status: "win", message: "All counters used." })
       } else if (nextGrid.every((r) => r.every((cell) => cell !== null))) {
-        setPause(false)
-        setIsTimerRunning(false)
-        setGameOver({ status: "lose", message: "Board is full." })
+        queueGameOver({ status: "lose", message: "Board is full." })
       }
     } else {
       const hadAnyScoringMoveBefore = !matchId ? !!findFirstScoringMove(3, gridState, blockCounts) : true
       nextGrid[row][col] = colorIndex
-      const attemptedScore = checkAndProcessPalindromes([{ row, col }], nextGrid, true, 3)
+      const attemptedScore = checkAndProcessPalindromes([{ row, col }], nextGrid, true, 3, gridState)
       if (attemptedScore <= 0) {
         if (!matchId && !hadAnyScoringMoveBefore) {
           nextBlockCounts[colorIndex] = Math.max(0, nextBlockCounts[colorIndex] - 1)
@@ -1207,13 +1222,9 @@ export default function GameLayoutWeb() {
           }
 
           if (nextBlockCounts.every((c) => c === 0)) {
-            setPause(false)
-            setIsTimerRunning(false)
-            setGameOver({ status: "win", message: "All counters used." })
+            queueGameOver({ status: "win", message: "All counters used." })
           } else if (nextGrid.every((r) => r.every((cell) => cell !== null))) {
-            setPause(false)
-            setIsTimerRunning(false)
-            setGameOver({ status: "lose", message: "Board is full." })
+            queueGameOver({ status: "lose", message: "Board is full." })
           }
 
           return true
@@ -1252,7 +1263,7 @@ export default function GameLayoutWeb() {
       triggerHaptic(14)
       console.log(`Successfully placed color ${colorIndex} at ${row},${col}`)
 
-      scoreFound = checkAndProcessPalindromes([{ row, col }], nextGrid, false, 3)
+      scoreFound = checkAndProcessPalindromes([{ row, col }], nextGrid, false, 3, gridState)
       newScore = scoreRef.current + scoreFound
       scoreRef.current = newScore
 
@@ -1269,13 +1280,9 @@ export default function GameLayoutWeb() {
 
       if (!matchId) {
         if (nextBlockCounts.every((c) => c === 0)) {
-          setPause(false)
-          setIsTimerRunning(false)
-          setGameOver({ status: "win", message: "All counters used." })
+          queueGameOver({ status: "win", message: "All counters used." })
         } else if (nextGrid.every((r) => r.every((cell) => cell !== null))) {
-          setPause(false)
-          setIsTimerRunning(false)
-          setGameOver({ status: "lose", message: "Board is full." })
+          queueGameOver({ status: "lose", message: "Board is full." })
         }
       }
     }
@@ -1314,23 +1321,41 @@ export default function GameLayoutWeb() {
   const getScoringEvents = (
     anchors: { row: number; col: number }[],
     currentGrid: (number | null)[][],
-    minLength = 3
+    minLength = 3,
+    previousGrid?: (number | null)[][]
   ): ScoringEvent[] => {
-    const eventsByKey = new Map<string, ScoringEvent>()
+    const collectEvents = (scanGrid: (number | null)[][]) => {
+      const eventsByKey = new Map<string, ScoringEvent>()
+      const scanAnchors = previousGrid
+        ? scanGrid.flatMap((rowArr, r) =>
+            rowArr.flatMap((cell, c) => (cell == null ? [] : [{ row: r, col: c }]))
+          )
+        : anchors
 
-    anchors.forEach(({ row, col }) => {
-      checkAllPalindromes(currentGrid, row, col, bulldogPositions, minLength).forEach((result) => {
-        if (!result.segment || !result.segmentLength || result.score <= 0) return
-        const key = `${result.kind}:${result.segment.map((t) => `${t.r},${t.c}`).join("|")}`
-        if (!eventsByKey.has(key)) {
-          eventsByKey.set(key, {
-            ...result,
-            segment: result.segment,
-            segmentLength: result.segmentLength,
-          })
-        }
+      scanAnchors.forEach(({ row, col }) => {
+        checkAllPalindromes(scanGrid, row, col, bulldogPositions, minLength).forEach((result) => {
+          if (!result.segment || !result.segmentLength || result.score <= 0) return
+          const key = `${result.kind}:${result.segment.map((t) => `${t.r},${t.c}`).join("|")}`
+          if (!eventsByKey.has(key)) {
+            eventsByKey.set(key, {
+              ...result,
+              segment: result.segment,
+              segmentLength: result.segmentLength,
+            })
+          }
+        })
       })
-    })
+
+      return eventsByKey
+    }
+
+    const eventsByKey = collectEvents(currentGrid)
+    if (previousGrid) {
+      const previousEventsByKey = collectEvents(previousGrid)
+      previousEventsByKey.forEach((_event, key) => {
+        eventsByKey.delete(key)
+      })
+    }
 
     return [...eventsByKey.values()].sort((a, b) => {
       if (b.segmentLength !== a.segmentLength) return b.segmentLength - a.segmentLength
@@ -1342,9 +1367,10 @@ export default function GameLayoutWeb() {
     anchors: { row: number; col: number }[],
     currentGrid: (number | null)[][],
     dryRun = false,
-    minLength = 3
+    minLength = 3,
+    previousGrid?: (number | null)[][]
   ) => {
-    const events = getScoringEvents(anchors, currentGrid, minLength)
+    const events = getScoringEvents(anchors, currentGrid, minLength, previousGrid)
     const scoreFound = events.reduce((total, event) => total + event.score, 0)
 
     if (scoreFound > 0 && !dryRun) {
@@ -1384,6 +1410,7 @@ export default function GameLayoutWeb() {
         scoringInProgressRef.current = false
         setScoringInProgress(false)
         setFeedback(null)
+        finishGameOver(pendingGameOverRef.current)
       }, (events.length - 1) * 900 + 2000)
       scoredCellsTimerRef.current.push(clearTimer)
     }
@@ -1399,7 +1426,7 @@ export default function GameLayoutWeb() {
           if (counts[colorIdx] <= 0) continue
           const tempGrid = grid.map((rowArr) => [...rowArr])
           tempGrid[r][c] = colorIdx
-          const sc = checkAndProcessPalindromes([{ row: r, col: c }], tempGrid, true, minLength)
+          const sc = checkAndProcessPalindromes([{ row: r, col: c }], tempGrid, true, minLength, grid)
           if (sc > 0) {
             return { row: r, col: c, colorIndex: colorIdx }
           }

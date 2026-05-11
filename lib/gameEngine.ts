@@ -243,54 +243,51 @@ export function checkAllPalindromes(
       if (cornerColor == null) return;
 
       for (const pair of pairs) {
-        let d = 1;
-        let lastValid = 0;
-        while (true) {
-          const ar = cornerRow + pair.a.dr * d;
-          const ac = cornerCol + pair.a.dc * d;
-          const br = cornerRow + pair.b.dr * d;
-          const bc = cornerCol + pair.b.dc * d;
-          if (!isInside(ar, ac) || !isInside(br, bc)) break;
-          const aColor = grid[ar][ac];
-          const bColor = grid[br][bc];
-          if (aColor == null || bColor == null) break;
-          if (aColor !== bColor) break;
-          lastValid = d;
-          d++;
+        const armA: ScoredTile[] = [];
+        const armB: ScoredTile[] = [];
+
+        for (let dist = 1; dist < GRID_SIZE; dist++) {
+          const r = cornerRow + pair.a.dr * dist;
+          const c = cornerCol + pair.a.dc * dist;
+          if (!isInside(r, c) || grid[r][c] == null) break;
+          armA.push({ color: grid[r][c] as number, r, c });
         }
 
-        const length = lastValid > 0 ? lastValid * 2 + 1 : 0;
-        if (length < minLength || !isOdd(length)) continue;
+        for (let dist = 1; dist < GRID_SIZE; dist++) {
+          const r = cornerRow + pair.b.dr * dist;
+          const c = cornerCol + pair.b.dc * dist;
+          if (!isInside(r, c) || grid[r][c] == null) break;
+          armB.push({ color: grid[r][c] as number, r, c });
+        }
 
-        let includesPlaced = cornerRow === row && cornerCol === col;
-        if (!includesPlaced) {
-          for (let dist = 1; dist <= lastValid; dist++) {
-            const aR = cornerRow + pair.a.dr * dist;
-            const aC = cornerCol + pair.a.dc * dist;
-            const bR = cornerRow + pair.b.dr * dist;
-            const bC = cornerCol + pair.b.dc * dist;
-            if ((aR === row && aC === col) || (bR === row && bC === col)) {
-              includesPlaced = true;
-              break;
+        for (let lenA = 1; lenA <= armA.length; lenA++) {
+          for (let lenB = 1; lenB <= armB.length; lenB++) {
+            const length = lenA + 1 + lenB;
+            if (length < minLength || !isOdd(length)) continue;
+
+            let includesPlaced = cornerRow === row && cornerCol === col;
+            if (!includesPlaced) {
+              includesPlaced =
+                armA.slice(0, lenA).some((tile) => tile.r === row && tile.c === col) ||
+                armB.slice(0, lenB).some((tile) => tile.r === row && tile.c === col);
             }
+            if (!includesPlaced) continue;
+
+            const tiles: ScoredTile[] = [];
+            for (let i = lenA - 1; i >= 0; i--) {
+              tiles.push(armA[i]);
+            }
+            tiles.push({ color: cornerColor, r: cornerRow, c: cornerCol });
+            for (let i = 0; i < lenB; i++) {
+              tiles.push(armB[i]);
+            }
+            const colors = tiles.map((tile) => tile.color);
+            const isPal = colors.join(',') === [...colors].reverse().join(',');
+            if (!isPal) continue;
+            if (!hasMultipleColors(tiles)) continue;
+            matches.push({ length, segment: tiles });
           }
         }
-        if (!includesPlaced) continue;
-
-        const tiles: ScoredTile[] = [];
-        for (let dist = lastValid; dist >= 1; dist--) {
-          const rA = cornerRow + pair.a.dr * dist;
-          const cA = cornerCol + pair.a.dc * dist;
-          tiles.push({ color: grid[rA][cA] as number, r: rA, c: cA });
-        }
-        tiles.push({ color: cornerColor, r: cornerRow, c: cornerCol });
-        for (let dist = 1; dist <= lastValid; dist++) {
-          const rB = cornerRow + pair.b.dr * dist;
-          const cB = cornerCol + pair.b.dc * dist;
-          tiles.push({ color: grid[rB][cB] as number, r: rB, c: cB });
-        }
-        if (!hasMultipleColors(tiles)) continue;
-        matches.push({ length, segment: tiles });
       }
     };
 
