@@ -562,7 +562,7 @@ export default function GameLayoutWeb() {
   const returnTo = typeof routeReturnTo === "string" ? routeReturnTo : Array.isArray(routeReturnTo) ? routeReturnTo[0] : undefined
 
   const { theme, colors, toggleTheme } = useThemeContext()
-  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, customGameColors, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings()
+  const { soundEnabled, hapticsEnabled, palindromeAnimationsEnabled, colorBlindEnabled, colorBlindMode, customGameColors, setSoundEnabled, setHapticsEnabled, setPalindromeAnimationsEnabled, setColorBlindEnabled } = useSettings()
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound()
 
   const [score, setScore] = useState(0)
@@ -1409,6 +1409,21 @@ export default function GameLayoutWeb() {
     const scoreFound = events.reduce((total, event) => total + event.score, 0)
 
     if (scoreFound > 0 && !dryRun) {
+      if (!palindromeAnimationsEnabled) {
+        const burstId = Date.now()
+        clearScoringFeedbackTimers()
+        setScore((prev) => prev + scoreFound)
+        setScoreBursts([{ id: burstId, points: scoreFound }])
+        const burstClearTimer = setTimeout(() => {
+          setScoreBursts((prev) => prev.filter((burst) => burst.id !== burstId))
+        }, 1200)
+        scoredCellsTimerRef.current.push(burstClearTimer)
+        playSuccessSound()
+        triggerHaptic([0, 12, 10, 12])
+        finishGameOver(pendingGameOverRef.current)
+        return scoreFound
+      }
+
       clearScoringFeedbackTimers()
       scoringInProgressRef.current = true
       setScoringInProgress(true)
@@ -2549,103 +2564,104 @@ export default function GameLayoutWeb() {
                   {/* Options */}
                   <div style={{
                     display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    flexDirection: "column",
+                    gap: 18,
                     marginTop: 10,
-                    marginBottom: 20,
                   }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound Effects</span>
-                    <Switch
-                      value={soundEnabled}
-                      onValueChange={setSoundEnabled}
-                      circleSize={18}
-                      barHeight={22}
-                      backgroundActive={colors.accent}
-                      backgroundInactive="#ccc"
-                      circleActiveColor="#fff"
-                      circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
-                      renderActiveText={false}
-                      renderInActiveText={false}
-                    />
-                  </div>
-
-                  <div style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 10,
-                  }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Haptic Feedback</span>
-                    <Switch
-                      value={hapticsEnabled}
-                      onValueChange={setHapticsEnabled}
-                      circleSize={18}
-                      barHeight={22}
-                      backgroundActive={colors.accent}
-                      backgroundInactive="#ccc"
-                      circleActiveColor="#fff"
-                      circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
-                      renderActiveText={false}
-                      renderInActiveText={false}
-                    />
-                  </div>
-
-                  <div style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: 14,
-                    marginBottom: 6,
-                  }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Dark Mode</span>
-                    <Switch
-                      value={theme === "dark"}
-                      onValueChange={toggleTheme}
-                      circleSize={18}
-                      barHeight={22}
-                      backgroundActive={colors.accent}
-                      backgroundInactive="#E5E5E5"
-                      circleActiveColor="#fff"
-                      circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
-                      renderActiveText={false}
-                      renderInActiveText={false}
-                    />
-                  </div>
-
-                  {/* Color Blind Mode - Last Position */}
-                  <div style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: 14,
-                    marginBottom: 6,
-                  }}>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Color Blind Mode</span>
-                      <span style={{ fontSize: 12, marginTop: 4, color: theme === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)", fontFamily: "Geist-Regular, system-ui" }}>
-                        Preference: {colorBlindMode === "symbols" ? "Symbols" : colorBlindMode === "emojis" ? "Emojis" : colorBlindMode === "cards" ? "Cards" : "Letters"}
-                      </span>
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound Effects</span>
+                      <Switch
+                        value={soundEnabled}
+                        onValueChange={setSoundEnabled}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#ccc"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
                     </div>
-                    <Switch
-                      value={colorBlindEnabled}
-                      onValueChange={setColorBlindEnabled}
-                      circleSize={18}
-                      barHeight={22}
-                      backgroundActive={colors.accent}
-                      backgroundInactive="#ccc"
-                      circleActiveColor="#fff"
-                      circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
-                      renderActiveText={false}
-                      renderInActiveText={false}
-                    />
+
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Palindrome Animations</span>
+                        <span style={{ fontSize: 12, marginTop: 4, color: theme === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)", fontFamily: "Geist-Regular, system-ui" }}>
+                          {palindromeAnimationsEnabled ? "Animated scoring" : "Instant scoring"}
+                        </span>
+                      </div>
+                      <Switch
+                        value={palindromeAnimationsEnabled}
+                        onValueChange={setPalindromeAnimationsEnabled}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#ccc"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Haptic Feedback</span>
+                      <Switch
+                        value={hapticsEnabled}
+                        onValueChange={setHapticsEnabled}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#ccc"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Dark Mode</span>
+                      <Switch
+                        value={theme === "dark"}
+                        onValueChange={toggleTheme}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#E5E5E5"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Color Blind Mode</span>
+                        <span style={{ fontSize: 12, marginTop: 4, color: theme === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)", fontFamily: "Geist-Regular, system-ui" }}>
+                          Preference: {colorBlindMode === "symbols" ? "Symbols" : colorBlindMode === "emojis" ? "Emojis" : colorBlindMode === "cards" ? "Cards" : "Letters"}
+                        </span>
+                      </div>
+                      <Switch
+                        value={colorBlindEnabled}
+                        onValueChange={setColorBlindEnabled}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#ccc"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
+                    </div>
                   </div>
 
                   {/* Preferences Link - Opens Profile Page */}
@@ -2659,7 +2675,7 @@ export default function GameLayoutWeb() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginTop: 20,
+                    marginTop: 28,
                     marginBottom: 6,
                     padding: 14,
                     backgroundColor: theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",

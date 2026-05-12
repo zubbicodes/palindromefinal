@@ -8,6 +8,7 @@ export type InteractionMode = 'drag' | 'pick';
 type SettingsContextValue = {
   soundEnabled: boolean;
   hapticsEnabled: boolean;
+  palindromeAnimationsEnabled: boolean;
   colorBlindEnabled: boolean;
   colorBlindMode: ColorBlindMode;
   interactionMode: InteractionMode;
@@ -15,6 +16,7 @@ type SettingsContextValue = {
   customGameColors: GameColorGradient[] | null;
   setSoundEnabled: (enabled: boolean) => void;
   setHapticsEnabled: (enabled: boolean) => void;
+  setPalindromeAnimationsEnabled: (enabled: boolean) => void;
   setColorBlindEnabled: (enabled: boolean) => void;
   setColorBlindMode: (mode: ColorBlindMode) => void;
   setInteractionMode: (mode: InteractionMode) => void;
@@ -24,12 +26,14 @@ type SettingsContextValue = {
 const SettingsContext = createContext<SettingsContextValue>({
   soundEnabled: true,
   hapticsEnabled: true,
+  palindromeAnimationsEnabled: true,
   colorBlindEnabled: false,
   colorBlindMode: 'symbols',
   interactionMode: 'drag',
   customGameColors: null,
   setSoundEnabled: () => {},
   setHapticsEnabled: () => {},
+  setPalindromeAnimationsEnabled: () => {},
   setColorBlindEnabled: () => {},
   setColorBlindMode: () => {},
   setInteractionMode: () => {},
@@ -38,6 +42,7 @@ const SettingsContext = createContext<SettingsContextValue>({
 
 const SOUND_ENABLED_KEY = 'appSoundEnabled';
 const HAPTICS_ENABLED_KEY = 'appHapticsEnabled';
+const PALINDROME_ANIMATIONS_ENABLED_KEY = 'appPalindromeAnimationsEnabled';
 const COLOR_BLIND_ENABLED_KEY = 'appColorBlindEnabled';
 const COLOR_BLIND_MODE_KEY = 'appColorBlindMode';
 const INTERACTION_MODE_KEY = 'appInteractionMode';
@@ -49,6 +54,7 @@ const INTERACTION_MODES: readonly InteractionMode[] = ['drag', 'pick'] as const;
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [soundEnabled, setSoundEnabledState] = useState(true);
   const [hapticsEnabled, setHapticsEnabledState] = useState(true);
+  const [palindromeAnimationsEnabled, setPalindromeAnimationsEnabledState] = useState(true);
   const [colorBlindEnabled, setColorBlindEnabledState] = useState(false);
   const [colorBlindMode, setColorBlindModeState] = useState<ColorBlindMode>('symbols');
   const [interactionMode, setInteractionModeState] = useState<InteractionMode>('drag');
@@ -57,9 +63,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const [soundValue, hapticsValue, colorBlindEnabledValue, colorBlindModeValue, interactionModeValue, customColorsValue] = await Promise.all([
+        const [soundValue, hapticsValue, palindromeAnimationsValue, colorBlindEnabledValue, colorBlindModeValue, interactionModeValue, customColorsValue] = await Promise.all([
           AsyncStorage.getItem(SOUND_ENABLED_KEY),
           AsyncStorage.getItem(HAPTICS_ENABLED_KEY),
+          AsyncStorage.getItem(PALINDROME_ANIMATIONS_ENABLED_KEY),
           AsyncStorage.getItem(COLOR_BLIND_ENABLED_KEY),
           AsyncStorage.getItem(COLOR_BLIND_MODE_KEY),
           AsyncStorage.getItem(INTERACTION_MODE_KEY),
@@ -71,6 +78,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
         if (hapticsValue === 'true' || hapticsValue === 'false') {
           setHapticsEnabledState(hapticsValue === 'true');
+        }
+        if (palindromeAnimationsValue === 'true' || palindromeAnimationsValue === 'false') {
+          setPalindromeAnimationsEnabledState(palindromeAnimationsValue === 'true');
         }
         if (colorBlindEnabledValue === 'true' || colorBlindEnabledValue === 'false') {
           setColorBlindEnabledState(colorBlindEnabledValue === 'true');
@@ -113,6 +123,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await AsyncStorage.setItem(HAPTICS_ENABLED_KEY, String(enabled));
     } catch (error) {
       console.log('Error saving haptics setting:', error);
+    }
+  };
+
+  const setPalindromeAnimationsEnabled = async (enabled: boolean) => {
+    try {
+      setPalindromeAnimationsEnabledState(enabled);
+      await AsyncStorage.setItem(PALINDROME_ANIMATIONS_ENABLED_KEY, String(enabled));
+    } catch (error) {
+      console.log('Error saving palindrome animations setting:', error);
     }
   };
 
@@ -160,18 +179,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     () => ({
       soundEnabled,
       hapticsEnabled,
+      palindromeAnimationsEnabled,
       colorBlindEnabled,
       colorBlindMode,
       interactionMode,
       customGameColors,
       setSoundEnabled,
       setHapticsEnabled,
+      setPalindromeAnimationsEnabled,
       setColorBlindEnabled,
       setColorBlindMode,
       setInteractionMode,
       setCustomGameColors,
     }),
-    [soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, interactionMode, customGameColors],
+    [soundEnabled, hapticsEnabled, palindromeAnimationsEnabled, colorBlindEnabled, colorBlindMode, interactionMode, customGameColors],
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

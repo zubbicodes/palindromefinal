@@ -471,7 +471,7 @@ export default function GameLayout() {
 
   // ✅ Get theme and toggle function from context
   const { theme, toggleTheme, colors } = useThemeContext();
-  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, interactionMode, customGameColors, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled, setInteractionMode } = useSettings();
+  const { soundEnabled, hapticsEnabled, palindromeAnimationsEnabled, colorBlindEnabled, colorBlindMode, interactionMode, customGameColors, setSoundEnabled, setHapticsEnabled, setPalindromeAnimationsEnabled, setColorBlindEnabled, setInteractionMode } = useSettings();
   const colorGradients = customGameColors ?? [...DEFAULT_GAME_GRADIENTS];
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound();
   const insets = useSafeAreaInsets();
@@ -914,6 +914,13 @@ export default function GameLayout() {
     const scoreFound = result.score;
 
     if (scoreFound > 0 && !dryRun) {
+      triggerHaptic('success');
+      playSuccessSound();
+
+      if (!palindromeAnimationsEnabled) {
+        return scoreFound;
+      }
+
       let feedbackText = "GOOD!";
       let feedbackColor = "#4ADE80";
       if (result.segmentLength === 5) {
@@ -927,8 +934,6 @@ export default function GameLayout() {
         feedbackColor = "#F472B6";
       }
 
-      triggerHaptic('success');
-      playSuccessSound();
       setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
       setTimeout(() => setFeedback(null), 2000);
 
@@ -1702,6 +1707,38 @@ export default function GameLayout() {
                     <Switch
                       value={hapticsEnabled}
                       onValueChange={setHapticsEnabled}
+                      disabled={false}
+                      activeText=""
+                      inActiveText=""
+                      circleSize={18}
+                      barHeight={22}
+                      circleBorderWidth={0}
+                      backgroundActive="#0060FF"
+                      backgroundInactive="#ccc"
+                      circleActiveColor="#FFFFFF"
+                      circleInActiveColor="#FFFFFF"
+                      changeValueImmediately={true}
+                      switchWidthMultiplier={2.5}
+                    />
+                  </View>
+
+                  <View style={styles.optionRow}>
+                    <View style={{ flexDirection: 'column', flex: 1, paddingRight: 14 }}>
+                      <Text
+                        style={[
+                          styles.optionLabel,
+                          { color: theme === 'dark' ? '#FFFFFF' : '#000000' },
+                        ]}
+                      >
+                        Palindrome Animations
+                      </Text>
+                      <Text style={{ fontSize: 12, marginTop: 4, color: theme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)' }}>
+                        {palindromeAnimationsEnabled ? 'Animated scoring' : 'Instant scoring'}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={palindromeAnimationsEnabled}
+                      onValueChange={setPalindromeAnimationsEnabled}
                       disabled={false}
                       activeText=""
                       inActiveText=""

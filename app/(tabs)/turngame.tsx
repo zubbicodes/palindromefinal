@@ -304,7 +304,7 @@ export default function TurnGameNative() {
   const matchId = typeof routeMatchId === 'string' ? routeMatchId : Array.isArray(routeMatchId) ? routeMatchId[0] : undefined;
 
   const { theme } = useThemeContext();
-  const { hapticsEnabled, colorBlindEnabled, colorBlindMode, customGameColors } = useSettings();
+  const { hapticsEnabled, palindromeAnimationsEnabled, colorBlindEnabled, colorBlindMode, customGameColors } = useSettings();
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
@@ -619,16 +619,18 @@ export default function TurnGameNative() {
         text = 'GREAT!';
         color = '#60A5FA';
       }
-      setFeedback({ text, color, id: Date.now() });
-      setTimeout(() => setFeedback(null), 1500);
+      if (palindromeAnimationsEnabled) {
+        setFeedback({ text, color, id: Date.now() });
+        setTimeout(() => setFeedback(null), 1500);
 
-      const keys = segment.length > 0 ? segment.map((t) => `${t.r},${t.c}`) : [`${row},${col}`];
-      setScoredCells(keys);
-      if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current);
-      scoredCellsTimerRef.current = setTimeout(() => {
-        setScoredCells([]);
-        scoredCellsTimerRef.current = null;
-      }, 2000);
+        const keys = segment.length > 0 ? segment.map((t) => `${t.r},${t.c}`) : [`${row},${col}`];
+        setScoredCells(keys);
+        if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current);
+        scoredCellsTimerRef.current = setTimeout(() => {
+          setScoredCells([]);
+          scoredCellsTimerRef.current = null;
+        }, 2000);
+      }
 
       try {
         playSuccessSound();
@@ -655,6 +657,7 @@ export default function TurnGameNative() {
       playDropSound,
       playErrorSound,
       playSuccessSound,
+      palindromeAnimationsEnabled,
       triggerHaptic,
       turnState,
       userId,

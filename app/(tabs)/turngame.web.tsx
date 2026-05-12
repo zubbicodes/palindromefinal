@@ -160,7 +160,7 @@ export default function TurnGameWeb() {
   const matchId = typeof routeMatchId === "string" ? routeMatchId : undefined
 
   const { theme, colors } = useThemeContext()
-  const { colorBlindEnabled, colorBlindMode, customGameColors } = useSettings()
+  const { palindromeAnimationsEnabled, colorBlindEnabled, colorBlindMode, customGameColors } = useSettings()
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound()
 
   // ── State ──
@@ -378,20 +378,22 @@ export default function TurnGameWeb() {
     const timeSpent = Math.max(0, Date.now() - getTurnStartedAtMs(turnState))
     lastMoveTime.current = Date.now()
 
-    // Show feedback
-    let text = "GOOD!", color = "#4ADE80"
-    if (scoreDelta <= 0) { text = "DONE!"; color = "#95DEFE" }
-    else if (segmentLength >= 9) { text = "LEGENDARY!"; color = "#F472B6" }
-    else if (segmentLength === 7) { text = "AMAZING!"; color = "#A78BFA" }
-    else if (segmentLength === 5) { text = "GREAT!"; color = "#60A5FA" }
-    setFeedback({ text, color, id: Date.now() })
-    setTimeout(() => setFeedback(null), 2000)
+    if (palindromeAnimationsEnabled) {
+      // Show feedback
+      let text = "GOOD!", color = "#4ADE80"
+      if (scoreDelta <= 0) { text = "DONE!"; color = "#95DEFE" }
+      else if (segmentLength >= 9) { text = "LEGENDARY!"; color = "#F472B6" }
+      else if (segmentLength === 7) { text = "AMAZING!"; color = "#A78BFA" }
+      else if (segmentLength === 5) { text = "GREAT!"; color = "#60A5FA" }
+      setFeedback({ text, color, id: Date.now() })
+      setTimeout(() => setFeedback(null), 2000)
 
-    // Highlight scored cells
-    const keys: string[] = segment.length > 0 ? segment.map(t => `${t.r},${t.c}`) : [`${row},${col}`]
-    setScoredCells(keys)
-    if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current)
-    scoredCellsTimerRef.current = setTimeout(() => { setScoredCells([]); scoredCellsTimerRef.current = null }, 2000)
+      // Highlight scored cells
+      const keys: string[] = segment.length > 0 ? segment.map(t => `${t.r},${t.c}`) : [`${row},${col}`]
+      setScoredCells(keys)
+      if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current)
+      scoredCellsTimerRef.current = setTimeout(() => { setScoredCells([]); scoredCellsTimerRef.current = null }, 2000)
+    }
 
     try {
       playSuccessSound()
