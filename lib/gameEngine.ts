@@ -174,21 +174,20 @@ export function createInitialState(seed: string): GameState {
 }
 
 /**
- * Check row and column through (row, col) for palindromes. Pure function.
- * Returns score earned (0 if none). Optional segmentLength for UI feedback.
+ * Check every row, column, and right-angle palindrome created through (row, col).
  */
-export function checkPalindromes(
+export function checkAllPalindromes(
   grid: Grid,
   row: number,
   col: number,
   bulldogPositions: { row: number; col: number }[],
   minLength: number = MIN_PALINDROME_LENGTH
-): ScoringResult {
+): ScoringResult[] {
   const isOdd = (n: number) => n % 2 === 1;
   const isInside = (r: number, c: number) => r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE;
   const hasMultipleColors = (segment: ScoredTile[]) => new Set(segment.map((tile) => tile.color)).size > 1;
 
-  const checkLine = (lineIsRow: boolean): { length: number; segment: ScoredTile[] | null } => {
+  const checkLine = (lineIsRow: boolean): { length: number; segment: ScoredTile[] }[] => {
     const line: ScoredTile[] = [];
     if (lineIsRow) {
       for (let c = 0; c < GRID_SIZE; c++) {
@@ -208,31 +207,28 @@ export function checkPalindromes(
     while (end < GRID_SIZE - 1 && line[end + 1].color !== -1) end++;
 
     const segment = line.slice(start, end + 1);
-    if (segment.length < minLength) return { length: 0, segment: null };
+    if (segment.length < minLength) return [];
 
-    // Find the longest palindrome within the segment that includes the placed tile
     const targetPosInSegment = targetIndex - start;
-    let bestLength = 0;
-    let bestSegment: ScoredTile[] | null = null;
+    const matches: { length: number; segment: ScoredTile[] }[] = [];
 
     for (let s = 0; s <= targetPosInSegment; s++) {
       for (let e = targetPosInSegment; e < segment.length; e++) {
         const len = e - s + 1;
-        if (len < minLength || !isOdd(len) || len <= bestLength) continue;
+        if (len < minLength || !isOdd(len)) continue;
         const sub = segment.slice(s, e + 1);
         const colors = sub.map(c => c.color);
         const isPal = colors.join(',') === [...colors].reverse().join(',');
         if (isPal && hasMultipleColors(sub)) {
-          bestLength = len;
-          bestSegment = sub;
+          matches.push({ length: len, segment: sub });
         }
       }
     }
 
-    return { length: bestLength, segment: bestSegment };
+    return matches;
   };
 
-  const checkRightAngle = (): { length: number; segment: ScoredTile[] | null } => {
+  const checkRightAngle = (): { length: number; segment: ScoredTile[] }[] => {
     const pairs = [
       { a: { dr: -1, dc: 0 }, b: { dr: 0, dc: -1 } },
       { a: { dr: -1, dc: 0 }, b: { dr: 0, dc: 1 } },
@@ -240,63 +236,58 @@ export function checkPalindromes(
       { a: { dr: 1, dc: 0 }, b: { dr: 0, dc: 1 } },
     ] as const;
 
-    let bestLen = 0;
-    let bestSegment: ScoredTile[] | null = null;
+    const matches: { length: number; segment: ScoredTile[] }[] = [];
 
     const tryCorner = (cornerRow: number, cornerCol: number) => {
       const cornerColor = grid[cornerRow][cornerCol];
       if (cornerColor == null) return;
 
       for (const pair of pairs) {
-        let d = 1;
-        let lastValid = 0;
-        while (true) {
-          const ar = cornerRow + pair.a.dr * d;
-          const ac = cornerCol + pair.a.dc * d;
-          const br = cornerRow + pair.b.dr * d;
-          const bc = cornerCol + pair.b.dc * d;
-          if (!isInside(ar, ac) || !isInside(br, bc)) break;
-          const aColor = grid[ar][ac];
-          const bColor = grid[br][bc];
-          if (aColor == null || bColor == null) break;
-          if (aColor !== bColor) break;
-          lastValid = d;
-          d++;
+        const armA: ScoredTile[] = [];
+        const armB: ScoredTile[] = [];
+
+        for (let dist = 1; dist < GRID_SIZE; dist++) {
+          const r = cornerRow + pair.a.dr * dist;
+          const c = cornerCol + pair.a.dc * dist;
+          if (!isInside(r, c) || grid[r][c] == null) break;
+          armA.push({ color: grid[r][c] as number, r, c });
         }
 
-        const length = lastValid > 0 ? lastValid * 2 + 1 : 0;
-        if (length < minLength || !isOdd(length)) continue;
+        for (let dist = 1; dist < GRID_SIZE; dist++) {
+          const r = cornerRow + pair.b.dr * dist;
+          const c = cornerCol + pair.b.dc * dist;
+          if (!isInside(r, c) || grid[r][c] == null) break;
+          armB.push({ color: grid[r][c] as number, r, c });
+        }
 
-        let includesPlaced = cornerRow === row && cornerCol === col;
-        if (!includesPlaced) {
-          for (let dist = 1; dist <= lastValid; dist++) {
-            const aR = cornerRow + pair.a.dr * dist;
-            const aC = cornerCol + pair.a.dc * dist;
-            const bR = cornerRow + pair.b.dr * dist;
-            const bC = cornerCol + pair.b.dc * dist;
-            if ((aR === row && aC === col) || (bR === row && bC === col)) {
-              includesPlaced = true;
-              break;
+        for (let lenA = 1; lenA <= armA.length; lenA++) {
+          for (let lenB = 1; lenB <= armB.length; lenB++) {
+            const length = lenA + 1 + lenB;
+            if (length < minLength || !isOdd(length)) continue;
+
+            let includesPlaced = cornerRow === row && cornerCol === col;
+            if (!includesPlaced) {
+              includesPlaced =
+                armA.slice(0, lenA).some((tile) => tile.r === row && tile.c === col) ||
+                armB.slice(0, lenB).some((tile) => tile.r === row && tile.c === col);
             }
+            if (!includesPlaced) continue;
+
+            const tiles: ScoredTile[] = [];
+            for (let i = lenA - 1; i >= 0; i--) {
+              tiles.push(armA[i]);
+            }
+            tiles.push({ color: cornerColor, r: cornerRow, c: cornerCol });
+            for (let i = 0; i < lenB; i++) {
+              tiles.push(armB[i]);
+            }
+            const colors = tiles.map((tile) => tile.color);
+            const isPal = colors.join(',') === [...colors].reverse().join(',');
+            if (!isPal) continue;
+            if (!hasMultipleColors(tiles)) continue;
+            matches.push({ length, segment: tiles });
           }
         }
-        if (!includesPlaced || length <= bestLen) continue;
-
-        const tiles: ScoredTile[] = [];
-        for (let dist = lastValid; dist >= 1; dist--) {
-          const rA = cornerRow + pair.a.dr * dist;
-          const cA = cornerCol + pair.a.dc * dist;
-          tiles.push({ color: grid[rA][cA] as number, r: rA, c: cA });
-        }
-        tiles.push({ color: cornerColor, r: cornerRow, c: cornerCol });
-        for (let dist = 1; dist <= lastValid; dist++) {
-          const rB = cornerRow + pair.b.dr * dist;
-          const cB = cornerCol + pair.b.dc * dist;
-          tiles.push({ color: grid[rB][cB] as number, r: rB, c: cB });
-        }
-        if (!hasMultipleColors(tiles)) continue;
-        bestLen = length;
-        bestSegment = tiles;
       }
     };
 
@@ -308,11 +299,11 @@ export function checkPalindromes(
       tryCorner(cornerRow, col);
     }
 
-    return { length: bestLen, segment: bestSegment };
+    return matches;
   };
 
-  const scoreFor = (length: number, segment: ScoredTile[] | null) => {
-    if (!segment || length < minLength) return { score: 0, hasBulldog: false };
+  const scoreFor = (length: number, segment: ScoredTile[]) => {
+    if (length < minLength) return { score: 0, hasBulldog: false };
     if (!isOdd(length) || !hasMultipleColors(segment)) return { score: 0, hasBulldog: false };
     const hasBulldog = segment.some((b) =>
       bulldogPositions.some((bp) => bp.row === b.r && bp.col === b.c)
@@ -320,14 +311,10 @@ export function checkPalindromes(
     return { score: length + (hasBulldog ? BULLDOG_BONUS : 0), hasBulldog };
   };
 
-  const rowResult = checkLine(true);
-  const colResult = checkLine(false);
-  const rightAngleResult = checkRightAngle();
-
   const candidates = [
-    { kind: 'row' as const, length: rowResult.length, segment: rowResult.segment },
-    { kind: 'col' as const, length: colResult.length, segment: colResult.segment },
-    { kind: 'rightAngle' as const, length: rightAngleResult.length, segment: rightAngleResult.segment },
+    ...checkLine(true).map((result) => ({ kind: 'row' as const, length: result.length, segment: result.segment })),
+    ...checkLine(false).map((result) => ({ kind: 'col' as const, length: result.length, segment: result.segment })),
+    ...checkRightAngle().map((result) => ({ kind: 'rightAngle' as const, length: result.length, segment: result.segment })),
   ]
     .map((candidate) => {
       const score = scoreFor(candidate.length, candidate.segment);
@@ -336,16 +323,36 @@ export function checkPalindromes(
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => (b.length !== a.length ? b.length - a.length : b.score - a.score));
 
-  const best = candidates[0];
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = `${candidate.kind}:${candidate.segment.map((tile) => `${tile.r},${tile.c}`).join('|')}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map((candidate) => ({
+    score: candidate.score,
+    segmentLength: candidate.length,
+    segment: candidate.segment,
+    kind: candidate.kind,
+    hasBulldog: candidate.hasBulldog,
+  }));
+}
+
+/**
+ * Check row, column, and right-angle palindromes through (row, col). Pure function.
+ * Returns the strongest single result for callers that still expect one score event.
+ */
+export function checkPalindromes(
+  grid: Grid,
+  row: number,
+  col: number,
+  bulldogPositions: { row: number; col: number }[],
+  minLength: number = MIN_PALINDROME_LENGTH
+): ScoringResult {
+  const best = checkAllPalindromes(grid, row, col, bulldogPositions, minLength)[0];
   if (!best) return { score: 0 };
 
-  return {
-    score: best.score,
-    segmentLength: best.length,
-    segment: best.segment ?? undefined,
-    kind: best.kind,
-    hasBulldog: best.hasBulldog,
-  };
+  return best;
 }
 
 /**

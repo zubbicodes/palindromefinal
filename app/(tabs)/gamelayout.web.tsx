@@ -5,7 +5,7 @@ import { ColorBlindMode, useSettings } from "@/context/SettingsContext"
 import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
-import { checkPalindromes, createInitialState, createSinglePlayerInitialState } from "@/lib/gameEngine"
+import { checkAllPalindromes, createInitialState, createSinglePlayerInitialState, type ScoringResult } from "@/lib/gameEngine"
 import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, submitScore, subscribeToMatch, updateLiveScore, type Match, type MatchPlayer } from "@/lib/matchmaking"
 import { saveSinglePlayerRun } from "@/lib/singlePlayer"
 import { Ionicons } from "@expo/vector-icons"
@@ -562,7 +562,7 @@ export default function GameLayoutWeb() {
   const returnTo = typeof routeReturnTo === "string" ? routeReturnTo : Array.isArray(routeReturnTo) ? routeReturnTo[0] : undefined
 
   const { theme, colors, toggleTheme } = useThemeContext()
-  const { soundEnabled, hapticsEnabled, colorBlindEnabled, colorBlindMode, customGameColors, setSoundEnabled, setHapticsEnabled, setColorBlindEnabled } = useSettings()
+  const { soundEnabled, hapticsEnabled, palindromeAnimationsEnabled, colorBlindEnabled, colorBlindMode, customGameColors, setSoundEnabled, setHapticsEnabled, setPalindromeAnimationsEnabled, setColorBlindEnabled } = useSettings()
   const { playPickupSound, playDropSound, playErrorSound, playSuccessSound } = useSound()
 
   const [score, setScore] = useState(0)
@@ -572,6 +572,7 @@ export default function GameLayoutWeb() {
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [pause, setPause] = useState(false)
   const [gameOver, setGameOver] = useState<{ status: "win" | "lose"; message: string } | null>(null)
+  const pendingGameOverRef = useRef<{ status: "win" | "lose"; message: string } | null>(null)
   const [firstMoveActive, setFirstMoveActive] = useState(false)
   const [firstMovePlacements, setFirstMovePlacements] = useState<{ row: number; col: number; colorIndex: number }[]>([])
 
@@ -762,10 +763,45 @@ export default function GameLayoutWeb() {
   const [wrongForcedTries, setWrongForcedTries] = useState(0)
   const wrongForcedTriesRef = useRef(0)
   const [scoredCells, setScoredCells] = useState<string[]>([])
-  const scoredCellsTimerRef = useRef<any>(null)
+  const [scoredCellsRun, setScoredCellsRun] = useState(0)
+  const scoredCellsTimerRef = useRef<any[]>([])
+  const [scoringInProgress, setScoringInProgress] = useState(false)
+  const scoringInProgressRef = useRef(false)
 
   // Feedback State
   const [feedback, setFeedback] = useState<{ text: string, color: string, id: number } | null>(null)
+  const [scoreBursts, setScoreBursts] = useState<{ id: number; points: number }[]>([])
+
+  type ScoringEvent = ScoringResult & {
+    segment: NonNullable<ScoringResult["segment"]>
+    segmentLength: number
+  }
+
+  const clearScoringFeedbackTimers = useCallback((syncDisplayedScore = false) => {
+    scoredCellsTimerRef.current.forEach((timer) => clearTimeout(timer))
+    scoredCellsTimerRef.current = []
+    setScoreBursts([])
+    scoringInProgressRef.current = false
+    setScoringInProgress(false)
+    if (syncDisplayedScore) setScore(scoreRef.current)
+  }, [])
+
+  const finishGameOver = useCallback((nextGameOver: { status: "win" | "lose"; message: string } | null) => {
+    if (!nextGameOver) return
+    pendingGameOverRef.current = null
+    setPause(false)
+    setIsTimerRunning(false)
+    setGameOver(nextGameOver)
+  }, [])
+
+  const queueGameOver = useCallback((nextGameOver: { status: "win" | "lose"; message: string } | null) => {
+    if (!nextGameOver) return
+    if (scoringInProgressRef.current) {
+      pendingGameOverRef.current = nextGameOver
+      return
+    }
+    finishGameOver(nextGameOver)
+  }, [finishGameOver])
 
   // Timer State
   const [secondsElapsed, setSecondsElapsed] = useState(0)
@@ -784,10 +820,6 @@ export default function GameLayoutWeb() {
   useEffect(() => {
     wrongForcedTriesRef.current = wrongForcedTries
   }, [wrongForcedTries])
-
-  useEffect(() => {
-    scoreRef.current = score
-  }, [score])
 
   const secondsElapsedRef = useRef(secondsElapsed)
   useEffect(() => {
@@ -823,12 +855,9 @@ export default function GameLayoutWeb() {
 
   useEffect(() => {
     return () => {
-      if (scoredCellsTimerRef.current) {
-        clearTimeout(scoredCellsTimerRef.current)
-        scoredCellsTimerRef.current = null
-      }
+      clearScoringFeedbackTimers(true)
     }
-  }, [])
+  }, [clearScoringFeedbackTimers])
 
   const center = Math.floor(gridSize / 2)
   const word = " PALINDROME"
@@ -853,18 +882,23 @@ export default function GameLayoutWeb() {
     setFirstMovePlacements([])
     setFirstMoveActive(true)
     setGameOver(null)
+    pendingGameOverRef.current = null
     singlePlayerSavedRef.current = false
 
+    scoreRef.current = 0
     setScore(0)
     setHints(2)
     setTime("00:00")
     setSecondsElapsed(0)
     setIsTimerRunning(false)
     setPause(false)
+    clearScoringFeedbackTimers()
+    setScoredCells([])
+    setScoredCellsRun(0)
     setFeedback(null)
     setDragOverCell(null)
     setActiveHint(null)
-  }, [])
+  }, [clearScoringFeedbackTimers])
 
   useEffect(() => {
     if (matchId) return
@@ -885,6 +919,7 @@ export default function GameLayoutWeb() {
       setGridState(initialState.grid.map((r) => [...r]))
       setBlockCounts([...initialState.blockCounts])
       setBulldogPositions([...initialState.bulldogPositions])
+      scoreRef.current = initialState.score
       setScore(initialState.score)
       setFirstMoveActive(false)
       setFirstMovePlacements([])
@@ -993,7 +1028,7 @@ export default function GameLayoutWeb() {
   useEffect(() => {
     if (matchId) return
     let interval: any
-    if (isTimerRunning && !pause) {
+    if (isTimerRunning && !pause && !scoringInProgress) {
       interval = setInterval(() => {
         setSecondsElapsed((prev) => {
           const next = prev + 1
@@ -1005,7 +1040,7 @@ export default function GameLayoutWeb() {
       }, 1000)
     }
     return () => clearInterval(interval)
-  }, [matchId, isTimerRunning, pause])
+  }, [matchId, isTimerRunning, pause, scoringInProgress])
 
   const handleDragStart = (colorIndex: number) => {
     playPickupSound()
@@ -1047,7 +1082,7 @@ export default function GameLayoutWeb() {
     e.preventDefault()
     setDragOverCell(null)
     setDraggedColor(null)
-    if (pause || settingsVisible || gameOver) return false
+    if (pause || settingsVisible || gameOver || scoringInProgressRef.current) return false
 
     const transferredColor = e.dataTransfer.getData("color")
     if (!transferredColor) {
@@ -1077,7 +1112,7 @@ export default function GameLayoutWeb() {
     }
 
     let scoreFound = 0
-    let newScore = score
+    let newScore = scoreRef.current
     let nextBlockCounts: number[] = [...blockCounts]
     let nextGrid: (number | null)[][] = gridState.map((r) => [...r])
 
@@ -1099,11 +1134,17 @@ export default function GameLayoutWeb() {
 
       const a = nextPlacements[0]
       const b = nextPlacements[1]
-      const scoreA = checkAndProcessPalindromes(a.row, a.col, a.colorIndex, nextGrid, true, 5)
-      const scoreB = checkAndProcessPalindromes(b.row, b.col, b.colorIndex, nextGrid, true, 5)
-      const bestScore = Math.max(scoreA, scoreB)
+      const attemptedScore = checkAndProcessPalindromes(
+        [
+          { row: a.row, col: a.col },
+          { row: b.row, col: b.col },
+        ],
+        nextGrid,
+        true,
+        5
+      )
 
-      if (bestScore <= 0) {
+      if (attemptedScore <= 0) {
         const revertedGrid = nextGrid.map((r) => [...r])
         const revertedCounts = [...nextBlockCounts]
         for (const p of nextPlacements) {
@@ -1139,13 +1180,18 @@ export default function GameLayoutWeb() {
         return false
       }
 
-      scoreFound =
-        scoreB >= scoreA
-          ? checkAndProcessPalindromes(b.row, b.col, b.colorIndex, nextGrid, false, 5)
-          : checkAndProcessPalindromes(a.row, a.col, a.colorIndex, nextGrid, false, 5)
+      scoreFound = checkAndProcessPalindromes(
+        [
+          { row: a.row, col: a.col },
+          { row: b.row, col: b.col },
+        ],
+        nextGrid,
+        false,
+        5
+      )
 
-      setScore((prev) => prev + scoreFound)
-      newScore = score + scoreFound
+      newScore = scoreRef.current + scoreFound
+      scoreRef.current = newScore
       setFirstMoveActive(false)
       setFirstMovePlacements([])
       if (wrongForcedTriesRef.current !== 0) {
@@ -1153,18 +1199,14 @@ export default function GameLayoutWeb() {
         setWrongForcedTries(0)
       }
       if (nextBlockCounts.every((c) => c === 0)) {
-        setPause(false)
-        setIsTimerRunning(false)
-        setGameOver({ status: "win", message: "All counters used." })
+        queueGameOver({ status: "win", message: "All counters used." })
       } else if (nextGrid.every((r) => r.every((cell) => cell !== null))) {
-        setPause(false)
-        setIsTimerRunning(false)
-        setGameOver({ status: "lose", message: "Board is full." })
+        queueGameOver({ status: "lose", message: "Board is full." })
       }
     } else {
       const hadAnyScoringMoveBefore = !matchId ? !!findFirstScoringMove(3, gridState, blockCounts) : true
       nextGrid[row][col] = colorIndex
-      const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, nextGrid, true, 3)
+      const attemptedScore = checkAndProcessPalindromes([{ row, col }], nextGrid, true, 3, gridState)
       if (attemptedScore <= 0) {
         if (!matchId && !hadAnyScoringMoveBefore) {
           nextBlockCounts[colorIndex] = Math.max(0, nextBlockCounts[colorIndex] - 1)
@@ -1180,13 +1222,9 @@ export default function GameLayoutWeb() {
           }
 
           if (nextBlockCounts.every((c) => c === 0)) {
-            setPause(false)
-            setIsTimerRunning(false)
-            setGameOver({ status: "win", message: "All counters used." })
+            queueGameOver({ status: "win", message: "All counters used." })
           } else if (nextGrid.every((r) => r.every((cell) => cell !== null))) {
-            setPause(false)
-            setIsTimerRunning(false)
-            setGameOver({ status: "lose", message: "Board is full." })
+            queueGameOver({ status: "lose", message: "Board is full." })
           }
 
           return true
@@ -1225,9 +1263,9 @@ export default function GameLayoutWeb() {
       triggerHaptic(14)
       console.log(`Successfully placed color ${colorIndex} at ${row},${col}`)
 
-      scoreFound = checkAndProcessPalindromes(row, col, colorIndex, nextGrid, false, 3)
-      setScore((prev) => prev + scoreFound)
-      newScore = score + scoreFound
+      scoreFound = checkAndProcessPalindromes([{ row, col }], nextGrid, false, 3, gridState)
+      newScore = scoreRef.current + scoreFound
+      scoreRef.current = newScore
 
       if (matchId && scoreFound > 0 && !scoreSubmitted) {
         authService.getSessionUser().then((user) => {
@@ -1242,13 +1280,9 @@ export default function GameLayoutWeb() {
 
       if (!matchId) {
         if (nextBlockCounts.every((c) => c === 0)) {
-          setPause(false)
-          setIsTimerRunning(false)
-          setGameOver({ status: "win", message: "All counters used." })
+          queueGameOver({ status: "win", message: "All counters used." })
         } else if (nextGrid.every((r) => r.every((cell) => cell !== null))) {
-          setPause(false)
-          setIsTimerRunning(false)
-          setGameOver({ status: "lose", message: "Board is full." })
+          queueGameOver({ status: "lose", message: "Board is full." })
         }
       }
     }
@@ -1277,36 +1311,158 @@ export default function GameLayoutWeb() {
     return true
   }
 
-  const checkAndProcessPalindromes = (row: number, col: number, _colorIdx: number, currentGrid: (number | null)[][], dryRun = false, minLength = 3) => {
-    const result = checkPalindromes(currentGrid, row, col, bulldogPositions, minLength)
-    const scoreFound = result.score
+  const getScoringFeedback = (length: number) => {
+    if (length === 5) return { text: "GREAT!", color: "#60A5FA" }
+    if (length === 7) return { text: "AMAZING!", color: "#A78BFA" }
+    if (length >= 9) return { text: "LEGENDARY!", color: "#F472B6" }
+    return { text: "GOOD!", color: "#4ADE80" }
+  }
 
-    if (scoreFound > 0 && !dryRun) {
-      let feedbackText = "GOOD!"
-      let feedbackColor = "#4ADE80"
-      if (result.segmentLength === 5) {
-        feedbackText = "GREAT!"
-        feedbackColor = "#60A5FA"
-      } else if (result.segmentLength === 7) {
-        feedbackText = "AMAZING!"
-        feedbackColor = "#A78BFA"
-      } else if ((result.segmentLength ?? 0) >= 9) {
-        feedbackText = "LEGENDARY!"
-        feedbackColor = "#F472B6"
+  const getScoringEvents = (
+    anchors: { row: number; col: number }[],
+    currentGrid: (number | null)[][],
+    minLength = 3,
+    previousGrid?: (number | null)[][]
+  ): ScoringEvent[] => {
+    const anchorKeys = new Set(anchors.map(({ row, col }) => `${row},${col}`))
+    const orderSegmentFromAnchor = (event: ScoringEvent): ScoringEvent => {
+      const anchorIndex = event.segment.findIndex((tile) => anchorKeys.has(`${tile.r},${tile.c}`))
+      if (anchorIndex < 0) return event
+
+      const ordered: NonNullable<ScoringResult["segment"]> = []
+      const seen = new Set<string>()
+      for (let distance = 0; distance < event.segment.length; distance++) {
+        const left = anchorIndex - distance
+        const right = anchorIndex + distance
+
+        if (left >= 0) {
+          const tile = event.segment[left]
+          const key = `${tile.r},${tile.c}`
+          if (!seen.has(key)) {
+            seen.add(key)
+            ordered.push(tile)
+          }
+        }
+
+        if (right < event.segment.length) {
+          const tile = event.segment[right]
+          const key = `${tile.r},${tile.c}`
+          if (!seen.has(key)) {
+            seen.add(key)
+            ordered.push(tile)
+          }
+        }
       }
 
-      const keys = result.segment ? result.segment.map((t) => `${t.r},${t.c}`) : []
-      setScoredCells(keys)
-      if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current)
-      scoredCellsTimerRef.current = setTimeout(() => {
-        setScoredCells([])
-        scoredCellsTimerRef.current = null
-      }, 2000)
+      return { ...event, segment: ordered }
+    }
 
-      setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() })
-      playSuccessSound()
-      triggerHaptic([0, 12, 10, 12])
-      setTimeout(() => setFeedback(null), 2000)
+    const collectEvents = (scanGrid: (number | null)[][]) => {
+      const eventsByKey = new Map<string, ScoringEvent>()
+      const scanAnchors = previousGrid
+        ? scanGrid.flatMap((rowArr, r) =>
+            rowArr.flatMap((cell, c) => (cell == null ? [] : [{ row: r, col: c }]))
+          )
+        : anchors
+
+      scanAnchors.forEach(({ row, col }) => {
+        checkAllPalindromes(scanGrid, row, col, bulldogPositions, minLength).forEach((result) => {
+          if (!result.segment || !result.segmentLength || result.score <= 0) return
+          const key = `${result.kind}:${result.segment.map((t) => `${t.r},${t.c}`).join("|")}`
+          if (!eventsByKey.has(key)) {
+            eventsByKey.set(key, {
+              ...result,
+              segment: result.segment,
+              segmentLength: result.segmentLength,
+            })
+          }
+        })
+      })
+
+      return eventsByKey
+    }
+
+    const eventsByKey = collectEvents(currentGrid)
+    if (previousGrid) {
+      const previousEventsByKey = collectEvents(previousGrid)
+      previousEventsByKey.forEach((_event, key) => {
+        eventsByKey.delete(key)
+      })
+    }
+
+    return [...eventsByKey.values()]
+      .sort((a, b) => {
+        if (b.segmentLength !== a.segmentLength) return b.segmentLength - a.segmentLength
+        return b.score - a.score
+      })
+      .map(orderSegmentFromAnchor)
+  }
+
+  const checkAndProcessPalindromes = (
+    anchors: { row: number; col: number }[],
+    currentGrid: (number | null)[][],
+    dryRun = false,
+    minLength = 3,
+    previousGrid?: (number | null)[][]
+  ) => {
+    const events = getScoringEvents(anchors, currentGrid, minLength, previousGrid)
+    const scoreFound = events.reduce((total, event) => total + event.score, 0)
+
+    if (scoreFound > 0 && !dryRun) {
+      if (!palindromeAnimationsEnabled) {
+        const burstId = Date.now()
+        clearScoringFeedbackTimers()
+        setScore((prev) => prev + scoreFound)
+        setScoreBursts([{ id: burstId, points: scoreFound }])
+        const burstClearTimer = setTimeout(() => {
+          setScoreBursts((prev) => prev.filter((burst) => burst.id !== burstId))
+        }, 1200)
+        scoredCellsTimerRef.current.push(burstClearTimer)
+        playSuccessSound()
+        triggerHaptic([0, 12, 10, 12])
+        finishGameOver(pendingGameOverRef.current)
+        return scoreFound
+      }
+
+      clearScoringFeedbackTimers()
+      scoringInProgressRef.current = true
+      setScoringInProgress(true)
+      setFeedback(null)
+      const scoringRunId = Date.now()
+
+      events.forEach((event, index) => {
+        const burstId = scoringRunId + index
+        const timer = setTimeout(() => {
+          const feedbackForLength = getScoringFeedback(event.segmentLength)
+          const keys = event.segment.map((t) => `${t.r},${t.c}`)
+          setScoredCells(keys)
+          setScoredCellsRun(scoringRunId + index)
+          setScore((prev) => {
+            const next = prev + event.score
+            return next
+          })
+          setScoreBursts((prev) => [...prev, { id: burstId, points: event.score }])
+          setFeedback({ text: feedbackForLength.text, color: feedbackForLength.color, id: burstId })
+          playSuccessSound()
+          triggerHaptic([0, 12, 10, 12])
+        }, index * 900)
+        scoredCellsTimerRef.current.push(timer)
+
+        const burstClearTimer = setTimeout(() => {
+          setScoreBursts((prev) => prev.filter((burst) => burst.id !== burstId))
+        }, index * 900 + 1200)
+        scoredCellsTimerRef.current.push(burstClearTimer)
+      })
+
+      const clearTimer = setTimeout(() => {
+        setScoredCells([])
+        scoredCellsTimerRef.current = []
+        scoringInProgressRef.current = false
+        setScoringInProgress(false)
+        setFeedback(null)
+        finishGameOver(pendingGameOverRef.current)
+      }, (events.length - 1) * 900 + 2000)
+      scoredCellsTimerRef.current.push(clearTimer)
     }
 
     return scoreFound
@@ -1320,7 +1476,7 @@ export default function GameLayoutWeb() {
           if (counts[colorIdx] <= 0) continue
           const tempGrid = grid.map((rowArr) => [...rowArr])
           tempGrid[r][c] = colorIdx
-          const sc = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength)
+          const sc = checkAndProcessPalindromes([{ row: r, col: c }], tempGrid, true, minLength, grid)
           if (sc > 0) {
             return { row: r, col: c, colorIndex: colorIdx }
           }
@@ -1599,13 +1755,47 @@ export default function GameLayoutWeb() {
           }
           @keyframes scorePulse {
             0% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); }
-            35% { box-shadow: 0 0 22px rgba(255,215,0,0.85); transform: scale(1.06); }
+            35% { box-shadow: 0 0 26px rgba(255,215,0,0.9); transform: scale(1.14); }
+            70% { box-shadow: 0 0 18px rgba(255,215,0,0.55); transform: scale(1.08); }
             100% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); }
+          }
+          @keyframes scorePulseAlt {
+            0% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); }
+            35% { box-shadow: 0 0 26px rgba(255,215,0,0.9); transform: scale(1.14); }
+            70% { box-shadow: 0 0 18px rgba(255,215,0,0.55); transform: scale(1.08); }
+            100% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); }
+          }
+          @keyframes scoredBlockZoom {
+            0% { transform: scale(1); filter: brightness(1); }
+            35% { transform: scale(1.2); filter: brightness(1.22); }
+            70% { transform: scale(1.1); filter: brightness(1.1); }
+            100% { transform: scale(1); filter: brightness(1); }
+          }
+          @keyframes scoredBlockZoomAlt {
+            0% { transform: scale(1); filter: brightness(1); }
+            35% { transform: scale(1.2); filter: brightness(1.22); }
+            70% { transform: scale(1.1); filter: brightness(1.1); }
+            100% { transform: scale(1); filter: brightness(1); }
           }
           @keyframes scoreShimmer {
             0% { opacity: 0; transform: translateX(-120%) skewX(-18deg); }
             30% { opacity: 0.85; }
             100% { opacity: 0; transform: translateX(120%) skewX(-18deg); }
+          }
+          @keyframes scoreShimmerAlt {
+            0% { opacity: 0; transform: translateX(-120%) skewX(-18deg); }
+            30% { opacity: 0.85; }
+            100% { opacity: 0; transform: translateX(120%) skewX(-18deg); }
+          }
+          @keyframes scoreValuePop {
+            0% { transform: scale(1); }
+            35% { transform: scale(1.18); }
+            100% { transform: scale(1); }
+          }
+          @keyframes scoreBurst {
+            0% { opacity: 0; transform: translate(-50%, 8px) scale(0.7); }
+            18% { opacity: 1; transform: translate(-50%, -4px) scale(1.08); }
+            100% { opacity: 0; transform: translate(-50%, -34px) scale(1); }
           }
           @keyframes hudFadeIn {
             0% { opacity: 0; transform: translateY(-8px); }
@@ -1768,6 +1958,9 @@ export default function GameLayoutWeb() {
                       const isHint = activeHint?.row === row && activeHint?.col === col
                       const isScored = scoredCells.includes(`${row},${col}`)
                       const scoreIndex = isScored ? scoredCells.indexOf(`${row},${col}`) : 0
+                      const scorePulseName = scoredCellsRun % 2 === 0 ? "scorePulse" : "scorePulseAlt"
+                      const scoredBlockZoomName = scoredCellsRun % 2 === 0 ? "scoredBlockZoom" : "scoredBlockZoomAlt"
+                      const scoreShimmerName = scoredCellsRun % 2 === 0 ? "scoreShimmer" : "scoreShimmerAlt"
                       if (isHovered || isHint) {
                         cellStyle.backgroundColor = theme === "dark" ? "rgba(100, 200, 255, 0.4)" : "rgba(100, 200, 255, 0.3)"
                         cellStyle.borderColor = theme === "dark" ? "rgba(100, 200, 255, 0.8)" : "rgba(50, 150, 255, 0.6)"
@@ -1783,7 +1976,7 @@ export default function GameLayoutWeb() {
                       if (isScored) {
                         cellStyle.borderColor = "rgba(255, 215, 0, 0.95)"
                         cellStyle.borderWidth = 2
-                        cellStyle.animation = `scorePulse 0.8s ease-out ${scoreIndex * 0.15}s both`
+                        cellStyle.animation = `${scorePulseName} 0.8s ease-out ${scoreIndex * 0.15}s both`
                         cellStyle.zIndex = 12
                       }
                       return (
@@ -1800,6 +1993,8 @@ export default function GameLayoutWeb() {
                               background: `linear-gradient(to right bottom, ${colorGradients[cellColorIndex][0]}, ${colorGradients[cellColorIndex][1]})`,
                               position: "absolute", top: 0, left: 0, zIndex: 0,
                               boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+                              transformOrigin: "center",
+                              animation: isScored ? `${scoredBlockZoomName} 0.8s ease-out ${scoreIndex * 0.15}s both` : undefined,
                             }} />
                           )}
                           {isHint && activeHint && (
@@ -1814,7 +2009,7 @@ export default function GameLayoutWeb() {
                               <div style={{
                                 position: "absolute", top: "-20%", bottom: "-20%", width: "60%",
                                 background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.85), rgba(255,255,255,0))",
-                                animation: `scoreShimmer 0.8s ease-out ${scoreIndex * 0.15}s both`,
+                                animation: `${scoreShimmerName} 0.8s ease-out ${scoreIndex * 0.15}s both`,
                               }} />
                             </div>
                           )}
@@ -1890,14 +2085,44 @@ export default function GameLayoutWeb() {
                 border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
                 boxShadow: theme === "dark" ? "0 4px 16px rgba(0,0,0,0.3)" : "0 4px 16px rgba(0,0,0,0.06)",
                 width: "100%", maxWidth: layoutConfig.rightPanelW - 16,
+                position: "relative",
+                overflow: "visible",
               }}>
                 <div style={{ width: 42, height: 42, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #FFC300, #FF8C00)", boxShadow: "0 4px 10px rgba(255,140,0,0.35)" }}>
                   <Ionicons name="trophy" size={22} color="#fff" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.2, color: colors.secondaryText, fontFamily: "system-ui" }}>Score</div>
-                  <div style={{ fontSize: "clamp(26px, 2.6vw, 36px)", fontWeight: 800, color: colors.accent, fontFamily: "system-ui", lineHeight: 1.1 }}>{score}</div>
+                  <div style={{
+                    fontSize: "clamp(26px, 2.6vw, 36px)",
+                    fontWeight: 800,
+                    color: colors.accent,
+                    fontFamily: "system-ui",
+                    lineHeight: 1.1,
+                    display: "inline-block",
+                    animation: scoreBursts.length ? "scoreValuePop 0.42s ease-out" : undefined,
+                  }}>{score}</div>
                 </div>
+                {scoreBursts.map((burst, index) => (
+                  <div
+                    key={burst.id}
+                    style={{
+                      position: "absolute",
+                      left: "68%",
+                      top: 12 + index * 3,
+                      transform: "translateX(-50%)",
+                      color: "#22C55E",
+                      fontFamily: "system-ui",
+                      fontWeight: 900,
+                      fontSize: 18,
+                      textShadow: theme === "dark" ? "0 2px 10px rgba(0,0,0,0.55)" : "0 2px 10px rgba(255,255,255,0.75)",
+                      pointerEvents: "none",
+                      animation: "scoreBurst 1.15s ease-out forwards",
+                    }}
+                  >
+                    +{burst.points}
+                  </div>
+                ))}
               </div>
 
               {/* Timer card */}
@@ -2026,9 +2251,35 @@ export default function GameLayoutWeb() {
                 background: theme === "dark" ? "rgba(5,5,30,0.97)" : "rgba(255,255,255,0.97)",
                 borderTop: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
               }}>
-                <div id="tour-game-status-score" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div id="tour-game-status-score" style={{ display: "flex", alignItems: "center", gap: 5, position: "relative", overflow: "visible" }}>
                   <Ionicons name="trophy" size={13} color="#FFD700" />
-                  <span style={{ fontSize: 15, fontWeight: 800, color: colors.accent, fontFamily: "system-ui" }}>{score}</span>
+                  <span style={{
+                    fontSize: 15,
+                    fontWeight: 800,
+                    color: colors.accent,
+                    fontFamily: "system-ui",
+                    display: "inline-block",
+                    animation: scoreBursts.length ? "scoreValuePop 0.42s ease-out" : undefined,
+                  }}>{score}</span>
+                  {scoreBursts.map((burst, index) => (
+                    <span
+                      key={burst.id}
+                      style={{
+                        position: "absolute",
+                        left: "70%",
+                        top: -8 - index * 2,
+                        color: "#22C55E",
+                        fontFamily: "system-ui",
+                        fontWeight: 900,
+                        fontSize: 13,
+                        textShadow: theme === "dark" ? "0 2px 8px rgba(0,0,0,0.65)" : "0 2px 8px rgba(255,255,255,0.8)",
+                        pointerEvents: "none",
+                        animation: "scoreBurst 1.15s ease-out forwards",
+                      }}
+                    >
+                      +{burst.points}
+                    </span>
+                  ))}
                 </div>
                 <div id="tour-game-timer" style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   <Ionicons name="time-outline" size={13} color="#95DEFE" />
@@ -2313,103 +2564,104 @@ export default function GameLayoutWeb() {
                   {/* Options */}
                   <div style={{
                     display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    flexDirection: "column",
+                    gap: 18,
                     marginTop: 10,
-                    marginBottom: 20,
                   }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound Effects</span>
-                    <Switch
-                      value={soundEnabled}
-                      onValueChange={setSoundEnabled}
-                      circleSize={18}
-                      barHeight={22}
-                      backgroundActive={colors.accent}
-                      backgroundInactive="#ccc"
-                      circleActiveColor="#fff"
-                      circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
-                      renderActiveText={false}
-                      renderInActiveText={false}
-                    />
-                  </div>
-
-                  <div style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 10,
-                  }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Haptic Feedback</span>
-                    <Switch
-                      value={hapticsEnabled}
-                      onValueChange={setHapticsEnabled}
-                      circleSize={18}
-                      barHeight={22}
-                      backgroundActive={colors.accent}
-                      backgroundInactive="#ccc"
-                      circleActiveColor="#fff"
-                      circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
-                      renderActiveText={false}
-                      renderInActiveText={false}
-                    />
-                  </div>
-
-                  <div style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: 14,
-                    marginBottom: 6,
-                  }}>
-                    <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Dark Mode</span>
-                    <Switch
-                      value={theme === "dark"}
-                      onValueChange={toggleTheme}
-                      circleSize={18}
-                      barHeight={22}
-                      backgroundActive={colors.accent}
-                      backgroundInactive="#E5E5E5"
-                      circleActiveColor="#fff"
-                      circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
-                      renderActiveText={false}
-                      renderInActiveText={false}
-                    />
-                  </div>
-
-                  {/* Color Blind Mode - Last Position */}
-                  <div style={{
-                    display: "flex",
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: 14,
-                    marginBottom: 6,
-                  }}>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Color Blind Mode</span>
-                      <span style={{ fontSize: 12, marginTop: 4, color: theme === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)", fontFamily: "Geist-Regular, system-ui" }}>
-                        Preference: {colorBlindMode === "symbols" ? "Symbols" : colorBlindMode === "emojis" ? "Emojis" : colorBlindMode === "cards" ? "Cards" : "Letters"}
-                      </span>
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Sound Effects</span>
+                      <Switch
+                        value={soundEnabled}
+                        onValueChange={setSoundEnabled}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#ccc"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
                     </div>
-                    <Switch
-                      value={colorBlindEnabled}
-                      onValueChange={setColorBlindEnabled}
-                      circleSize={18}
-                      barHeight={22}
-                      backgroundActive={colors.accent}
-                      backgroundInactive="#ccc"
-                      circleActiveColor="#fff"
-                      circleInActiveColor="#fff"
-                      switchWidthMultiplier={2.5}
-                      renderActiveText={false}
-                      renderInActiveText={false}
-                    />
+
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Palindrome Animations</span>
+                        <span style={{ fontSize: 12, marginTop: 4, color: theme === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)", fontFamily: "Geist-Regular, system-ui" }}>
+                          {palindromeAnimationsEnabled ? "Animated scoring" : "Instant scoring"}
+                        </span>
+                      </div>
+                      <Switch
+                        value={palindromeAnimationsEnabled}
+                        onValueChange={setPalindromeAnimationsEnabled}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#ccc"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Haptic Feedback</span>
+                      <Switch
+                        value={hapticsEnabled}
+                        onValueChange={setHapticsEnabled}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#ccc"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Dark Mode</span>
+                      <Switch
+                        value={theme === "dark"}
+                        onValueChange={toggleTheme}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#E5E5E5"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 34, gap: 18 }}>
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 16, color: colors.text, fontFamily: "Geist-Regular, system-ui" }}>Color Blind Mode</span>
+                        <span style={{ fontSize: 12, marginTop: 4, color: theme === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.55)", fontFamily: "Geist-Regular, system-ui" }}>
+                          Preference: {colorBlindMode === "symbols" ? "Symbols" : colorBlindMode === "emojis" ? "Emojis" : colorBlindMode === "cards" ? "Cards" : "Letters"}
+                        </span>
+                      </div>
+                      <Switch
+                        value={colorBlindEnabled}
+                        onValueChange={setColorBlindEnabled}
+                        circleSize={18}
+                        barHeight={22}
+                        backgroundActive={colors.accent}
+                        backgroundInactive="#ccc"
+                        circleActiveColor="#fff"
+                        circleInActiveColor="#fff"
+                        switchWidthMultiplier={2.5}
+                        renderActiveText={false}
+                        renderInActiveText={false}
+                      />
+                    </div>
                   </div>
 
                   {/* Preferences Link - Opens Profile Page */}
@@ -2423,7 +2675,7 @@ export default function GameLayoutWeb() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginTop: 20,
+                    marginTop: 28,
                     marginBottom: 6,
                     padding: 14,
                     backgroundColor: theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
