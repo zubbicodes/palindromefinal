@@ -139,6 +139,31 @@ export default function MatchResultWebScreen() {
 
   const text = isDark ? '#FFFFFF' : '#111111';
   const muted = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(17,17,17,0.6)';
+  const wasNeverPlayed =
+    match?.mode === 'race' &&
+    match.status === 'finished' &&
+    myScore === 0 &&
+    opponentScore === 0 &&
+    (match.match_players ?? []).length >= 2 &&
+    (match.match_players ?? []).every((p) => p.submitted_at != null);
+  const didDraw =
+    !wasNeverPlayed &&
+    match?.status === 'finished' &&
+    myScore != null &&
+    opponentScore != null &&
+    myScore === opponentScore;
+  const resultTitle = wasNeverPlayed
+    ? 'Match Abandoned'
+    : didDraw
+      ? "It's a draw"
+      : isWinner === true
+        ? 'You won!'
+        : isWinner === false
+          ? 'You lost'
+          : 'Match Complete';
+  const resultMessage = wasNeverPlayed
+    ? 'The match ended because no first move was made before the start timer ran out.'
+    : null;
 
   return (
     <div
@@ -162,8 +187,13 @@ export default function MatchResultWebScreen() {
           ) : match ? (
             <>
               <Text style={[styles.resultTitle, { color: text }]}>
-                {isWinner === true ? 'You won!' : isWinner === false ? 'You lost' : 'Match Complete'}
+                {resultTitle}
               </Text>
+              {resultMessage && (
+                <Text style={[styles.resultMessage, { color: muted }]}>
+                  {resultMessage}
+                </Text>
+              )}
 
               <View style={styles.scoresRow}>
                 <View style={styles.scoreCard}>
@@ -283,7 +313,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
   },
-  resultTitle: { fontFamily: 'Geist-Bold', fontSize: 22, marginBottom: 32 },
+  resultTitle: { fontFamily: 'Geist-Bold', fontSize: 22, marginBottom: 12, textAlign: 'center' },
+  resultMessage: { fontFamily: 'Geist-Regular', fontSize: 15, lineHeight: 21, marginBottom: 28, textAlign: 'center', maxWidth: 360 },
   scoresRow: { flexDirection: 'row', gap: 24, marginBottom: 40 },
   scoreCard: {
     minWidth: 120,

@@ -252,6 +252,72 @@ const DraggableBlock = ({
   )
 }
 
+function RacePlayerCard({
+  name,
+  avatar,
+  score,
+  time,
+  isYou,
+  isActive,
+  theme,
+  colors,
+}: {
+  name: string
+  avatar: string | null
+  score: number | null
+  time: string
+  isYou: boolean
+  isActive: boolean
+  theme: string
+  colors: any
+}) {
+  const isDark = theme === "dark"
+  const borderColor = isActive ? (isYou ? "#22c55e" : "#ef4444") : "transparent"
+  const glowColor = isActive ? (isYou ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)") : "transparent"
+
+  return (
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 6,
+      padding: "12px 10px",
+      borderRadius: 16,
+      background: isDark ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
+      border: `2px solid ${borderColor}`,
+      boxShadow: isActive ? `0 0 20px ${glowColor}` : (isDark ? "0 4px 16px rgba(0,0,0,0.3)" : "0 4px 16px rgba(0,0,0,0.06)"),
+      width: "100%",
+      transition: "all 0.3s ease",
+      fontFamily: "Geist-Regular, system-ui, sans-serif",
+    }}>
+      <div style={{ position: "relative" }}>
+        <Image
+          source={avatar ? { uri: avatar } : require("../../assets/images/profile_ph.png")}
+          style={{ width: 44, height: 44, borderRadius: 22, resizeMode: "contain", borderWidth: 2.5, borderColor: isActive ? borderColor : colors.accent }}
+          accessibilityLabel={isYou ? "Your profile" : "Opponent profile"}
+        />
+        {isYou ? (
+        <div style={{ position: "absolute", bottom: -2, right: -2, background: colors.accent, borderRadius: 8, padding: "1px 5px", fontSize: 8, fontWeight: 800, color: "#fff", fontFamily: "Geist-Bold, system-ui, sans-serif" }}>YOU</div>
+      ) : null}
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 700, color: colors.text, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 120, fontFamily: "Geist-Bold, system-ui, sans-serif" }}>
+        {name}
+      </span>
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: 1, color: colors.secondaryText, fontFamily: "Geist-Regular, system-ui, sans-serif" }}>Score</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: colors.accent, fontFamily: "Geist-Bold, system-ui, sans-serif" }}>{score ?? "--"}</div>
+        </div>
+        <div style={{ width: 1, height: 28, background: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }} />
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 8, textTransform: "uppercase", letterSpacing: 1, color: colors.secondaryText, fontFamily: "Geist-Regular, system-ui, sans-serif" }}>Time</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#95DEFE", fontFamily: "Geist-Bold, system-ui, sans-serif" }}>{time}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type GameTutorialMode = "modal" | "coach"
 
 type GameTutorialStep = {
@@ -588,7 +654,7 @@ export default function GameLayoutWeb() {
   const noHintsFaceTimerRef = useRef<any>(null)
 
   const [opponentScore, setOpponentScore] = useState<number | null>(null)
-  const [, setOpponentName] = useState<string>("Opponent")
+  const [opponentName, setOpponentName] = useState<string>("Opponent")
   const [opponentAvatar, setOpponentAvatar] = useState<string | null>(null)
   const [multiplayerTimeLimit, setMultiplayerTimeLimit] = useState<number | null>(null)
   const [multiplayerJoinedAt, setMultiplayerJoinedAt] = useState<number | null>(null)
@@ -600,6 +666,10 @@ export default function GameLayoutWeb() {
   const scoreRef = useRef(score)
   const multiplayerFirstMoveAtRef = useRef<number | null>(null)
   const singlePlayerSavedRef = useRef(false)
+  const raceFinalizePendingRef = useRef<{ score: number } | null>(null)
+  const pendingMatchResultRef = useRef<{ matchId: string; returnTo?: string } | null>(null)
+  const racePausedMsRef = useRef(0)
+  const racePauseStartedAtRef = useRef<number | null>(null)
 
   const triggerHaptic = useCallback((pattern: number | number[]) => {
     if (!hapticsEnabled) return
@@ -786,6 +856,41 @@ export default function GameLayoutWeb() {
     if (syncDisplayedScore) setScore(scoreRef.current)
   }, [])
 
+  const submitRaceScoreWhenReady = useCallback((finalScore: number) => {
+    if (!matchId) return
+    if (scoreSubmitted && !raceFinalizePendingRef.current) return
+
+    raceFinalizePendingRef.current = { score: finalScore }
+    if (scoringInProgressRef.current) return
+
+    const pending = raceFinalizePendingRef.current
+    raceFinalizePendingRef.current = null
+    setScoreSubmitted(true)
+    authService.getSessionUser().then((user) => {
+      if (user) submitScore(matchId, user.id, pending.score)
+    })
+  }, [matchId, scoreSubmitted])
+
+  const flushDeferredRaceCompletion = useCallback(() => {
+    const pendingScore = raceFinalizePendingRef.current
+    if (pendingScore && matchId) {
+      raceFinalizePendingRef.current = null
+      setScoreSubmitted(true)
+      authService.getSessionUser().then((user) => {
+        if (user) submitScore(matchId, user.id, pendingScore.score)
+      })
+    }
+
+    const pendingResult = pendingMatchResultRef.current
+    if (pendingResult) {
+      pendingMatchResultRef.current = null
+      router.replace({
+        pathname: "/matchresult",
+        params: { matchId: pendingResult.matchId, ...(pendingResult.returnTo ? { returnTo: pendingResult.returnTo } : {}) },
+      })
+    }
+  }, [matchId, router])
+
   const finishGameOver = useCallback((nextGameOver: { status: "win" | "lose"; message: string } | null) => {
     if (!nextGameOver) return
     pendingGameOverRef.current = null
@@ -898,6 +1003,8 @@ export default function GameLayoutWeb() {
     setFeedback(null)
     setDragOverCell(null)
     setActiveHint(null)
+    racePausedMsRef.current = 0
+    racePauseStartedAtRef.current = null
   }, [clearScoringFeedbackTimers])
 
   useEffect(() => {
@@ -923,6 +1030,8 @@ export default function GameLayoutWeb() {
       setScore(initialState.score)
       setFirstMoveActive(false)
       setFirstMovePlacements([])
+      racePausedMsRef.current = 0
+      racePauseStartedAtRef.current = null
       const user = await authService.getSessionUser()
       const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id)
       if (other) {
@@ -947,7 +1056,12 @@ export default function GameLayoutWeb() {
           if (profile?.full_name) setOpponentName(profile.full_name)
           if (profile?.avatar_url) setOpponentAvatar(profile.avatar_url)
           if (m.status === "finished") {
-            router.replace({ pathname: "/matchresult", params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } })
+            const nextResult = { matchId: m.id, ...(returnTo ? { returnTo } : {}) }
+            if (scoringInProgressRef.current) {
+              pendingMatchResultRef.current = { matchId: m.id, ...(returnTo ? { returnTo } : {}) }
+            } else {
+              router.replace({ pathname: "/matchresult", params: nextResult })
+            }
           }
         }
       })
@@ -966,40 +1080,35 @@ export default function GameLayoutWeb() {
       setFirstMoveCountdown(remaining)
       setTime(`0:${remaining.toString().padStart(2, "0")}`)
       if (remaining <= 0) {
-        setScoreSubmitted(true)
-        authService.getSessionUser().then((user) => {
-          if (user) submitScore(matchId, user.id, 0)
-        })
+        submitRaceScoreWhenReady(0)
       }
     }
 
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [matchId, multiplayerJoinedAt, multiplayerFirstMoveAt, scoreSubmitted])
+  }, [matchId, multiplayerJoinedAt, multiplayerFirstMoveAt, scoreSubmitted, submitRaceScoreWhenReady])
 
   useEffect(() => {
     if (!matchId || multiplayerFirstMoveAt == null || multiplayerTimeLimit == null || scoreSubmitted) return
     const endAt = multiplayerFirstMoveAt + multiplayerTimeLimit * 1000
 
     const tick = () => {
+      if (scoringInProgressRef.current) return
       const now = Date.now()
-      const remaining = Math.max(0, Math.ceil((endAt - now) / 1000))
+      const remaining = Math.max(0, Math.ceil((endAt + racePausedMsRef.current - now) / 1000))
       const mins = Math.floor(remaining / 60).toString().padStart(2, "0")
       const secs = (remaining % 60).toString().padStart(2, "0")
       setTime(`${mins}:${secs}`)
       if (remaining <= 0) {
-        setScoreSubmitted(true)
-        authService.getSessionUser().then((user) => {
-          if (user) submitScore(matchId, user.id, scoreRef.current)
-        })
+        submitRaceScoreWhenReady(scoreRef.current)
       }
     }
 
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [matchId, multiplayerFirstMoveAt, multiplayerTimeLimit, scoreSubmitted])
+  }, [matchId, multiplayerFirstMoveAt, multiplayerTimeLimit, scoreSubmitted, submitRaceScoreWhenReady])
 
 
 
@@ -1302,10 +1411,7 @@ export default function GameLayoutWeb() {
     }
 
     if (matchId && nextBlockCounts.every((c) => c === 0) && !scoreSubmitted) {
-      setScoreSubmitted(true)
-      authService.getSessionUser().then((user) => {
-        if (user) submitScore(matchId, user.id, newScore)
-      })
+      submitRaceScoreWhenReady(newScore)
     }
 
     return true
@@ -1421,11 +1527,15 @@ export default function GameLayoutWeb() {
         playSuccessSound()
         triggerHaptic([0, 12, 10, 12])
         finishGameOver(pendingGameOverRef.current)
+        flushDeferredRaceCompletion()
         return scoreFound
       }
 
       clearScoringFeedbackTimers()
       scoringInProgressRef.current = true
+      if (matchId && racePauseStartedAtRef.current == null) {
+        racePauseStartedAtRef.current = Date.now()
+      }
       setScoringInProgress(true)
       setFeedback(null)
       const scoringRunId = Date.now()
@@ -1458,9 +1568,14 @@ export default function GameLayoutWeb() {
         setScoredCells([])
         scoredCellsTimerRef.current = []
         scoringInProgressRef.current = false
+        if (matchId && racePauseStartedAtRef.current != null) {
+          racePausedMsRef.current += Date.now() - racePauseStartedAtRef.current
+          racePauseStartedAtRef.current = null
+        }
         setScoringInProgress(false)
         setFeedback(null)
         finishGameOver(pendingGameOverRef.current)
+        flushDeferredRaceCompletion()
       }, (events.length - 1) * 900 + 2000)
       scoredCellsTimerRef.current.push(clearTimer)
     }
@@ -1514,6 +1629,7 @@ export default function GameLayoutWeb() {
     boxSizing: "border-box",
     padding: "10px 10px 0",
     gap: 0,
+    fontFamily: "Geist-Regular, system-ui, sans-serif",
   }
 
   const tutorialStep: GameTutorialStep | null =
@@ -1815,10 +1931,30 @@ export default function GameLayoutWeb() {
           display: "flex", alignItems: "center", justifyContent: "center",
           padding: "0 4px", position: "relative",
         }}>
+          {matchId ? (
+            <Pressable onPress={() => setHomeConfirmationVisible(true)} style={{ position: "absolute", left: 8 }}>
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </Pressable>
+          ) : null}
           <span style={{
             fontSize: "clamp(20px, 2.8vw, 32px)", fontWeight: 900,
             color: colors.accent, fontFamily: "system-ui", letterSpacing: -1,
           }}>PALINDROME®</span>
+          {matchId ? (
+            <div style={{
+              position: "absolute",
+              right: 8,
+              padding: "6px 14px",
+              borderRadius: 12,
+              background: scoreSubmitted ? "rgba(245,158,11,0.2)" : "rgba(34,197,94,0.2)",
+              border: scoreSubmitted ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(34,197,94,0.4)",
+              animation: scoreSubmitted ? "none" : "pulse 2s infinite",
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: scoreSubmitted ? "#f59e0b" : "#22c55e" }}>
+                {scoreSubmitted ? "FINISHING..." : "RACE MODE"}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* ── Main 3-Column Area ── */}
@@ -1839,43 +1975,38 @@ export default function GameLayoutWeb() {
               justifyContent: "center", alignItems: "center",
               paddingRight: 8,
             }}>
-              {/* Player card */}
-              <div style={{
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 7,
-                padding: "12px 8px", borderRadius: 16,
-                background: theme === "dark" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
-                border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
-                boxShadow: theme === "dark" ? "0 4px 16px rgba(0,0,0,0.3)" : "0 4px 16px rgba(0,0,0,0.06)",
-                width: "100%", maxWidth: layoutConfig.leftPanelW - 16,
-              }}>
-                <Image
-                  source={avatar ? { uri: avatar } : require("../../assets/images/profile_ph.png")}
-                  style={{ width: 48, height: 48, borderRadius: 24, resizeMode: "contain", borderWidth: 2.5, borderColor: colors.accent }}
-                  accessibilityLabel="Profile"
-                />
-                <span style={{
-                  fontSize: 13, fontWeight: 700, color: colors.text, fontFamily: "system-ui",
-                  textAlign: "center", overflow: "hidden", textOverflow: "ellipsis",
-                  whiteSpace: "nowrap", maxWidth: layoutConfig.leftPanelW - 20,
-                }}>{userName}</span>
-              </div>
-
-              {/* Opponent card (multiplayer) */}
               {matchId ? (
+                <RacePlayerCard
+                  name={userName}
+                  avatar={avatar}
+                  score={score}
+                  time={time}
+                  isYou={true}
+                  isActive={!scoreSubmitted}
+                  theme={theme}
+                  colors={colors}
+                />
+              ) : (
                 <div style={{
-                  display: "flex", alignItems: "center", gap: 8, padding: "9px 10px",
-                  borderRadius: 12,
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 7,
+                  padding: "12px 8px", borderRadius: 16,
                   background: theme === "dark" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
                   border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.07)",
+                  boxShadow: theme === "dark" ? "0 4px 16px rgba(0,0,0,0.3)" : "0 4px 16px rgba(0,0,0,0.06)",
+                  width: "100%", maxWidth: layoutConfig.leftPanelW - 16,
                 }}>
-                  <Image source={opponentAvatar ? { uri: opponentAvatar } : require("../../assets/images/profile_ph.png")}
-                    style={{ width: 28, height: 28, borderRadius: 14, resizeMode: "contain" }} accessibilityLabel="Opponent" />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 10, color: colors.secondaryText, fontFamily: "system-ui" }}>Opponent</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: colors.accent }}>{opponentScore ?? "—"}</div>
-                  </div>
+                  <Image
+                    source={avatar ? { uri: avatar } : require("../../assets/images/profile_ph.png")}
+                    style={{ width: 48, height: 48, borderRadius: 24, resizeMode: "contain", borderWidth: 2.5, borderColor: colors.accent }}
+                    accessibilityLabel="Profile"
+                  />
+                  <span style={{
+                    fontSize: 13, fontWeight: 700, color: colors.text, fontFamily: "system-ui",
+                    textAlign: "center", overflow: "hidden", textOverflow: "ellipsis",
+                    whiteSpace: "nowrap", maxWidth: layoutConfig.leftPanelW - 20,
+                  }}>{userName}</span>
                 </div>
-              ) : null}
+              )}
 
               {/* Vertical color blocks */}
               <div id="tour-game-blocks" style={{
@@ -1900,6 +2031,17 @@ export default function GameLayoutWeb() {
             flex: 1, display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center", gap: 10, minWidth: 0, minHeight: 0,
           }}>
+            {matchId && layoutConfig.leftPanelW === 0 && (
+              <div style={{ display: "flex", gap: 12, width: "100%", maxWidth: layoutConfig.boardSize, justifyContent: "space-between" }}>
+                <div style={{ flex: 1 }}>
+                  <RacePlayerCard name={userName} avatar={avatar} score={score} time={time} isYou={true} isActive={!scoreSubmitted} theme={theme} colors={colors} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <RacePlayerCard name={opponentName} avatar={opponentAvatar} score={opponentScore} time={time} isYou={false} isActive={!scoreSubmitted} theme={theme} colors={colors} />
+                </div>
+              </div>
+            )}
+
             {/* Game Board */}
             <div
               id="tour-game-board"
@@ -2077,6 +2219,85 @@ export default function GameLayoutWeb() {
               paddingLeft: 8,
             }}>
 
+              {matchId ? (
+                <>
+                  <RacePlayerCard
+                    name={opponentName}
+                    avatar={opponentAvatar}
+                    score={opponentScore}
+                    time={time}
+                    isYou={false}
+                    isActive={!scoreSubmitted}
+                    theme={theme}
+                    colors={colors}
+                  />
+
+                  <div style={{
+                    padding: "14px 16px",
+                    borderRadius: 16,
+                    background: scoreSubmitted ? "rgba(245,158,11,0.15)" : "rgba(34,197,94,0.15)",
+                    border: scoreSubmitted ? "2px solid rgba(245,158,11,0.4)" : "2px solid rgba(34,197,94,0.4)",
+                    width: "100%",
+                    textAlign: "center",
+                    animation: scoreSubmitted ? "none" : "pulse 2s infinite",
+                  }}>
+                    <Ionicons name={scoreSubmitted ? "hourglass-outline" : "flash"} size={24} color={scoreSubmitted ? "#f59e0b" : "#22c55e"} />
+                    <div style={{ fontSize: 14, fontWeight: 800, color: scoreSubmitted ? "#f59e0b" : "#22c55e", marginTop: 4 }}>
+                      {scoreSubmitted ? "WAITING..." : "LIVE RACE"}
+                    </div>
+                  </div>
+
+                  {firstMoveCountdown != null ? (
+                    <div style={{ padding: "10px 14px", borderRadius: 14, textAlign: "center", width: "100%", backgroundColor: firstMoveCountdown <= 5 ? "rgba(239,68,68,0.9)" : "rgba(34,197,94,0.9)" }}>
+                      <span style={{ fontFamily: "Geist-Bold", fontSize: 12, color: "#FFFFFF" }}>First move in {firstMoveCountdown}s</span>
+                    </div>
+                  ) : null}
+
+                  <div style={{ height: 1, background: theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", width: "100%" }} />
+
+                  <div style={{ display: "flex", gap: 8, width: "100%" }}>
+                    <Pressable onPress={() => setHomeConfirmationVisible(true)} style={{ flex: 1 }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "11px 6px", borderRadius: 14, cursor: "pointer", background: "linear-gradient(135deg, #ef4444, #dc2626)", transition: "transform 0.1s" }}
+                        onMouseDown={e => e.currentTarget.style.transform = "scale(0.93)"}
+                        onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                        onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                      >
+                        <Ionicons name="flag" size={20} color="#fff" />
+                        <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>LEAVE</span>
+                      </div>
+                    </Pressable>
+                    <Pressable onPress={() => router.push("/")} style={{ flex: 1 }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "11px 6px", borderRadius: 14, cursor: "pointer", background: theme === "dark" ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.06)", border: theme === "dark" ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.08)" }}
+                        onMouseDown={e => e.currentTarget.style.transform = "scale(0.93)"}
+                        onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                        onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                      >
+                        <Ionicons name="home" size={20} color={colors.text} />
+                        <span style={{ fontSize: 9, fontWeight: 700, color: colors.text, letterSpacing: 0.5, opacity: 0.8 }}>HOME</span>
+                      </div>
+                    </Pressable>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, width: "100%" }}>
+                    {[
+                      { icon: "settings-sharp" as const, onPress: () => setSettingsVisible(true), label: "SETTINGS" },
+                      { icon: "book-outline" as const, onPress: () => setRulesVisible(true), label: "RULES" },
+                    ].map(({ icon, onPress, label }) => (
+                      <Pressable key={label} onPress={onPress} style={{ flex: 1 }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, padding: "9px 4px", borderRadius: 14, cursor: "pointer", background: theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", border: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)", transition: "transform 0.1s" }}
+                          onMouseDown={e => e.currentTarget.style.transform = "scale(0.93)"}
+                          onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                        >
+                          <Ionicons name={icon} size={18} color={colors.text} />
+                          <span style={{ fontSize: 8, fontWeight: 700, color: colors.text, letterSpacing: 0.5, opacity: 0.7 }}>{label}</span>
+                        </div>
+                      </Pressable>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
               {/* Score card */}
               <div id="tour-game-status-score" style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
@@ -2239,6 +2460,8 @@ export default function GameLayoutWeb() {
                   </Pressable>
                 ))}
               </div>
+                </>
+              )}
             </div>
           )}
 
@@ -2251,6 +2474,33 @@ export default function GameLayoutWeb() {
                 background: theme === "dark" ? "rgba(5,5,30,0.97)" : "rgba(255,255,255,0.97)",
                 borderTop: theme === "dark" ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
               }}>
+                {matchId ? (
+                  <>
+                    <div style={{ padding: "4px 10px", borderRadius: 8, background: scoreSubmitted ? "rgba(245,158,11,0.2)" : "rgba(34,197,94,0.2)" }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: scoreSubmitted ? "#f59e0b" : "#22c55e" }}>{scoreSubmitted ? "WAITING" : "RACING"}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, position: "relative", overflow: "visible" }}>
+                      <Ionicons name="trophy" size={13} color="#FFD700" />
+                      <span style={{ fontSize: 15, fontWeight: 800, color: colors.accent, fontFamily: "system-ui" }}>{score}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <Ionicons name="time-outline" size={13} color="#95DEFE" />
+                      <span style={{ fontSize: 15, fontWeight: 800, color: "#95DEFE", fontFamily: "system-ui" }}>{time}</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: colors.secondaryText }}>OPP {opponentScore ?? "--"}</span>
+                    <Pressable onPress={() => setHomeConfirmationVisible(true)}>
+                      <div style={{ width: 34, height: 34, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(239,68,68,0.2)" }}>
+                        <Ionicons name="flag" size={15} color="#ef4444" />
+                      </div>
+                    </Pressable>
+                    <Pressable onPress={() => setSettingsVisible(true)}>
+                      <div style={{ width: 34, height: 34, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", background: theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.07)" }}>
+                        <Ionicons name="settings-sharp" size={15} color={colors.text} />
+                      </div>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
                 <div id="tour-game-status-score" style={{ display: "flex", alignItems: "center", gap: 5, position: "relative", overflow: "visible" }}>
                   <Ionicons name="trophy" size={13} color="#FFD700" />
                   <span style={{
@@ -2304,6 +2554,8 @@ export default function GameLayoutWeb() {
                     </div>
                   </Pressable>
                 ))}
+                  </>
+                )}
               </div>
             </div>
           )}

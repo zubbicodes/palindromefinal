@@ -145,7 +145,8 @@ export default function LoginWeb() {
             ? 'linear-gradient(to right, #000017, #000074)'
             : '#FFFFFF',
           fontFamily: 'Geist, sans-serif',
-          overflowY: windowWidth < 900 ? 'auto' : 'hidden',
+          overflowY: 'auto',
+          overflowX: 'hidden',
           boxSizing: 'border-box',
         }}
       >
@@ -194,9 +195,9 @@ export default function LoginWeb() {
             maxWidth: '1100px',
             display: 'flex',
             justifyContent: 'center',
-            alignItems: 'flex-start',
-            padding: '60px 40px',
-            gap: '60px',
+            alignItems: windowWidth < 900 ? 'center' : 'flex-start',
+            padding: windowWidth < 900 ? '28px 20px 40px' : 'clamp(32px, 6vh, 60px) 40px',
+            gap: windowWidth < 900 ? '24px' : '60px',
             flexWrap: 'wrap',
             boxSizing: 'border-box',
           }}
@@ -205,17 +206,17 @@ export default function LoginWeb() {
           <div
             style={{
               flex: 1,
-              minWidth: '360px',
+              minWidth: windowWidth < 900 ? '0' : '360px',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'flex-start',
-              marginTop: '60px'
+              alignItems: windowWidth < 900 ? 'center' : 'flex-start',
+              marginTop: windowWidth < 900 ? '0' : 'clamp(16px, 6vh, 60px)'
             }}
           >
-            <div style={{ width: '400px', textAlign: 'right' }}>
+            <div style={{ width: 'min(400px, 100%)', textAlign: windowWidth < 900 ? 'center' : 'right' }}>
               <h1
                 style={{
-                  fontSize: '36px',
+                  fontSize: windowWidth < 520 ? '28px' : '36px',
                   fontWeight: 700,
                   marginBottom: '10px',
                   color: colors.text,
@@ -238,10 +239,10 @@ export default function LoginWeb() {
           <div
             style={{
               flex: 1,
-              minWidth: '400px',
+              minWidth: '0',
               maxWidth: '400px',
               width: '100%',
-              marginTop: '80px'
+              marginTop: windowWidth < 900 ? '0' : 'clamp(24px, 8vh, 80px)'
             }}
           >
             {/* Bordered Card */}

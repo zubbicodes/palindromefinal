@@ -342,9 +342,14 @@ export default function TurnGameNative() {
   const lastMoveTime = useRef<number>(Date.now());
 
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null);
+  const [pendingPlacedCell, setPendingPlacedCell] = useState<{ row: number; col: number; colorIndex: number } | null>(null);
   const [feedback, setFeedback] = useState<{ text: string; color: string; id: number } | null>(null);
   const [scoredCells, setScoredCells] = useState<string[]>([]);
+  const [scoredCellsRun, setScoredCellsRun] = useState(0);
   const scoredCellsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scoringInProgress, setScoringInProgress] = useState(false);
+  const scoringInProgressRef = useRef(false);
+  const pendingGameOverInfoRef = useRef<GameOverInfo | null>(null);
   const timeoutSubmittingRef = useRef(false);
 
   const gridSize = GRID_SIZE;
@@ -371,6 +376,19 @@ export default function TurnGameNative() {
       ? turnState.board
       : Array.from({ length: gridSize }, () => Array(gridSize).fill(null));
   const bulldogPositions = useMemo(() => turnState?.bulldog_positions ?? [], [turnState]);
+
+  const finishTurnScoring = useCallback(() => {
+    if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current);
+    scoredCellsTimerRef.current = null;
+    setScoredCells([]);
+    setFeedback(null);
+    scoringInProgressRef.current = false;
+    setScoringInProgress(false);
+    if (pendingGameOverInfoRef.current) {
+      setGameOverInfo(pendingGameOverInfoRef.current);
+      pendingGameOverInfoRef.current = null;
+    }
+  }, []);
 
   // ── Layout ──
   const boardSize = useMemo(() => {
@@ -492,18 +510,20 @@ export default function TurnGameNative() {
   useEffect(() => {
     if (turnState?.finished_reason && !gameOverInfo && userId) {
       const isP1 = userId === turnState.player1_user_id;
-      setGameOverInfo({
+      const nextGameOverInfo = {
         winner: turnState.winner_user_id,
         reason: turnState.finished_reason,
         myScore: isP1 ? turnState.player1_score : turnState.player2_score,
         opScore: isP1 ? turnState.player2_score : turnState.player1_score,
-      });
+      };
+      if (scoringInProgressRef.current) pendingGameOverInfoRef.current = nextGameOverInfo;
+      else setGameOverInfo(nextGameOverInfo);
     }
   }, [turnState, gameOverInfo, userId]);
 
   // ── Chess clock tick ──
   useEffect(() => {
-    if (!turnState || isGameOver || !turnState.current_turn_user_id) return;
+    if (!turnState || isGameOver || !turnState.current_turn_user_id || scoringInProgress) return;
     const interval = setInterval(() => {
       const elapsed = Math.max(0, Date.now() - turnStartedLocal.current);
       const isP1Turn = turnState.current_turn_user_id === turnState.player1_user_id;
@@ -533,7 +553,7 @@ export default function TurnGameNative() {
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [turnState, isGameOver, matchId]);
+  }, [turnState, isGameOver, matchId, scoringInProgress]);
 
   // Cleanup scoredCells timer
   useEffect(() => {
@@ -553,29 +573,40 @@ export default function TurnGameNative() {
       _colorIdx: number,
       currentGrid: (number | null)[][],
       previousGrid?: (number | null)[][]
-    ): { scoreFound: number; segment: { r: number; c: number }[]; segmentLength: number } => {
+    ): { scoreFound: number; events: { score: number; segment: { r: number; c: number }[]; segmentLength: number }[] } => {
       const { score, events } = scoreNewPalindromes([{ row, col }], currentGrid, bulldogPositions, 3, previousGrid);
-      const topEvent = events[0];
-      const segmentKeys = new Map<string, { r: number; c: number }>();
-      events.forEach((event) => {
-        event.segment.forEach((tile) => {
-          segmentKeys.set(`${tile.r},${tile.c}`, { r: tile.r, c: tile.c });
-        });
-      });
       return {
         scoreFound: score,
-        segment: [...segmentKeys.values()],
-        segmentLength: topEvent?.segmentLength ?? 0,
+        events: events.map((event) => ({
+          score: event.score,
+          segment: event.segment,
+          segmentLength: event.segmentLength,
+        })),
       };
     },
     [bulldogPositions]
   );
 
+  const getScoringFeedback = useCallback((length: number) => {
+    if (length >= 9) return { text: 'LEGENDARY!', color: '#F472B6' };
+    if (length === 7) return { text: 'AMAZING!', color: '#A78BFA' };
+    if (length === 5) return { text: 'GREAT!', color: '#60A5FA' };
+    return { text: 'GOOD!', color: '#4ADE80' };
+  }, []);
+
+  const waitForTurnScoringFrame = useCallback((ms: number) => new Promise<void>((resolve) => {
+    if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current);
+    scoredCellsTimerRef.current = setTimeout(() => {
+      scoredCellsTimerRef.current = null;
+      resolve();
+    }, ms);
+  }), []);
+
   // ── Handle drop ──
   const handleDrop = useCallback(
     async (row: number, col: number, colorIndex: number) => {
       setDragOverCell(null);
-      if (!isMyTurn || isGameOver || !matchId || !userId || !turnState) {
+      if (!isMyTurn || isGameOver || !matchId || !userId || !turnState || scoringInProgressRef.current) {
         playErrorSound();
         triggerHaptic('error');
         return;
@@ -598,7 +629,7 @@ export default function TurnGameNative() {
 
       const tempGrid = board.map((r) => [...r]);
       tempGrid[row][col] = colorIndex;
-      const { scoreFound: scoreDelta, segment, segmentLength } = checkAndScore(row, col, colorIndex, tempGrid, board);
+      const { scoreFound: scoreDelta, events: scoringEvents } = checkAndScore(row, col, colorIndex, tempGrid, board);
       const isLastOwnBlock = myBlocks.reduce((total, count) => total + count, 0) === 1;
 
       if (scoreDelta <= 0 && !isLastOwnBlock) {
@@ -611,33 +642,24 @@ export default function TurnGameNative() {
       triggerHaptic('light');
       const timeSpent = Math.max(0, Date.now() - getTurnStartedAtMs(turnState));
       lastMoveTime.current = Date.now();
+      setPendingPlacedCell({ row, col, colorIndex });
 
-      let text = 'GOOD!';
-      let color = '#4ADE80';
-      if (scoreDelta <= 0) {
-        text = 'DONE!';
-        color = '#95DEFE';
-      } else if (segmentLength >= 9) {
-        text = 'LEGENDARY!';
-        color = '#F472B6';
-      } else if (segmentLength === 7) {
-        text = 'AMAZING!';
-        color = '#A78BFA';
-      } else if (segmentLength === 5) {
-        text = 'GREAT!';
-        color = '#60A5FA';
-      }
       if (palindromeAnimationsEnabled) {
-        setFeedback({ text, color, id: Date.now() });
-        setTimeout(() => setFeedback(null), 1500);
+        scoringInProgressRef.current = true;
+        setScoringInProgress(true);
+        const eventsToAnimate = scoringEvents.length > 0
+          ? scoringEvents
+          : [{ score: 0, segment: [{ r: row, c: col }], segmentLength: 0 }];
 
-        const keys = segment.length > 0 ? segment.map((t) => `${t.r},${t.c}`) : [`${row},${col}`];
-        setScoredCells(keys);
-        if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current);
-        scoredCellsTimerRef.current = setTimeout(() => {
-          setScoredCells([]);
-          scoredCellsTimerRef.current = null;
-        }, 2000);
+        for (let index = 0; index < eventsToAnimate.length; index += 1) {
+          const event = eventsToAnimate[index];
+          const feedbackForLength = scoreDelta <= 0 ? { text: 'DONE!', color: '#95DEFE' } : getScoringFeedback(event.segmentLength);
+          setFeedback({ text: feedbackForLength.text, color: feedbackForLength.color, id: Date.now() + index });
+          setScoredCells(event.segment.map((tile) => `${tile.r},${tile.c}`));
+          setScoredCellsRun(Date.now() + index);
+          await waitForTurnScoringFrame(index === eventsToAnimate.length - 1 ? 2000 : 900);
+        }
+        finishTurnScoring();
       }
 
       try {
@@ -649,8 +671,10 @@ export default function TurnGameNative() {
         setLocalTimeP2(newState.player2_time_ms);
         turnStartedLocal.current = getTurnStartedAtMs(newState);
         lastMoveTime.current = getTurnStartedAtMs(newState);
+        setPendingPlacedCell(null);
       } catch (err) {
         console.error('Move submit error:', err);
+        setPendingPlacedCell(null);
         playErrorSound();
         triggerHaptic('error');
       }
@@ -666,9 +690,12 @@ export default function TurnGameNative() {
       playErrorSound,
       playSuccessSound,
       palindromeAnimationsEnabled,
+      finishTurnScoring,
+      getScoringFeedback,
       triggerHaptic,
       turnState,
       userId,
+      waitForTurnScoringFrame,
     ]
   );
 
@@ -776,9 +803,13 @@ export default function TurnGameNative() {
                   if (col === center && row >= center - halfWord && row < center - halfWord + word.length) {
                     letter = word[row - (center - halfWord)];
                   }
-                  const cellColor = board[row]?.[col] ?? null;
+                  const cellColor = pendingPlacedCell?.row === row && pendingPlacedCell.col === col
+                    ? pendingPlacedCell.colorIndex
+                    : board[row]?.[col] ?? null;
                   const isHovered = dragOverCell?.row === row && dragOverCell?.col === col;
                   const isScored = scoredCells.includes(`${row},${col}`);
+                  const scoreIndex = isScored ? scoredCells.indexOf(`${row},${col}`) : 0;
+                  const scoredScale = isScored ? (scoredCellsRun % 2 === 0 ? 1.14 : 1.1) : 1;
 
                   return (
                     <View
@@ -812,7 +843,14 @@ export default function TurnGameNative() {
                           colors={[colorGradients[cellColor][0], colorGradients[cellColor][1]]}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
-                          style={[StyleSheet.absoluteFill, { borderRadius: 6 }]}
+                          style={[
+                            StyleSheet.absoluteFill,
+                            {
+                              borderRadius: 6,
+                              transform: [{ scale: scoredScale }],
+                              opacity: isScored && scoreIndex % 2 === 1 ? 0.96 : 1,
+                            },
+                          ]}
                         />
                       )}
                       {cellColor !== null && colorBlindEnabled && !letter && (

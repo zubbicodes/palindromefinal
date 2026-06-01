@@ -181,9 +181,14 @@ export default function TurnGameWeb() {
   const lastMoveTime = useRef<number>(Date.now())
 
   const [dragOverCell, setDragOverCell] = useState<{ row: number; col: number } | null>(null)
+  const [pendingPlacedCell, setPendingPlacedCell] = useState<{ row: number; col: number; colorIndex: number } | null>(null)
   const [feedback, setFeedback] = useState<{ text: string; color: string; id: number } | null>(null)
   const [scoredCells, setScoredCells] = useState<string[]>([])
+  const [scoredCellsRun, setScoredCellsRun] = useState(0)
   const scoredCellsTimerRef = useRef<any>(null)
+  const [scoringInProgress, setScoringInProgress] = useState(false)
+  const scoringInProgressRef = useRef(false)
+  const pendingGameOverInfoRef = useRef<GameOverInfo | null>(null)
   const timeoutSubmittingRef = useRef(false)
   const [, forceUpdate] = useState(0)
 
@@ -205,6 +210,25 @@ export default function TurnGameWeb() {
   const opScore = turnState ? (isPlayer1 ? turnState.player2_score : turnState.player1_score) : 0
   const board: (number | null)[][] = turnState?.board?.length === gridSize ? turnState.board : Array.from({ length: gridSize }, () => Array(gridSize).fill(null))
   const bulldogPositions = useMemo(() => turnState?.bulldog_positions ?? [], [turnState])
+
+  const finishTurnScoring = useCallback(() => {
+    if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current)
+    scoredCellsTimerRef.current = null
+    setScoredCells([])
+    setFeedback(null)
+    scoringInProgressRef.current = false
+    setScoringInProgress(false)
+    if (pendingGameOverInfoRef.current) {
+      setGameOverInfo(pendingGameOverInfoRef.current)
+      pendingGameOverInfoRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current)
+    }
+  }, [])
 
   // ── Layout ──
   useEffect(() => { const h = () => forceUpdate(n => n + 1); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h) }, [])
@@ -284,12 +308,14 @@ export default function TurnGameWeb() {
       lastMoveTime.current = getTurnStartedAtMs(s)
       if (s.finished_reason && !gameOverInfo) {
         const isP1 = userId === s.player1_user_id
-        setGameOverInfo({
+        const nextGameOverInfo = {
           winner: s.winner_user_id,
           reason: s.finished_reason,
           myScore: isP1 ? s.player1_score : s.player2_score,
           opScore: isP1 ? s.player2_score : s.player1_score,
-        })
+        }
+        if (scoringInProgressRef.current) pendingGameOverInfoRef.current = nextGameOverInfo
+        else setGameOverInfo(nextGameOverInfo)
       }
     })
     return unsub
@@ -297,7 +323,7 @@ export default function TurnGameWeb() {
 
   // ── Chess clock tick ──
   useEffect(() => {
-    if (!turnState || isGameOver || !turnState.current_turn_user_id) return
+    if (!turnState || isGameOver || !turnState.current_turn_user_id || scoringInProgress) return
     const interval = setInterval(() => {
       const elapsed = Math.max(0, Date.now() - turnStartedLocal.current)
       const isP1Turn = turnState.current_turn_user_id === turnState.player1_user_id
@@ -327,43 +353,59 @@ export default function TurnGameWeb() {
       }
     }, 100)
     return () => clearInterval(interval)
-  }, [turnState, isGameOver, matchId])
+  }, [turnState, isGameOver, matchId, scoringInProgress])
 
   // ── Game over detection ──
   useEffect(() => {
     if (turnState?.finished_reason && !gameOverInfo && userId) {
       const isP1 = userId === turnState.player1_user_id
-      setGameOverInfo({
+      const nextGameOverInfo = {
         winner: turnState.winner_user_id,
         reason: turnState.finished_reason,
         myScore: isP1 ? turnState.player1_score : turnState.player2_score,
         opScore: isP1 ? turnState.player2_score : turnState.player1_score,
-      })
+      }
+      if (scoringInProgressRef.current) pendingGameOverInfoRef.current = nextGameOverInfo
+      else setGameOverInfo(nextGameOverInfo)
     }
   }, [turnState, gameOverInfo, userId])
 
   // ── Palindrome check (client-side for scoring) ──
-  const checkAndScore = useCallback((row: number, col: number, _colorIdx: number, currentGrid: (number | null)[][], previousGrid?: (number | null)[][]): { scoreFound: number, segment: {r: number, c: number}[], segmentLength: number } => {
+  const checkAndScore = useCallback((row: number, col: number, _colorIdx: number, currentGrid: (number | null)[][], previousGrid?: (number | null)[][]): {
+    scoreFound: number
+    events: { score: number; segment: { r: number; c: number }[]; segmentLength: number }[]
+  } => {
     const { score, events } = scoreNewPalindromes([{ row, col }], currentGrid, bulldogPositions, 3, previousGrid)
-    const topEvent = events[0]
-    const segmentKeys = new Map<string, { r: number; c: number }>()
-    events.forEach((event) => {
-      event.segment.forEach((tile) => {
-        segmentKeys.set(`${tile.r},${tile.c}`, { r: tile.r, c: tile.c })
-      })
-    })
     return {
       scoreFound: score,
-      segment: [...segmentKeys.values()],
-      segmentLength: topEvent?.segmentLength ?? 0,
+      events: events.map((event) => ({
+        score: event.score,
+        segment: event.segment,
+        segmentLength: event.segmentLength,
+      })),
     }
   }, [bulldogPositions])
+
+  const getScoringFeedback = (length: number) => {
+    if (length >= 9) return { text: "LEGENDARY!", color: "#F472B6" }
+    if (length === 7) return { text: "AMAZING!", color: "#A78BFA" }
+    if (length === 5) return { text: "GREAT!", color: "#60A5FA" }
+    return { text: "GOOD!", color: "#4ADE80" }
+  }
+
+  const waitForTurnScoringFrame = (ms: number) => new Promise<void>((resolve) => {
+    if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current)
+    scoredCellsTimerRef.current = setTimeout(() => {
+      scoredCellsTimerRef.current = null
+      resolve()
+    }, ms)
+  })
 
   // ── Handle drop ──
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, row: number, col: number) => {
     e.preventDefault()
     setDragOverCell(null)
-    if (!isMyTurn || isGameOver || !matchId || !userId || !turnState) { playErrorSound(); return }
+    if (!isMyTurn || isGameOver || !matchId || !userId || !turnState || scoringInProgressRef.current) { playErrorSound(); return }
 
     const colorIndex = parseInt(e.dataTransfer.getData("color"), 10)
     if (isNaN(colorIndex) || colorIndex < 0 || colorIndex >= NUM_COLORS) { playErrorSound(); return }
@@ -373,7 +415,7 @@ export default function TurnGameWeb() {
     // Client-side scoring check
     const tempGrid = board.map(r => [...r])
     tempGrid[row][col] = colorIndex
-    const { scoreFound: scoreDelta, segment, segmentLength } = checkAndScore(row, col, colorIndex, tempGrid, board)
+    const { scoreFound: scoreDelta, events: scoringEvents } = checkAndScore(row, col, colorIndex, tempGrid, board)
     const isLastOwnBlock = myBlocks.reduce((total, count) => total + count, 0) === 1
 
     if (scoreDelta <= 0 && !isLastOwnBlock) {
@@ -384,22 +426,27 @@ export default function TurnGameWeb() {
     playDropSound()
     const timeSpent = Math.max(0, Date.now() - getTurnStartedAtMs(turnState))
     lastMoveTime.current = Date.now()
+    setPendingPlacedCell({ row, col, colorIndex })
 
     if (palindromeAnimationsEnabled) {
-      // Show feedback
-      let text = "GOOD!", color = "#4ADE80"
-      if (scoreDelta <= 0) { text = "DONE!"; color = "#95DEFE" }
-      else if (segmentLength >= 9) { text = "LEGENDARY!"; color = "#F472B6" }
-      else if (segmentLength === 7) { text = "AMAZING!"; color = "#A78BFA" }
-      else if (segmentLength === 5) { text = "GREAT!"; color = "#60A5FA" }
-      setFeedback({ text, color, id: Date.now() })
-      setTimeout(() => setFeedback(null), 2000)
+      scoringInProgressRef.current = true
+      setScoringInProgress(true)
+      const eventsToAnimate = scoringEvents.length > 0
+        ? scoringEvents
+        : [{ score: 0, segment: [{ r: row, c: col }], segmentLength: 0 }]
 
-      // Highlight scored cells
-      const keys: string[] = segment.length > 0 ? segment.map(t => `${t.r},${t.c}`) : [`${row},${col}`]
-      setScoredCells(keys)
-      if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current)
-      scoredCellsTimerRef.current = setTimeout(() => { setScoredCells([]); scoredCellsTimerRef.current = null }, 2000)
+      for (let index = 0; index < eventsToAnimate.length; index += 1) {
+        const event = eventsToAnimate[index]
+        const feedbackForLength = scoreDelta <= 0
+          ? { text: "DONE!", color: "#95DEFE" }
+          : getScoringFeedback(event.segmentLength)
+        setFeedback({ text: feedbackForLength.text, color: feedbackForLength.color, id: Date.now() + index })
+        setScoredCells(event.segment.map((tile) => `${tile.r},${tile.c}`))
+        setScoredCellsRun(Date.now() + index)
+        await waitForTurnScoringFrame(index === eventsToAnimate.length - 1 ? 2000 : 900)
+      }
+
+      finishTurnScoring()
     }
 
     try {
@@ -410,8 +457,10 @@ export default function TurnGameWeb() {
       setLocalTimeP2(newState.player2_time_ms)
       turnStartedLocal.current = getTurnStartedAtMs(newState)
       lastMoveTime.current = getTurnStartedAtMs(newState)
+      setPendingPlacedCell(null)
     } catch (err) {
       console.error("Move submit error:", err)
+      setPendingPlacedCell(null)
       playErrorSound()
     }
   }
@@ -523,7 +572,11 @@ export default function TurnGameWeb() {
         @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-60px); opacity: 0; } }
         @keyframes pulse { 0%,100% { opacity: 0.5; transform: scale(0.97); } 50% { opacity: 1; transform: scale(1.03); } }
         @keyframes scorePulse { 0% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); } 35% { box-shadow: 0 0 22px rgba(255,215,0,0.85); transform: scale(1.06); } 100% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); } }
+        @keyframes scorePulseAlt { 0% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); } 35% { box-shadow: 0 0 22px rgba(255,215,0,0.85); transform: scale(1.06); } 100% { box-shadow: 0 0 0 rgba(255,215,0,0); transform: scale(1); } }
+        @keyframes scoredBlockZoom { 0% { transform: scale(1); filter: brightness(1); } 35% { transform: scale(1.2); filter: brightness(1.22); } 70% { transform: scale(1.1); filter: brightness(1.1); } 100% { transform: scale(1); filter: brightness(1); } }
+        @keyframes scoredBlockZoomAlt { 0% { transform: scale(1); filter: brightness(1); } 35% { transform: scale(1.2); filter: brightness(1.22); } 70% { transform: scale(1.1); filter: brightness(1.1); } 100% { transform: scale(1); filter: brightness(1); } }
         @keyframes scoreShimmer { 0% { opacity: 0; transform: translateX(-120%) skewX(-18deg); } 30% { opacity: 0.85; } 100% { opacity: 0; transform: translateX(120%) skewX(-18deg); } }
+        @keyframes scoreShimmerAlt { 0% { opacity: 0; transform: translateX(-120%) skewX(-18deg); } 30% { opacity: 0.85; } 100% { opacity: 0; transform: translateX(120%) skewX(-18deg); } }
       `}</style>
 
       {/* Top Bar */}
@@ -588,10 +641,15 @@ export default function TurnGameWeb() {
                     let letter: string | null = null
                     if (row === center && col >= center - halfWord && col < center - halfWord + word.length) letter = word[col - (center - halfWord)]
                     if (col === center && row >= center - halfWord && row < center - halfWord + word.length) letter = word[row - (center - halfWord)]
-                    const cellColor = board[row]?.[col] ?? null
+                    const cellColor = pendingPlacedCell?.row === row && pendingPlacedCell.col === col
+                      ? pendingPlacedCell.colorIndex
+                      : board[row]?.[col] ?? null
                     const isHovered = dragOverCell?.row === row && dragOverCell?.col === col
                     const isScored = scoredCells.includes(`${row},${col}`)
                     const scoreIndex = isScored ? scoredCells.indexOf(`${row},${col}`) : 0
+                    const scorePulseName = scoredCellsRun % 2 === 0 ? "scorePulse" : "scorePulseAlt"
+                    const scoredBlockZoomName = scoredCellsRun % 2 === 0 ? "scoredBlockZoom" : "scoredBlockZoomAlt"
+                    const scoreShimmerName = scoredCellsRun % 2 === 0 ? "scoreShimmer" : "scoreShimmerAlt"
                     const cellStyle: React.CSSProperties = {
                       width: layoutConfig.cellSize, height: layoutConfig.cellSize,
                       borderWidth: 1, borderStyle: "solid", borderColor: "#CCDAE466", borderRadius: 8, margin: 3,
@@ -600,7 +658,7 @@ export default function TurnGameWeb() {
                       transition: "all 0.15s", position: "relative", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.05)",
                     }
                     if (isHovered) { cellStyle.backgroundColor = isDark ? "rgba(100,200,255,0.4)" : "rgba(100,200,255,0.3)"; cellStyle.borderColor = isDark ? "rgba(100,200,255,0.8)" : "rgba(50,150,255,0.6)"; cellStyle.transform = "scale(1.05)" }
-                    if (isScored) { cellStyle.borderColor = "rgba(255,215,0,0.95)"; cellStyle.borderWidth = 2; cellStyle.animation = `scorePulse 0.8s ease-out ${scoreIndex * 0.15}s both` }
+                    if (isScored) { cellStyle.borderColor = "rgba(255,215,0,0.95)"; cellStyle.borderWidth = 2; cellStyle.animation = `${scorePulseName} 0.8s ease-out ${scoreIndex * 0.15}s both` }
 
                     return (
                       <div key={col}
@@ -610,13 +668,13 @@ export default function TurnGameWeb() {
                         onDrop={(e) => handleDrop(e, row, col)}
                         style={cellStyle}
                       >
-                        {cellColor !== null && <div style={{ width: "100%", height: "100%", borderRadius: 6, background: `linear-gradient(to right bottom, ${colorGradients[cellColor][0]}, ${colorGradients[cellColor][1]})`, position: "absolute", top: 0, left: 0, boxShadow: "0 2px 5px rgba(0,0,0,0.2)" }} />}
+                        {cellColor !== null && <div style={{ width: "100%", height: "100%", borderRadius: 6, background: `linear-gradient(to right bottom, ${colorGradients[cellColor][0]}, ${colorGradients[cellColor][1]})`, position: "absolute", top: 0, left: 0, boxShadow: "0 2px 5px rgba(0,0,0,0.2)", transformOrigin: "center", animation: isScored ? `${scoredBlockZoomName} 0.8s ease-out ${scoreIndex * 0.15}s both` : undefined }} />}
                         {isScored && (
                           <div style={{ position: "absolute", inset: 0, borderRadius: 6, overflow: "hidden", zIndex: 1, pointerEvents: "none" }}>
                             <div style={{
                               position: "absolute", top: "-20%", bottom: "-20%", width: "60%",
                               background: "linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.85), rgba(255,255,255,0))",
-                              animation: `scoreShimmer 0.8s ease-out ${scoreIndex * 0.15}s both`,
+                              animation: `${scoreShimmerName} 0.8s ease-out ${scoreIndex * 0.15}s both`,
                             }} />
                           </div>
                         )}

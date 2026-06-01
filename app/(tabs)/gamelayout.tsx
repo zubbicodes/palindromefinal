@@ -633,6 +633,8 @@ export default function GameLayout() {
   const [wrongForcedTries, setWrongForcedTries] = useState(0);
 
   const [scoredCells, setScoredCells] = useState<string[]>([]);
+  const [scoringInProgress, setScoringInProgress] = useState(false);
+  const scoringInProgressRef = useRef(false);
   const scoredCellsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -654,6 +656,10 @@ export default function GameLayout() {
   const secondsElapsedRef = useRef(secondsElapsed);
   const singlePlayerSavedRef = useRef(false);
   const multiplayerFirstMoveAtRef = useRef<number | null>(null);
+  const raceFinalizePendingRef = useRef<{ score: number } | null>(null);
+  const pendingMatchResultRef = useRef<{ matchId: string; returnTo?: string } | null>(null);
+  const racePausedMsRef = useRef(0);
+  const racePauseStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     gridStateRef.current = gridState;
@@ -725,6 +731,10 @@ export default function GameLayout() {
     wrongForcedTriesRef.current = 0;
     singlePlayerSavedRef.current = false;
     setScoredCells([]);
+    scoringInProgressRef.current = false;
+    setScoringInProgress(false);
+    racePausedMsRef.current = 0;
+    racePauseStartedAtRef.current = null;
     if (scoredCellsTimerRef.current) {
       clearTimeout(scoredCellsTimerRef.current);
       scoredCellsTimerRef.current = null;
@@ -776,8 +786,11 @@ export default function GameLayout() {
       setBlockCounts([...initialState.blockCounts]);
       setBulldogPositions([...initialState.bulldogPositions]);
       setScore(initialState.score);
+      scoreRef.current = initialState.score;
       setFirstMoveActive(false);
       setFirstMovePlacements([]);
+      racePausedMsRef.current = 0;
+      racePauseStartedAtRef.current = null;
       const user = await authService.getSessionUser();
       const other = (m.match_players ?? []).find((p: MatchPlayer) => p.user_id !== user?.id);
       if (other) {
@@ -803,7 +816,12 @@ export default function GameLayout() {
           if (profile?.full_name) setOpponentName(profile.full_name);
           if (profile?.avatar_url) setOpponentAvatar(profile.avatar_url);
           if (m.status === 'finished') {
-            router.replace({ pathname: '/matchresult' as any, params: { matchId: m.id, ...(returnTo ? { returnTo } : {}) } });
+            const nextResult = { matchId: m.id, ...(returnTo ? { returnTo } : {}) };
+            if (scoringInProgressRef.current) {
+              pendingMatchResultRef.current = nextResult;
+            } else {
+              router.replace({ pathname: '/matchresult' as any, params: nextResult });
+            }
           }
         }
       });
@@ -815,7 +833,7 @@ export default function GameLayout() {
   useEffect(() => {
     if (matchId) return;
     let interval: any;
-    if (isTimerRunning && !pause) {
+    if (isTimerRunning && !pause && !scoringInProgress) {
       interval = setInterval(() => {
         setSecondsElapsed((prev) => {
           const next = prev + 1;
@@ -827,7 +845,38 @@ export default function GameLayout() {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [matchId, isTimerRunning, pause]);
+  }, [matchId, isTimerRunning, pause, scoringInProgress]);
+
+  const submitRaceScoreWhenReady = useCallback((finalScore: number) => {
+    if (!matchId) return;
+    if (scoreSubmitted && !raceFinalizePendingRef.current) return;
+    raceFinalizePendingRef.current = { score: finalScore };
+    if (scoringInProgressRef.current) return;
+
+    const pending = raceFinalizePendingRef.current;
+    raceFinalizePendingRef.current = null;
+    setScoreSubmitted(true);
+    authService.getSessionUser().then((user) => {
+      if (user) submitScore(matchId, user.id, pending.score);
+    });
+  }, [matchId, scoreSubmitted]);
+
+  const flushDeferredRaceCompletion = useCallback(() => {
+    const pendingScore = raceFinalizePendingRef.current;
+    if (pendingScore && matchId) {
+      raceFinalizePendingRef.current = null;
+      setScoreSubmitted(true);
+      authService.getSessionUser().then((user) => {
+        if (user) submitScore(matchId, user.id, pendingScore.score);
+      });
+    }
+
+    const pendingResult = pendingMatchResultRef.current;
+    if (pendingResult) {
+      pendingMatchResultRef.current = null;
+      router.replace({ pathname: '/matchresult' as any, params: { matchId: pendingResult.matchId, ...(pendingResult.returnTo ? { returnTo: pendingResult.returnTo } : {}) } });
+    }
+  }, [matchId]);
 
   // Multiplayer: first move countdown (15 sec) - forfeit if no move
   useEffect(() => {
@@ -841,17 +890,14 @@ export default function GameLayout() {
       setFirstMoveCountdown(remaining);
       setTime(`0:${remaining.toString().padStart(2, '0')}`);
       if (remaining <= 0) {
-        setScoreSubmitted(true);
-        authService.getSessionUser().then((user) => {
-          if (user) submitScore(matchId, user.id, 0);
-        });
+        submitRaceScoreWhenReady(0);
       }
     };
 
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [matchId, multiplayerJoinedAt, multiplayerFirstMoveAt, scoreSubmitted]);
+  }, [matchId, multiplayerJoinedAt, multiplayerFirstMoveAt, scoreSubmitted, submitRaceScoreWhenReady]);
 
   // Multiplayer: 5 min game timer - starts on first move
   useEffect(() => {
@@ -859,23 +905,21 @@ export default function GameLayout() {
     const endAt = multiplayerFirstMoveAt + multiplayerTimeLimit * 1000;
 
     const tick = () => {
+      if (scoringInProgressRef.current) return;
       const now = Date.now();
-      const remaining = Math.max(0, Math.ceil((endAt - now) / 1000));
+      const remaining = Math.max(0, Math.ceil((endAt + racePausedMsRef.current - now) / 1000));
       const mins = Math.floor(remaining / 60).toString().padStart(2, '0');
       const secs = (remaining % 60).toString().padStart(2, '0');
       setTime(`${mins}:${secs}`);
       if (remaining <= 0) {
-        setScoreSubmitted(true);
-        authService.getSessionUser().then((user) => {
-          if (user) submitScore(matchId, user.id, scoreRef.current);
-        });
+        submitRaceScoreWhenReady(scoreRef.current);
       }
     };
 
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [matchId, multiplayerFirstMoveAt, multiplayerTimeLimit, scoreSubmitted]);
+  }, [matchId, multiplayerFirstMoveAt, multiplayerTimeLimit, scoreSubmitted, submitRaceScoreWhenReady]);
 
   // Fetch/Refresh user profile
   useEffect(() => {
@@ -929,6 +973,7 @@ export default function GameLayout() {
       playSuccessSound();
 
       if (!palindromeAnimationsEnabled) {
+        flushDeferredRaceCompletion();
         return scoreFound;
       }
 
@@ -949,12 +994,25 @@ export default function GameLayout() {
       setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
       setTimeout(() => setFeedback(null), 2000);
 
-      const keys = [...new Set(events.flatMap((event) => event.segment.map((tile) => `${tile.r},${tile.c}`)))];
-      setScoredCells(keys);
+      scoringInProgressRef.current = true;
+      if (matchId && racePauseStartedAtRef.current == null) {
+        racePauseStartedAtRef.current = Date.now();
+      }
+      setScoringInProgress(true);
+
+      const keys = events[0]?.segment.map((tile) => `${tile.r},${tile.c}`) ?? [];
+      setScoredCells(keys.length ? keys : [...new Set(events.flatMap((event) => event.segment.map((tile) => `${tile.r},${tile.c}`)))]);
       if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current);
       scoredCellsTimerRef.current = setTimeout(() => {
         setScoredCells([]);
         scoredCellsTimerRef.current = null;
+        scoringInProgressRef.current = false;
+        if (matchId && racePauseStartedAtRef.current != null) {
+          racePausedMsRef.current += Date.now() - racePauseStartedAtRef.current;
+          racePauseStartedAtRef.current = null;
+        }
+        setScoringInProgress(false);
+        flushDeferredRaceCompletion();
       }, 2000);
     }
 
@@ -998,7 +1056,7 @@ export default function GameLayout() {
     setDragOverCell(null);
     setDraggedColor(null);
 
-    if (gameOver || pause || settingsVisible) {
+    if (gameOver || pause || settingsVisible || scoringInProgressRef.current) {
       return false;
     }
 
@@ -1165,10 +1223,7 @@ export default function GameLayout() {
       setFirstMoveCountdown(null);
     }
     if (matchId && nextBlockCounts.every((c) => c === 0) && !scoreSubmitted) {
-      setScoreSubmitted(true);
-      authService.getSessionUser().then((user) => {
-        if (user) submitScore(matchId, user.id, newScore);
-      });
+      submitRaceScoreWhenReady(newScore);
     }
     if (!matchId) {
       if (nextBlockCounts.every((c) => c === 0)) {

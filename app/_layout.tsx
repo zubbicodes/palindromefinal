@@ -23,6 +23,21 @@ const webFontCss = `
   font-style: normal;
   font-display: swap;
 }
+html, body, #root {
+  min-height: 100%;
+  overflow: auto;
+  font-family: 'Geist-Regular', system-ui, sans-serif;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#root::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
 `;
 
 const SplashScreen = Platform.select({

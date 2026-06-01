@@ -18,6 +18,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type GameMode = 'race' | 'turn';
+type RecentMatchSummary = {
+  result: 'Won' | 'Lost' | 'Draw' | '—';
+  myScore: number | null;
+  opponentScore: number | null;
+};
+
+const RECENT_GAMES_LIMIT = 5;
 
 export default function MultiplayerLobbyScreen() {
   const { theme, colors } = useThemeContext();
@@ -37,7 +44,7 @@ export default function MultiplayerLobbyScreen() {
       if (user) {
         setUserId(user.id);
         try {
-          const list = await getRecentMatches(user.id, 15);
+          const list = await getRecentMatches(user.id, RECENT_GAMES_LIMIT);
           if (!cancelled) setRecentMatches(list);
           for (const m of list) {
             if (!m.match_players?.length) continue;
@@ -110,22 +117,23 @@ export default function MultiplayerLobbyScreen() {
     }
   }, []);
 
-  const getResultForMatch = useCallback(
-    (match: Match): string => {
-      if (match.status !== 'finished' || !userId || !match.match_players?.length) return '—';
+  const getRecentMatchSummary = useCallback(
+    (match: Match): RecentMatchSummary => {
+      const empty: RecentMatchSummary = { result: '—', myScore: null, opponentScore: null };
+      if (match.status !== 'finished' || !userId || !match.match_players?.length) return empty;
       const me = match.match_players.find((p) => p.user_id === userId);
       const other = match.match_players.find((p) => p.user_id !== userId);
-      if (!me || !other) return '—';
+      if (!me || !other) return empty;
       const myScore = me.score != null ? me.score : null;
-      const theirScore = other.score != null ? other.score : null;
-      if (myScore !== null && theirScore !== null) {
-        if (myScore > theirScore) return 'Won';
-        if (theirScore > myScore) return 'Lost';
-        return 'Draw';
+      const opponentScore = other.score != null ? other.score : null;
+      if (myScore !== null && opponentScore !== null) {
+        if (myScore > opponentScore) return { result: 'Won', myScore, opponentScore };
+        if (opponentScore > myScore) return { result: 'Lost', myScore, opponentScore };
+        return { result: 'Draw', myScore, opponentScore };
       }
-      if (me.is_winner) return 'Won';
-      if (other.is_winner) return 'Lost';
-      return 'Draw';
+      if (me.is_winner) return { result: 'Won', myScore, opponentScore };
+      if (other.is_winner) return { result: 'Lost', myScore, opponentScore };
+      return { result: 'Draw', myScore, opponentScore };
     },
     [userId]
   );
@@ -214,46 +222,56 @@ export default function MultiplayerLobbyScreen() {
             ) : recentMatches.length === 0 ? (
               <Text style={[styles.recentEmpty, { color: muted }]}>No recent games. Play a match to see history here.</Text>
             ) : (
-              recentMatches.slice(0, 15).map((m) => (
-                <Pressable
-                  key={m.id}
-                  onPress={() => openRecentMatch(m)}
-                  style={({ pressed }) => [
-                    styles.recentRow,
-                    { backgroundColor: cardBg, opacity: pressed ? 0.9 : 1 },
-                  ]}
-                >
-                  <View style={styles.recentRowLeft}>
-                    <Text style={[styles.recentOpponent, { color: text }]} numberOfLines={1}>
-                      vs {opponentNames[m.id] ?? 'Opponent'}
-                    </Text>
-                    <Text style={[styles.recentDate, { color: muted }]}>
-                      {new Date(m.created_at).toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        year: m.created_at > new Date(Date.now() - 86400000 * 365).toISOString() ? undefined : 'numeric',
-                      })}
-                    </Text>
-                  </View>
-                  <View style={styles.recentRowRight}>
-                    <View style={[styles.resultBadge, { backgroundColor: getResultForMatch(m) === 'Won' ? 'rgba(34,197,94,0.2)' : getResultForMatch(m) === 'Lost' ? 'rgba(239,68,68,0.2)' : 'rgba(0,0,0,0.08)' }]}>
-                      <Text
-                        style={[
-                          styles.resultBadgeText,
-                          {
-                            color: getResultForMatch(m) === 'Won' ? '#22c55e' : getResultForMatch(m) === 'Lost' ? '#ef4444' : muted,
-                          },
-                        ]}
-                      >
-                        {getResultForMatch(m)}
+              recentMatches.slice(0, RECENT_GAMES_LIMIT).map((m) => {
+                const summary = getRecentMatchSummary(m);
+                const resultColor =
+                  summary.result === 'Won' ? '#22c55e' : summary.result === 'Lost' ? '#ef4444' : summary.result === 'Draw' ? '#f59e0b' : muted;
+                const resultBg =
+                  summary.result === 'Won' ? 'rgba(34,197,94,0.16)' : summary.result === 'Lost' ? 'rgba(239,68,68,0.16)' : summary.result === 'Draw' ? 'rgba(245,158,11,0.16)' : 'rgba(0,0,0,0.08)';
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => openRecentMatch(m)}
+                    style={({ pressed }) => [
+                      styles.recentRow,
+                      { backgroundColor: cardBg, opacity: pressed ? 0.9 : 1 },
+                    ]}
+                  >
+                    <View style={styles.recentRowLeft}>
+                      <View style={styles.recentTitleLine}>
+                        <Text style={[styles.recentOpponent, { color: text }]} numberOfLines={1}>
+                          vs {opponentNames[m.id] ?? 'Opponent'}
+                        </Text>
+                        <View style={[styles.modePill, { backgroundColor: m.mode === 'turn' ? 'rgba(124,58,237,0.16)' : 'rgba(17,119,254,0.16)' }]}>
+                          <Text style={[styles.modePillText, { color: m.mode === 'turn' ? '#A78BFA' : '#48B7FF' }]}>
+                            {m.mode === 'turn' ? 'Turn' : 'Race'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.recentDate, { color: muted }]}>
+                        {new Date(m.finished_at ?? m.created_at).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: (m.finished_at ?? m.created_at) > new Date(Date.now() - 86400000 * 365).toISOString() ? undefined : 'numeric',
+                        })}
                       </Text>
                     </View>
-                    {m.status === 'finished' && (
-                      <Ionicons name="chevron-forward" size={18} color={muted} />
-                    )}
-                  </View>
-                </Pressable>
-              ))
+                    <View style={styles.recentRowRight}>
+                      <View style={styles.scoreLine}>
+                        <Text style={[styles.scoreNumber, { color: text }]}>{summary.myScore ?? '--'}</Text>
+                        <Text style={[styles.scoreDash, { color: muted }]}>-</Text>
+                        <Text style={[styles.scoreNumber, { color: muted }]}>{summary.opponentScore ?? '--'}</Text>
+                      </View>
+                      <View style={[styles.resultBadge, { backgroundColor: resultBg }]}>
+                        <Text style={[styles.resultBadgeText, { color: resultColor }]}>{summary.result}</Text>
+                      </View>
+                      {m.status === 'finished' && (
+                        <Ionicons name="chevron-forward" size={18} color={muted} />
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })
             )}
           </View>
         </ScrollView>
@@ -318,9 +336,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.06)',
   },
   recentRowLeft: { flex: 1, minWidth: 0 },
-  recentOpponent: { fontFamily: 'Geist-Bold', fontSize: 15, marginBottom: 2 },
+  recentTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0, marginBottom: 3 },
+  recentOpponent: { fontFamily: 'Geist-Bold', fontSize: 15, flexShrink: 1 },
   recentDate: { fontFamily: 'Geist-Regular', fontSize: 12 },
   recentRowRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  modePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  modePillText: { fontFamily: 'Geist-Bold', fontSize: 10 },
+  scoreLine: { flexDirection: 'row', alignItems: 'baseline', gap: 4, minWidth: 56, justifyContent: 'flex-end' },
+  scoreNumber: { fontFamily: 'Geist-Bold', fontSize: 17 },
+  scoreDash: { fontFamily: 'Geist-Regular', fontSize: 13 },
   resultBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   resultBadgeText: { fontFamily: 'Geist-Bold', fontSize: 12 },
 });
