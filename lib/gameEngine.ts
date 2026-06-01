@@ -48,6 +48,12 @@ export interface HintMove {
   colorIndex: number;
 }
 
+export type ScoringEvent = ScoringResult & {
+  score: number;
+  segmentLength: number;
+  segment: ScoredTile[];
+};
+
 import { createSeededRandom } from './seededRandom';
 
 function getBlockedPositionsForBulldogs(): Set<string> {
@@ -356,6 +362,107 @@ export function checkPalindromes(
 }
 
 /**
+ * Collect every newly-created scoring event from one or more placement anchors.
+ * This is the multi-score gameplay used by the single-player web game.
+ */
+export function getNewScoringEvents(
+  anchors: { row: number; col: number }[],
+  currentGrid: Grid,
+  bulldogPositions: { row: number; col: number }[],
+  minLength: number = MIN_PALINDROME_LENGTH,
+  previousGrid?: Grid
+): ScoringEvent[] {
+  const anchorKeys = new Set(anchors.map(({ row, col }) => `${row},${col}`));
+
+  const orderSegmentFromAnchor = (event: ScoringEvent): ScoringEvent => {
+    const anchorIndex = event.segment.findIndex((tile) => anchorKeys.has(`${tile.r},${tile.c}`));
+    if (anchorIndex < 0) return event;
+
+    const ordered: ScoredTile[] = [];
+    const seen = new Set<string>();
+    for (let distance = 0; distance < event.segment.length; distance++) {
+      const left = anchorIndex - distance;
+      const right = anchorIndex + distance;
+
+      if (left >= 0) {
+        const tile = event.segment[left];
+        const key = `${tile.r},${tile.c}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          ordered.push(tile);
+        }
+      }
+
+      if (right < event.segment.length) {
+        const tile = event.segment[right];
+        const key = `${tile.r},${tile.c}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          ordered.push(tile);
+        }
+      }
+    }
+
+    return { ...event, segment: ordered };
+  };
+
+  const collectEvents = (scanGrid: Grid) => {
+    const eventsByKey = new Map<string, ScoringEvent>();
+    const scanAnchors = previousGrid
+      ? scanGrid.flatMap((rowArr, r) =>
+          rowArr.flatMap((cell, c) => (cell == null ? [] : [{ row: r, col: c }]))
+        )
+      : anchors;
+
+    scanAnchors.forEach(({ row, col }) => {
+      checkAllPalindromes(scanGrid, row, col, bulldogPositions, minLength).forEach((result) => {
+        if (!result.segment || !result.segmentLength || result.score <= 0) return;
+        const key = `${result.kind}:${result.segment.map((t) => `${t.r},${t.c}`).join('|')}`;
+        if (!eventsByKey.has(key)) {
+          eventsByKey.set(key, {
+            ...result,
+            score: result.score,
+            segment: result.segment,
+            segmentLength: result.segmentLength,
+          });
+        }
+      });
+    });
+
+    return eventsByKey;
+  };
+
+  const eventsByKey = collectEvents(currentGrid);
+  if (previousGrid) {
+    const previousEventsByKey = collectEvents(previousGrid);
+    previousEventsByKey.forEach((_event, key) => {
+      eventsByKey.delete(key);
+    });
+  }
+
+  return [...eventsByKey.values()]
+    .sort((a, b) => {
+      if (b.segmentLength !== a.segmentLength) return b.segmentLength - a.segmentLength;
+      return b.score - a.score;
+    })
+    .map(orderSegmentFromAnchor);
+}
+
+export function scoreNewPalindromes(
+  anchors: { row: number; col: number }[],
+  currentGrid: Grid,
+  bulldogPositions: { row: number; col: number }[],
+  minLength: number = MIN_PALINDROME_LENGTH,
+  previousGrid?: Grid
+): { score: number; events: ScoringEvent[] } {
+  const events = getNewScoringEvents(anchors, currentGrid, bulldogPositions, minLength, previousGrid);
+  return {
+    score: events.reduce((total, event) => total + event.score, 0),
+    events,
+  };
+}
+
+/**
  * Apply a move: validate, update grid and inventory, compute score delta.
  * Returns { success, newState, scoreDelta }.
  */
@@ -387,12 +494,12 @@ export function applyMove(
   const newGrid = state.grid.map((r) => [...r]);
   newGrid[row][col] = colorIndex;
 
-  const result = checkPalindromes(
+  const result = scoreNewPalindromes(
+    [{ row, col }],
     newGrid,
-    row,
-    col,
     state.bulldogPositions,
-    minLength
+    minLength,
+    state.grid
   );
 
   const newBlockCounts = [...state.blockCounts];
@@ -427,12 +534,12 @@ export function findScoringMove(
         if (state.blockCounts[colorIdx] <= 0) continue;
         const tempGrid = state.grid.map((rowArr) => [...rowArr]);
         tempGrid[r][c] = colorIdx;
-        const result = checkPalindromes(
+        const result = scoreNewPalindromes(
+          [{ row: r, col: c }],
           tempGrid,
-          r,
-          c,
           state.bulldogPositions,
-          minLength
+          minLength,
+          state.grid
         );
         if (result.score > 0) {
           return { row: r, col: c, colorIndex: colorIdx };

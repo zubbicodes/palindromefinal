@@ -5,7 +5,7 @@ import { ColorBlindMode, useSettings } from "@/context/SettingsContext"
 import { useThemeContext } from "@/context/ThemeContext"
 import { useSound } from "@/hooks/use-sound"
 import { DEFAULT_GAME_GRADIENTS } from "@/lib/gameColors"
-import { checkPalindromes, GRID_SIZE, NUM_COLORS } from "@/lib/gameEngine"
+import { GRID_SIZE, NUM_COLORS, scoreNewPalindromes } from "@/lib/gameEngine"
 import {
   getTurnMatchState, initTurnBoard, submitTurnMove,
   forfeitTurnMatch, subscribeToTurnState, ensureTurnMatchReady, expireTurnClock,
@@ -343,12 +343,19 @@ export default function TurnGameWeb() {
   }, [turnState, gameOverInfo, userId])
 
   // ── Palindrome check (client-side for scoring) ──
-  const checkAndScore = useCallback((row: number, col: number, _colorIdx: number, currentGrid: (number | null)[][]): { scoreFound: number, segment: {r: number, c: number}[], segmentLength: number } => {
-    const result = checkPalindromes(currentGrid, row, col, bulldogPositions, 3)
+  const checkAndScore = useCallback((row: number, col: number, _colorIdx: number, currentGrid: (number | null)[][], previousGrid?: (number | null)[][]): { scoreFound: number, segment: {r: number, c: number}[], segmentLength: number } => {
+    const { score, events } = scoreNewPalindromes([{ row, col }], currentGrid, bulldogPositions, 3, previousGrid)
+    const topEvent = events[0]
+    const segmentKeys = new Map<string, { r: number; c: number }>()
+    events.forEach((event) => {
+      event.segment.forEach((tile) => {
+        segmentKeys.set(`${tile.r},${tile.c}`, { r: tile.r, c: tile.c })
+      })
+    })
     return {
-      scoreFound: result.score,
-      segment: result.segment ? result.segment.map((t) => ({ r: t.r, c: t.c })) : [],
-      segmentLength: result.segmentLength ?? 0,
+      scoreFound: score,
+      segment: [...segmentKeys.values()],
+      segmentLength: topEvent?.segmentLength ?? 0,
     }
   }, [bulldogPositions])
 
@@ -366,7 +373,7 @@ export default function TurnGameWeb() {
     // Client-side scoring check
     const tempGrid = board.map(r => [...r])
     tempGrid[row][col] = colorIndex
-    const { scoreFound: scoreDelta, segment, segmentLength } = checkAndScore(row, col, colorIndex, tempGrid)
+    const { scoreFound: scoreDelta, segment, segmentLength } = checkAndScore(row, col, colorIndex, tempGrid, board)
     const isLastOwnBlock = myBlocks.reduce((total, count) => total + count, 0) === 1
 
     if (scoreDelta <= 0 && !isLastOwnBlock) {

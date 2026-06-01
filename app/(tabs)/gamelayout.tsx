@@ -29,7 +29,7 @@ import { ColorBlindMode, useSettings } from '@/context/SettingsContext';
 import { useThemeContext } from '@/context/ThemeContext';
 import { useSound } from '@/hooks/use-sound';
 import { DEFAULT_GAME_GRADIENTS } from '@/lib/gameColors';
-import { checkPalindromes, createInitialState, createSinglePlayerInitialState } from '@/lib/gameEngine';
+import { createInitialState, createSinglePlayerInitialState, scoreNewPalindromes } from '@/lib/gameEngine';
 import { FIRST_MOVE_TIMEOUT_SECONDS, getMatch, submitScore, subscribeToMatch, updateLiveScore, type Match, type MatchPlayer } from '@/lib/matchmaking';
 import { saveSinglePlayerRun } from '@/lib/singlePlayer';
 
@@ -909,9 +909,20 @@ export default function GameLayout() {
     fetchProfile();
   }, [settingsVisible]);
 
-  const checkAndProcessPalindromes = (row: number, col: number, _colorIdx: number, currentGrid: (number | null)[][], dryRun = false, minLength = 3) => {
-    const result = checkPalindromes(currentGrid, row, col, bulldogPositions, minLength);
-    const scoreFound = result.score;
+  const checkAndProcessPalindromes = (
+    anchors: { row: number; col: number }[],
+    currentGrid: (number | null)[][],
+    dryRun = false,
+    minLength = 3,
+    previousGrid?: (number | null)[][]
+  ) => {
+    const { score: scoreFound, events } = scoreNewPalindromes(
+      anchors,
+      currentGrid,
+      bulldogPositions,
+      minLength,
+      previousGrid
+    );
 
     if (scoreFound > 0 && !dryRun) {
       triggerHaptic('success');
@@ -923,13 +934,14 @@ export default function GameLayout() {
 
       let feedbackText = "GOOD!";
       let feedbackColor = "#4ADE80";
-      if (result.segmentLength === 5) {
+      const topEvent = events[0];
+      if (topEvent?.segmentLength === 5) {
         feedbackText = "GREAT!";
         feedbackColor = "#60A5FA";
-      } else if (result.segmentLength === 7) {
+      } else if (topEvent?.segmentLength === 7) {
         feedbackText = "AMAZING!";
         feedbackColor = "#A78BFA";
-      } else if ((result.segmentLength ?? 0) >= 9) {
+      } else if ((topEvent?.segmentLength ?? 0) >= 9) {
         feedbackText = "LEGENDARY!";
         feedbackColor = "#F472B6";
       }
@@ -937,7 +949,7 @@ export default function GameLayout() {
       setFeedback({ text: feedbackText, color: feedbackColor, id: Date.now() });
       setTimeout(() => setFeedback(null), 2000);
 
-      const keys = result.segment ? result.segment.map((tile) => `${tile.r},${tile.c}`) : [];
+      const keys = [...new Set(events.flatMap((event) => event.segment.map((tile) => `${tile.r},${tile.c}`)))];
       setScoredCells(keys);
       if (scoredCellsTimerRef.current) clearTimeout(scoredCellsTimerRef.current);
       scoredCellsTimerRef.current = setTimeout(() => {
@@ -958,7 +970,7 @@ export default function GameLayout() {
           if (blockCountsRef.current[colorIdx] <= 0) continue;
           const tempGrid = gridStateRef.current.map((rowArr) => [...rowArr]);
           tempGrid[r][c] = colorIdx;
-          const sc = checkAndProcessPalindromes(r, c, colorIdx, tempGrid, true, minLength);
+          const sc = checkAndProcessPalindromes([{ row: r, col: c }], tempGrid, true, minLength, gridStateRef.current);
           if (sc > 0) {
             return { row: r, col: c, colorIndex: colorIdx };
           }
@@ -1025,11 +1037,17 @@ export default function GameLayout() {
 
       const a = nextPlacements[0];
       const b = nextPlacements[1];
-      const scoreA = checkAndProcessPalindromes(a.row, a.col, a.colorIndex, newGrid, true, 5);
-      const scoreB = checkAndProcessPalindromes(b.row, b.col, b.colorIndex, newGrid, true, 5);
-      const bestScore = Math.max(scoreA, scoreB);
+      const attemptedScore = checkAndProcessPalindromes(
+        [
+          { row: a.row, col: a.col },
+          { row: b.row, col: b.col },
+        ],
+        newGrid,
+        true,
+        5
+      );
 
-      if (bestScore <= 0) {
+      if (attemptedScore <= 0) {
         const revertedGrid = newGrid.map((r) => [...r]);
         const revertedCounts = [...nextBlockCounts];
         for (const p of nextPlacements) {
@@ -1065,19 +1083,25 @@ export default function GameLayout() {
         return false;
       }
 
-      scoreFound =
-        scoreB >= scoreA
-          ? checkAndProcessPalindromes(b.row, b.col, b.colorIndex, newGrid, false, 5)
-          : checkAndProcessPalindromes(a.row, a.col, a.colorIndex, newGrid, false, 5);
+      scoreFound = checkAndProcessPalindromes(
+        [
+          { row: a.row, col: a.col },
+          { row: b.row, col: b.col },
+        ],
+        newGrid,
+        false,
+        5
+      );
 
       setScore((prev) => prev + scoreFound);
       newScore = scoreRef.current + scoreFound;
+      scoreRef.current = newScore;
       setFirstMoveActive(false);
       setFirstMovePlacements([]);
     } else {
       const hadAnyScoringMoveBefore = !matchId ? !!findFirstScoringMove(3) : true;
       newGrid[row][col] = colorIndex;
-      const attemptedScore = checkAndProcessPalindromes(row, col, colorIndex, newGrid, true, 3);
+      const attemptedScore = checkAndProcessPalindromes([{ row, col }], newGrid, true, 3, gridStateRef.current);
 
       if (attemptedScore <= 0) {
         if (!matchId && !hadAnyScoringMoveBefore) {
@@ -1119,9 +1143,10 @@ export default function GameLayout() {
         playDropSound();
         triggerHaptic('drop');
 
-        scoreFound = checkAndProcessPalindromes(row, col, colorIndex, newGrid, false, 3);
+        scoreFound = checkAndProcessPalindromes([{ row, col }], newGrid, false, 3, gridStateRef.current);
         setScore((prev) => prev + scoreFound);
         newScore = scoreRef.current + scoreFound;
+        scoreRef.current = newScore;
       }
     }
     
