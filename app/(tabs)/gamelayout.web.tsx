@@ -356,6 +356,44 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v))
 }
 
+const VIDEO_GUIDE_SEEN_KEY = "palindrome_video_guide_v1_seen"
+
+const GUIDE_SLIDES = [
+  {
+    video: "/demo/5_counter_first.mp4",
+    title: "First Move",
+    description: "Place two blocks that form a multi-color odd palindrome of length 5 or more.",
+  },
+  {
+    video: "/demo/dog_counter_first.mp4",
+    title: "Bulldog Cells",
+    description: "Special cells block your placements — plan your moves around them!",
+  },
+  {
+    video: "/demo/right_counter_first.mp4",
+    title: "Scoring Palindromes",
+    description: "Create odd-length color palindromes in rows, columns, or L-shapes to score points.",
+  },
+]
+
+function safeGetVideoGuideSeen(): boolean {
+  try {
+    if (typeof window === "undefined") return true
+    return window.localStorage.getItem(VIDEO_GUIDE_SEEN_KEY) === "1"
+  } catch {
+    return true
+  }
+}
+
+function safeSetVideoGuideSeen(): void {
+  try {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(VIDEO_GUIDE_SEEN_KEY, "1")
+  } catch {
+    return
+  }
+}
+
 function GameTutorialOverlay(props: {
   open: boolean
   step: GameTutorialStep | null
@@ -621,6 +659,180 @@ function GameTutorialOverlay(props: {
   )
 }
 
+function VideoGuideOverlay(props: {
+  open: boolean
+  slideIndex: number
+  accentColor: string
+  isDark: boolean
+  onBack: () => void
+  onNext: () => void
+  onSkip: () => void
+  onDone: () => void
+}) {
+  const { open, slideIndex, accentColor, isDark, onBack, onNext, onSkip, onDone } = props
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
+  const slide = GUIDE_SLIDES[slideIndex]
+
+  useEffect(() => {
+    if (!open) return
+    videoRefs.current.forEach((v, i) => {
+      if (!v) return
+      if (i === slideIndex) {
+        v.currentTime = 0
+        v.play().catch(() => {})
+      } else {
+        v.pause()
+      }
+    })
+  }, [open, slideIndex])
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onSkip()
+      if (e.key === "ArrowRight" || e.key === "Enter") onNext()
+      if (e.key === "ArrowLeft") onBack()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [open, onBack, onNext, onSkip])
+
+  if (!open || !slide) return null
+
+  const isLast = slideIndex === GUIDE_SLIDES.length - 1
+  const viewportW = typeof window === "undefined" ? 1024 : window.innerWidth
+  const viewportH = typeof window === "undefined" ? 768 : window.innerHeight
+  const smallScreen = viewportW < 420
+  const cardW = smallScreen ? Math.min(viewportW - 24, 440) : Math.min(620, viewportW - 48)
+  const maxCardH = viewportH - 32
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 99999,
+        fontFamily: "Geist-Regular, system-ui",
+      }}
+    >
+      <div style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.75)",
+        backdropFilter: "blur(10px)",
+        zIndex: 1,
+      }} />
+
+      <div style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 2,
+        padding: 16,
+      }}>
+        <div style={{
+          width: cardW,
+          maxWidth: "calc(100vw - 24px)",
+          maxHeight: maxCardH,
+          background: isDark ? "rgba(10,10,28,0.98)" : "rgba(255,255,255,0.98)",
+          borderRadius: 24,
+          overflow: "hidden",
+          boxShadow: "0 28px 70px rgba(0,0,0,0.55)",
+          border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.10)",
+          display: "flex",
+          flexDirection: "column",
+        }}>
+          <div style={{ padding: "20px 22px 14px", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ fontFamily: "Geist-Bold, system-ui", fontSize: 20, lineHeight: 1.2, color: isDark ? "#FFFFFF" : "#111111" }}>{slide.title}</div>
+              <div style={{ fontSize: 13, color: isDark ? "rgba(255,255,255,0.55)" : "rgba(17,17,17,0.55)", background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", borderRadius: 8, padding: "2px 10px" }}>{slideIndex + 1}/{GUIDE_SLIDES.length}</div>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 14, lineHeight: 1.5, color: isDark ? "rgba(255,255,255,0.78)" : "rgba(17,17,17,0.72)" }}>{slide.description}</div>
+          </div>
+
+          <div style={{ position: "relative", width: "100%", background: isDark ? "rgba(10,10,28,1)" : "#111111", flexShrink: 0 }}>
+            {GUIDE_SLIDES.map((s, i) => (
+              <div key={s.video} style={{
+                position: i === slideIndex ? "relative" : "absolute",
+                inset: i === slideIndex ? undefined : 0,
+                opacity: i === slideIndex ? 1 : 0,
+                transition: "opacity 0.35s ease",
+                pointerEvents: i === slideIndex ? "auto" : "none",
+                zIndex: i === slideIndex ? 2 : 1,
+              }}>
+                <video
+                  ref={(el) => { videoRefs.current[i] = el }}
+                  src={s.video}
+                  autoPlay={i === slideIndex}
+                  loop
+                  muted
+                  playsInline
+                  preload="auto"
+                  style={{ width: "100%", maxHeight: `calc(${maxCardH}px - 180px)`, objectFit: "cover", display: "block" }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "center", gap: 6, padding: "14px 0 6px", flexShrink: 0 }}>
+            {GUIDE_SLIDES.map((_, i) => (
+              <div key={i} style={{
+                width: i === slideIndex ? 22 : 8,
+                height: 8,
+                borderRadius: 4,
+                background: i === slideIndex ? accentColor : (isDark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.14)"),
+                transition: "all 0.25s ease",
+              }} />
+            ))}
+          </div>
+
+          <div style={{ padding: "6px 22px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            <button onClick={onSkip} style={{
+              border: isDark ? "1px solid rgba(255,255,255,0.16)" : "1px solid rgba(17,17,17,0.16)",
+              background: "transparent",
+              borderRadius: 12,
+              padding: "11px 18px",
+              cursor: "pointer",
+              fontFamily: "Geist-Regular, system-ui",
+              fontSize: 14,
+              color: isDark ? "#FFFFFF" : "#111111",
+            }}>Skip</button>
+
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              {slideIndex > 0 ? (
+                <button onClick={onBack} style={{
+                  border: isDark ? "1px solid rgba(255,255,255,0.16)" : "1px solid rgba(17,17,17,0.16)",
+                  background: "transparent",
+                  borderRadius: 12,
+                  padding: "11px 16px",
+                  cursor: "pointer",
+                  fontFamily: "Geist-Regular, system-ui",
+                  fontSize: 14,
+                  color: isDark ? "#FFFFFF" : "#111111",
+                }}>Back</button>
+              ) : null}
+              <button onClick={isLast ? onDone : onNext} style={{
+                border: `1px solid ${accentColor}`,
+                background: accentColor,
+                color: "#FFFFFF",
+                borderRadius: 12,
+                padding: "11px 22px",
+                cursor: "pointer",
+                fontFamily: "Geist-Bold, system-ui",
+                fontSize: 14,
+              }}>{isLast ? "Start Playing" : "Next"}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function GameLayoutWeb() {
   const router = useRouter()
   const { matchId: routeMatchId, returnTo: routeReturnTo } = useLocalSearchParams<{ matchId?: string; returnTo?: string }>()
@@ -652,6 +864,8 @@ export default function GameLayoutWeb() {
   const [tutorialUiIndex, setTutorialUiIndex] = useState(0)
   const [noHintsFaceVisible, setNoHintsFaceVisible] = useState(false)
   const noHintsFaceTimerRef = useRef<any>(null)
+  const [guideVisible, setGuideVisible] = useState(false)
+  const [guideSlideIndex, setGuideSlideIndex] = useState(0)
 
   const [opponentScore, setOpponentScore] = useState<number | null>(null)
   const [opponentName, setOpponentName] = useState<string>("Opponent")
@@ -792,6 +1006,47 @@ export default function GameLayoutWeb() {
     setTutorialPhase("ui")
     setTutorialUiIndex(0)
     setTutorialOpen(true)
+  }, [])
+
+  const openGuide = useCallback(() => {
+    setGuideSlideIndex(0)
+    setGuideVisible(true)
+  }, [])
+
+  const skipGuide = useCallback(() => {
+    safeSetVideoGuideSeen()
+    setGuideVisible(false)
+  }, [])
+
+  const doneGuide = useCallback(() => {
+    safeSetVideoGuideSeen()
+    setGuideVisible(false)
+  }, [])
+
+  const nextGuide = useCallback(() => {
+    setGuideSlideIndex((i) => {
+      if (i >= GUIDE_SLIDES.length - 1) {
+        doneGuide()
+        return i
+      }
+      return i + 1
+    })
+  }, [doneGuide])
+
+  const backGuide = useCallback(() => {
+    setGuideSlideIndex((i) => Math.max(0, i - 1))
+  }, [])
+
+  useEffect(() => {
+    if (safeGetVideoGuideSeen()) return
+    if (matchId) return
+    if (safeGetGameTutorialSeen()) {
+      const t = setTimeout(() => {
+        setGuideSlideIndex(0)
+        setGuideVisible(true)
+      }, 600)
+      return () => clearTimeout(t)
+    }
   }, [])
 
   useEffect(() => {
@@ -2281,6 +2536,7 @@ export default function GameLayoutWeb() {
                   <div style={{ display: "flex", gap: 8, width: "100%" }}>
                     {[
                       { icon: "settings-sharp" as const, onPress: () => setSettingsVisible(true), label: "SETTINGS" },
+                      { icon: "film-outline" as const, onPress: openGuide, label: "GUIDE" },
                       { icon: "book-outline" as const, onPress: () => setRulesVisible(true), label: "RULES" },
                     ].map(({ icon, onPress, label }) => (
                       <Pressable key={label} onPress={onPress} style={{ flex: 1 }}>
@@ -2441,10 +2697,11 @@ export default function GameLayoutWeb() {
                 ))}
               </div>
 
-              {/* Settings / Tour / Rules */}
+              {/* Settings / Guide / Tour / Rules */}
               <div style={{ display: "flex", gap: 8, width: "100%", maxWidth: layoutConfig.rightPanelW - 16 }}>
                 {[
                   { icon: "settings-sharp" as const, onPress: () => setSettingsVisible(true), id: "tour-game-btn-settings", label: "SETTINGS" },
+                  { icon: "film-outline" as const, onPress: openGuide, id: undefined, label: "GUIDE" },
                   { icon: "help-circle-outline" as const, onPress: openTutorial, id: undefined, label: "TOUR" },
                   { icon: "book-outline" as const, onPress: () => setRulesVisible(true), id: undefined, label: "RULES" },
                 ].map(({ icon, onPress, id, label }, i) => (
@@ -2545,6 +2802,7 @@ export default function GameLayoutWeb() {
                   { id: "tour-game-btn-restart",  icon: "refresh"             as const, onPress: () => setRestartConfirmationVisible(true), gradient: "" },
                   { id: "tour-game-btn-home",     icon: "home"                as const, onPress: () => setHomeConfirmationVisible(true),    gradient: "" },
                   { id: "tour-game-btn-settings", icon: "settings-sharp"      as const, onPress: () => setSettingsVisible(true),            gradient: "" },
+                  { id: undefined,                icon: "film-outline"        as const, onPress: openGuide,                                   gradient: "" },
                   { id: undefined,                icon: "help-circle-outline" as const, onPress: openTutorial,                              gradient: "" },
                   { id: undefined,                icon: "book-outline"        as const, onPress: () => setRulesVisible(true),               gradient: "" },
                 ].map(({ id, icon, onPress, gradient }, idx) => (
@@ -3244,6 +3502,17 @@ export default function GameLayoutWeb() {
             }
             doneTutorial()
           }}
+        />
+
+        <VideoGuideOverlay
+          open={guideVisible}
+          slideIndex={guideSlideIndex}
+          accentColor={colors.accent}
+          isDark={theme === "dark"}
+          onBack={backGuide}
+          onNext={nextGuide}
+          onSkip={skipGuide}
+          onDone={doneGuide}
         />
       </div>
   )

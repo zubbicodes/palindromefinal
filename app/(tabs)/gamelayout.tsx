@@ -7,6 +7,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Animated,
+    Dimensions,
     GestureResponderEvent,
     Image,
     PanResponder,
@@ -22,6 +23,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SpotlightTourProvider, type TourState, type TourStep } from 'react-native-spotlight-tour';
 import Svg, { Defs, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 import { Switch } from 'react-native-switch';
+import { Video, ResizeMode } from 'expo-av';
 
 // ✅ Import theme context
 import { authService } from '@/authService';
@@ -268,6 +270,26 @@ const PaletteBlock = ({
 
 const GAME_TUTORIAL_SEEN_KEY = 'palindrome_game_tutorial_v1_seen';
 
+const VIDEO_GUIDE_SEEN_KEY = 'palindrome_video_guide_v1_seen';
+
+const GUIDE_SLIDES = [
+  {
+    video: require('../../assets/demo/5_counter_first.mp4'),
+    title: 'First Move',
+    description: 'Place two blocks that form a multi-color odd palindrome of length 5 or more.',
+  },
+  {
+    video: require('../../assets/demo/dog_counter_first.mp4'),
+    title: 'Bulldog Cells',
+    description: 'Special cells block your placements — plan your moves around them!',
+  },
+  {
+    video: require('../../assets/demo/right_counter_first.mp4'),
+    title: 'Scoring Palindromes',
+    description: 'Create odd-length color palindromes in rows, columns, or L-shapes to score points.',
+  },
+];
+
 function TourCard(props: {
   title: string;
   description: string;
@@ -464,6 +486,122 @@ function GameTourSpotSync(props: {
   return null;
 }
 
+function VideoGuideOverlay(props: {
+  open: boolean
+  slideIndex: number
+  accentColor: string
+  isDark: boolean
+  onBack: () => void
+  onNext: () => void
+  onSkip: () => void
+  onDone: () => void
+}) {
+  const { open, slideIndex, accentColor, isDark, onBack, onNext, onSkip, onDone } = props
+  const videoRefs = useRef<(Video | null)[]>([])
+  const slide = GUIDE_SLIDES[slideIndex]
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
+
+  useEffect(() => {
+    if (!open) return
+    videoRefs.current.forEach((v, i) => {
+      if (!v) return
+      if (i === slideIndex) {
+        v.playFromPositionAsync(0).catch(() => {})
+      } else {
+        v.pauseAsync().catch(() => {})
+      }
+    })
+  }, [open, slideIndex])
+
+  if (!open || !slide) return null
+
+  const isLast = slideIndex === GUIDE_SLIDES.length - 1
+  const cardW = Math.min(windowWidth - 24, 440)
+  const vidMaxH = Math.max(180, windowHeight - 320)
+
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999 }} pointerEvents="auto">
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)' }} />
+
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', padding: 12 }}>
+        <View style={{
+          width: cardW,
+          maxHeight: windowHeight - 24,
+          backgroundColor: isDark ? 'rgba(10,10,28,0.98)' : 'rgba(255,255,255,0.98)',
+          borderRadius: 24,
+          overflow: 'hidden',
+          shadowColor: '#000',
+          shadowOpacity: 0.5,
+          shadowRadius: 30,
+          shadowOffset: { width: 0, height: 20 },
+          elevation: 16,
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
+        }}>
+          <View style={{ padding: 20, paddingBottom: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+              <Text style={{ fontFamily: 'Geist-Bold', fontSize: 20, lineHeight: 24, color: isDark ? '#FFFFFF' : '#111111' }}>{slide.title}</Text>
+              <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 13, color: isDark ? 'rgba(255,255,255,0.55)' : 'rgba(17,17,17,0.55)', fontFamily: 'Geist-Bold' }}>{slideIndex + 1}/{GUIDE_SLIDES.length}</Text>
+              </View>
+            </View>
+            <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, color: isDark ? 'rgba(255,255,255,0.78)' : 'rgba(17,17,17,0.72)', fontFamily: 'Geist-Regular' }}>{slide.description}</Text>
+          </View>
+
+          <View style={{ position: 'relative', width: '100%', height: vidMaxH, backgroundColor: isDark ? 'rgba(10,10,28,1)' : '#111111' }}>
+            {GUIDE_SLIDES.map((s, i) => (
+              <View key={s.title} style={{
+                position: i === slideIndex ? 'relative' : 'absolute',
+                left: 0, right: 0, top: 0, bottom: 0,
+                opacity: i === slideIndex ? 1 : 0,
+                zIndex: i === slideIndex ? 2 : 1,
+              }}>
+                <Video
+                  ref={(el: Video | null) => { videoRefs.current[i] = el }}
+                  source={s.video}
+                  resizeMode={ResizeMode.CONTAIN}
+                  isLooping
+                  isMuted
+                  shouldPlay={i === slideIndex && open}
+                  style={{ width: '100%', height: vidMaxH }}
+                />
+              </View>
+            ))}
+          </View>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingVertical: 14 }}>
+            {GUIDE_SLIDES.map((_, i) => (
+              <View key={i} style={{
+                width: i === slideIndex ? 22 : 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: i === slideIndex ? accentColor : (isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.14)'),
+              }} />
+            ))}
+          </View>
+
+          <View style={{ paddingHorizontal: 22, paddingBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <Pressable onPress={onSkip} style={{ borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)', borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11 }}>
+              <Text style={{ fontFamily: 'Geist-Regular', fontSize: 14, color: isDark ? '#FFFFFF' : '#111111' }}>Skip</Text>
+            </Pressable>
+
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+              {slideIndex > 0 ? (
+                <Pressable onPress={onBack} style={{ borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(17,17,17,0.16)', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 11 }}>
+                  <Text style={{ fontFamily: 'Geist-Regular', fontSize: 14, color: isDark ? '#FFFFFF' : '#111111' }}>Back</Text>
+                </Pressable>
+              ) : null}
+              <Pressable onPress={isLast ? onDone : onNext} style={{ backgroundColor: accentColor, borderWidth: 1, borderColor: accentColor, borderRadius: 12, paddingHorizontal: 22, paddingVertical: 11 }}>
+                <Text style={{ fontFamily: 'Geist-Bold', fontSize: 14, color: '#FFFFFF' }}>{isLast ? 'Start Playing' : 'Next'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </View>
+    </View>
+  )
+}
+
 export default function GameLayout() {
   const { matchId: routeMatchId, returnTo: routeReturnTo } = useLocalSearchParams<{ matchId?: string; returnTo?: string }>();
   const matchId = typeof routeMatchId === 'string' ? routeMatchId : undefined;
@@ -488,6 +626,8 @@ export default function GameLayout() {
   const [restartConfirmationVisible, setRestartConfirmationVisible] = useState(false);
   const [homeConfirmationVisible, setHomeConfirmationVisible] = useState(false);
   const [rulesVisible, setRulesVisible] = useState(false);
+  const [guideVisible, setGuideVisible] = useState(false);
+  const [guideSlideIndex, setGuideSlideIndex] = useState(0);
   
   const [firstMoveActive, setFirstMoveActive] = useState(false);
   const [firstMovePlacements, setFirstMovePlacements] = useState<{ row: number; col: number; colorIndex: number }[]>([]);
@@ -541,6 +681,35 @@ export default function GameLayout() {
 
   const markTourSeen = useCallback(() => {
     void AsyncStorage.setItem(GAME_TUTORIAL_SEEN_KEY, '1');
+  }, []);
+
+  const openGuide = useCallback(() => {
+    setGuideSlideIndex(0);
+    setGuideVisible(true);
+  }, []);
+
+  const skipGuide = useCallback(() => {
+    void AsyncStorage.setItem(VIDEO_GUIDE_SEEN_KEY, '1');
+    setGuideVisible(false);
+  }, []);
+
+  const doneGuide = useCallback(() => {
+    void AsyncStorage.setItem(VIDEO_GUIDE_SEEN_KEY, '1');
+    setGuideVisible(false);
+  }, []);
+
+  const nextGuide = useCallback(() => {
+    setGuideSlideIndex((i) => {
+      if (i >= GUIDE_SLIDES.length - 1) {
+        doneGuide();
+        return i;
+      }
+      return i + 1;
+    });
+  }, [doneGuide]);
+
+  const backGuide = useCallback(() => {
+    setGuideSlideIndex((i) => Math.max(0, i - 1));
   }, []);
 
   const flashNoHintsFace = useCallback(() => {
@@ -612,6 +781,25 @@ export default function GameLayout() {
         const seen = await AsyncStorage.getItem(GAME_TUTORIAL_SEEN_KEY);
         if (seen === '1') return;
         setTimeout(() => tourRef.current?.start?.(), 450);
+      } catch {
+        return;
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const guideSeen = await AsyncStorage.getItem(VIDEO_GUIDE_SEEN_KEY);
+        if (guideSeen === '1') return;
+        if (matchId) return;
+        const tutorialSeen = await AsyncStorage.getItem(GAME_TUTORIAL_SEEN_KEY);
+        if (tutorialSeen === '1') {
+          setTimeout(() => {
+            setGuideSlideIndex(0);
+            setGuideVisible(true);
+          }, 600);
+        }
       } catch {
         return;
       }
@@ -1678,6 +1866,12 @@ export default function GameLayout() {
           </LinearGradient>
         </Pressable>
 
+        <Pressable onPress={openGuide}>
+          <LinearGradient colors={['#C35DD7', '#E879F9']} style={styles.gradientButton}>
+            <Ionicons name="film-outline" size={20} color="#FFFFFF" />
+          </LinearGradient>
+        </Pressable>
+
         <Pressable onPress={() => setRulesVisible(true)}>
           <LinearGradient colors={['#111111', '#3C3C3C']} style={styles.gradientButton}>
             <Ionicons name="book-outline" size={20} color="#FFFFFF" />
@@ -2318,6 +2512,16 @@ export default function GameLayout() {
     </SafeAreaView>
       </>
     )}
+    <VideoGuideOverlay
+      open={guideVisible}
+      slideIndex={guideSlideIndex}
+      accentColor={colors.accent}
+      isDark={theme === 'dark'}
+      onBack={backGuide}
+      onNext={nextGuide}
+      onSkip={skipGuide}
+      onDone={doneGuide}
+    />
     </SpotlightTourProvider>
   );
 }
